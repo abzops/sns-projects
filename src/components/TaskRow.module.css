@@ -1,0 +1,56 @@
+.row {
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.row:hover {
+  background: rgba(253, 226, 21, 0.055);
+}
+
+.row td {
+  padding: 14px 16px;
+  color: var(--text);
+  font-size: 0.82rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.titleCell {
+  max-width: 340px;
+  white-space: normal !important;
+}
+
+.taskTitle {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.assignee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assigneeName {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.unassigned,
+.date {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.overdue {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.today {
+  color: var(--accent);
+  font-weight: 800;
+}

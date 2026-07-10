@@ -1,0 +1,466 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+  animation: fadeIn 0.35s ease both;
+}
+
+.loadingContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+
+.header {
+  padding: 26px;
+  background:
+    linear-gradient(135deg, rgba(253, 226, 21, 0.1), transparent 46%),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.header h1 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: clamp(1.8rem, 3vw, 2.45rem);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 16px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.activeTab {
+  color: var(--black);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tabContent {
+  flex: 1;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 900px;
+  animation: fadeInUp 0.3s ease both;
+}
+
+.card,
+.memberList {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.card {
+  padding: 24px;
+}
+
+.card h2 {
+  margin: 0 0 20px;
+  color: var(--text);
+  font-size: 1.12rem;
+  font-weight: 900;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.cardHeader h2 {
+  margin: 0 0 4px;
+}
+
+.cardHeader p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.input,
+.roleSelect {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.input {
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.input:focus,
+.roleSelect:focus {
+  outline: none;
+  background: var(--panel-2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(253, 226, 21, 0.1);
+}
+
+.input:disabled,
+.roleSelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.inputWithIcon {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.inputWithIcon .input {
+  padding-left: 42px;
+}
+
+.primaryBtn,
+.dangerBtn,
+.dangerBtnModal,
+.cancelBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.primaryBtn {
+  align-self: flex-start;
+  color: var(--black);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border: 1px solid var(--accent);
+}
+
+.primaryBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(253, 226, 21, 0.18);
+}
+
+.primaryBtn:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  opacity: 0.55;
+}
+
+.cancelBtn {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.cancelBtn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--brand-line);
+}
+
+.dangerBtn {
+  color: var(--red);
+  background: rgba(232, 97, 74, 0.1);
+  border: 1px solid rgba(232, 97, 74, 0.32);
+}
+
+.dangerBtn:hover {
+  background: rgba(232, 97, 74, 0.18);
+  border-color: var(--red);
+}
+
+.dangerBtnModal {
+  color: #fff;
+  background: var(--red);
+  border: 1px solid var(--red);
+}
+
+.dangerBtnModal:hover {
+  filter: brightness(1.08);
+}
+
+.dangerZone {
+  border-color: rgba(232, 97, 74, 0.34);
+}
+
+.dangerZone h2 {
+  color: var(--red);
+}
+
+.dangerZone p {
+  margin: -8px 0 20px;
+  color: var(--muted);
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  transition: background var(--transition);
+}
+
+.memberRow:last-child {
+  border-bottom: none;
+}
+
+.memberRow:hover {
+  background: rgba(253, 226, 21, 0.055);
+}
+
+.memberInfo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.memberName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.memberEmail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.youBadge,
+.pendingBadge,
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.youBadge {
+  padding: 2px 7px;
+  color: var(--accent);
+  background: rgba(253, 226, 21, 0.08);
+  border: 1px solid var(--brand-line);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pendingBadge {
+  padding: 2px 7px;
+  color: var(--orange);
+  background: rgba(232, 160, 58, 0.12);
+  border: 1px solid rgba(232, 160, 58, 0.32);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.memberActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.roleBadge {
+  gap: 6px;
+  padding: 6px 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 0.76rem;
+  text-transform: capitalize;
+}
+
+.roleBadge[data-role="owner"] {
+  color: var(--accent);
+  background: rgba(253, 226, 21, 0.08);
+  border-color: var(--brand-line);
+}
+
+.roleBadge[data-role="admin"] {
+  color: var(--blue);
+  background: rgba(90, 157, 232, 0.12);
+  border-color: rgba(90, 157, 232, 0.32);
+}
+
+.roleSelect {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.iconBtn:hover {
+  color: var(--red);
+  background: rgba(232, 97, 74, 0.12);
+  border-color: rgba(232, 97, 74, 0.32);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.deleteConfirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.warningIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 16px;
+  color: var(--red);
+  background: rgba(232, 97, 74, 0.12);
+  border: 1px solid rgba(232, 97, 74, 0.32);
+  border-radius: 50%;
+}
+
+.deleteConfirm h3 {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.deleteConfirm p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .tabs {
+    width: 100%;
+    border-radius: var(--radius);
+  }
+
+  .tab {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .cardHeader,
+  .memberRow,
+  .memberActions,
+  .modalActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primaryBtn,
+  .dangerBtn {
+    width: 100%;
+  }
+}

@@ -1,0 +1,62 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  padding: 60px 24px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(253, 226, 21, 0.055), transparent 42%),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: fadeInUp 0.4s ease both;
+}
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 20px;
+  color: var(--accent);
+  background: rgba(253, 226, 21, 0.08);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius);
+}
+
+.title {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.description {
+  max-width: 420px;
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.action {
+  min-height: 42px;
+  padding: 10px 24px;
+  color: var(--black);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition);
+}
+
+.action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(253, 226, 21, 0.18);
+}
