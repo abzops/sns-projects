@@ -10,9 +10,13 @@ import ProjectsPage from './pages/ProjectsPage'
 import TasksPage from './pages/TasksPage'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 
+const routerBasename = import.meta.env.BASE_URL === '/'
+  ? undefined
+  : import.meta.env.BASE_URL.replace(/\/$/, '')
+
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <AuthProvider>
         <ToastProvider>
           <Routes>

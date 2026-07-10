@@ -5,7 +5,7 @@ import { Loader2, Mail, Lock, User } from 'lucide-react'
 import styles from './SignUpPage.module.css'
 
 export default function SignUpPage() {
-  const { user, signUp } = useAuth()
+  const { user, signUp, configError } = useAuth()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,6 +13,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const logoSrc = `${import.meta.env.BASE_URL}stacknstock-logo.png`
 
   if (user) return <Navigate to="/" replace />
 
@@ -56,7 +57,7 @@ export default function SignUpPage() {
         <div className={styles.card}>
           <div className={styles.logoSection}>
             <img
-              src="/stacknstock-logo.png"
+              src={logoSrc}
               alt="Stack n Stock"
               className={styles.logo}
             />
@@ -83,7 +84,7 @@ export default function SignUpPage() {
       <form className={styles.card} onSubmit={handleSubmit}>
         <div className={styles.logoSection}>
           <img
-            src="/stacknstock-logo.png"
+            src={logoSrc}
             alt="Stack n Stock"
             className={styles.logo}
           />
@@ -91,10 +92,10 @@ export default function SignUpPage() {
           <p className={styles.subtitle}>Create your account</p>
         </div>
 
-        {error && (
+        {(error || configError) && (
           <div className={styles.errorBox}>
             <span className={styles.errorDot} />
-            {error}
+            {error || configError}
           </div>
         )}
 

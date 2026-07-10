@@ -5,11 +5,12 @@ import { Loader2, Mail, Lock } from 'lucide-react'
 import styles from './LoginPage.module.css'
 
 export default function LoginPage() {
-  const { user, signIn } = useAuth()
+  const { user, signIn, configError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const logoSrc = `${import.meta.env.BASE_URL}stacknstock-logo.png`
 
   if (user) return <Navigate to="/" replace />
 
@@ -37,7 +38,7 @@ export default function LoginPage() {
       <form className={styles.card} onSubmit={handleSubmit}>
         <div className={styles.logoSection}>
           <img
-            src="/stacknstock-logo.png"
+            src={logoSrc}
             alt="Stack n Stock"
             className={styles.logo}
           />
@@ -45,10 +46,10 @@ export default function LoginPage() {
           <p className={styles.subtitle}>Sign in to your account</p>
         </div>
 
-        {error && (
+        {(error || configError) && (
           <div className={styles.errorBox}>
             <span className={styles.errorDot} />
-            {error}
+            {error || configError}
           </div>
         )}
 
