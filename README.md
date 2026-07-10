@@ -35,6 +35,21 @@ React + Vite project management app using Supabase Auth, Postgres, and Row Level
    http://127.0.0.1:5173/
    ```
 
+## GitHub Pages Deployment
+
+This app is deployed by `.github/workflows/deploy-pages.yml`.
+
+For the live site to connect to Supabase, add these repository variables in GitHub:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Then push to `main`. GitHub Actions builds `dist/` and deploys it to:
+
+```text
+https://abzops.github.io/sns-projects/
+```
+
 ## Supabase Setup
 
 1. Create a Supabase project.
