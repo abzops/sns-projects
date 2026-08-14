@@ -729,8 +729,9 @@
   display: flex;
   gap: 16px;
   overflow-x: auto;
-  padding-bottom: 12px;
+  padding-bottom: 16px;
   min-height: calc(100vh - 280px);
+  scroll-behavior: smooth;
 }
 
 .column {
@@ -741,6 +742,14 @@
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 260px);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+}
+
+.columnOver {
+  border-color: var(--yellow) !important;
+  background: rgba(253, 226, 21, 0.04) !important;
+  box-shadow: 0 0 0 1px var(--yellow) inset, 0 12px 28px rgba(0, 0, 0, 0.5);
 }
 
 .colHeader {
@@ -749,6 +758,12 @@
   justify-content: space-between;
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--panel-soft);
+  z-index: 2;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
 }
 
 .colTitleWrap {
@@ -786,6 +801,28 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 120px;
+}
+
+.emptyDropZone {
+  flex: 1;
+  min-height: 110px;
+  border: 1px dashed var(--line-light);
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.01);
+  pointer-events: none;
+}
+
+.sortableCardContainer {
+  position: relative;
 }
 
 .colAddBtn {
@@ -804,9 +841,14 @@
   transition: all var(--transition);
 }
 
-.colAddBtn:hover {
+.colAddBtn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.03);
   color: var(--yellow);
+}
+
+.colAddBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ══════════════════════════════════════════════════ */

@@ -1,4 +1,5 @@
-import { Calendar, ShieldAlert, ListTodo, Layers } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Calendar, ShieldAlert, ListTodo, Layers, GripVertical, MoreVertical } from 'lucide-react';
 import PriorityIcon from './PriorityIcon';
 import RaciBadge from './RaciBadge';
 import styles from './TaskCard.module.css';
@@ -17,51 +18,147 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export default function TaskCard({ task, onClick, isDragging = false, showStatus = false, showHierarchy = false }) {
+export default function TaskCard({
+  task,
+  onClick,
+  isDragging = false,
+  isOverlay = false,
+  showStatus = false,
+  showHierarchy = false,
+  dragHandleProps = null,
+  statuses = [],
+  onMoveStatus = null,
+}) {
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showStatusMenu) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowStatusMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showStatusMenu]);
+
   if (!task) return null;
 
   const isDone = task.task_statuses?.system_code === 'done' || task.task_statuses?.name?.toLowerCase().includes('done');
   const isBlocked = task.task_statuses?.system_code === 'blocked' || task.task_statuses?.name?.toLowerCase().includes('blocked');
   const overdue = isOverdue(task.due_date, isDone);
-
   const hasSubtasks = (task.subtask_count || 0) > 0;
+
+  const handleCardClick = (e) => {
+    // If clicked inside the drag handle or status menu, do not trigger card detail modal
+    if (e.target.closest(`.${styles.dragHandle}`) || e.target.closest(`.${styles.menuContainer}`)) {
+      return;
+    }
+    onClick?.(task);
+  };
 
   return (
     <div
-      className={`${styles.card} ${isDragging ? styles.dragging : ''} ${isBlocked ? styles.blockedCard : ''}`}
-      onClick={() => onClick?.(task)}
+      className={`
+        ${styles.card}
+        ${isDragging ? styles.dragging : ''}
+        ${isOverlay ? styles.overlayCard : ''}
+        ${isBlocked ? styles.blockedCard : ''}
+      `}
+      onClick={handleCardClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onClick?.(task)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') handleCardClick(e);
+      }}
     >
-      {/* Top badges row */}
+      {/* Top badges & Grip handle row */}
       <div className={styles.topRow}>
-        <div className={styles.statusTags}>
-          {showStatus && task.task_statuses && (
-            <span
-              className={styles.statusPill}
-              style={{
-                background: `${task.task_statuses.color}20`,
-                color: task.task_statuses.color,
-                borderColor: `${task.task_statuses.color}40`,
-              }}
+        <div className={styles.leftTopGroup}>
+          {dragHandleProps && (
+            <div
+              className={styles.dragHandle}
+              title="Drag to reorder or move status"
+              tabIndex={-1}
+              aria-label="Drag handle"
+              {...dragHandleProps}
+              onClick={(e) => e.stopPropagation()}
             >
-              {task.task_statuses.name}
-            </span>
+              <GripVertical size={14} />
+            </div>
           )}
-          {isBlocked && (
-            <span className={styles.blockedPill} title="Task is marked as Blocked">
-              <ShieldAlert size={11} /> Blocked
-            </span>
-          )}
-          {showHierarchy && (task.milestones?.name || task.task_lists?.name) && (
-            <span className={styles.hierarchyBadge} title={`${task.milestones?.name || ''} › ${task.task_lists?.name || ''}`}>
-              <Layers size={10} />
-              <span>{task.task_lists?.name || task.milestones?.name}</span>
-            </span>
+
+          <div className={styles.statusTags}>
+            {showStatus && task.task_statuses && (
+              <span
+                className={styles.statusPill}
+                style={{
+                  background: `${task.task_statuses.color}20`,
+                  color: task.task_statuses.color,
+                  borderColor: `${task.task_statuses.color}40`,
+                }}
+              >
+                {task.task_statuses.name}
+              </span>
+            )}
+            {isBlocked && (
+              <span className={styles.blockedPill} title="Task is marked as Blocked">
+                <ShieldAlert size={11} /> Blocked
+              </span>
+            )}
+            {showHierarchy && (task.milestones?.name || task.task_lists?.name) && (
+              <span className={styles.hierarchyBadge} title={`${task.milestones?.name || ''} › ${task.task_lists?.name || ''}`}>
+                <Layers size={10} />
+                <span>{task.task_lists?.name || task.milestones?.name}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.rightTopGroup}>
+          <PriorityIcon priority={task.priority || 'none'} showLabel />
+
+          {/* Quick status change fallback for touch / accessible menu */}
+          {onMoveStatus && statuses.length > 0 && !isOverlay && (
+            <div className={styles.menuContainer} ref={menuRef}>
+              <button
+                type="button"
+                className={styles.menuTriggerBtn}
+                title="Move task to another status"
+                aria-label="Move task status"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowStatusMenu((prev) => !prev);
+                }}
+              >
+                <MoreVertical size={13} />
+              </button>
+
+              {showStatusMenu && (
+                <div className={styles.statusDropdownMenu} onClick={(e) => e.stopPropagation()}>
+                  <div className={styles.menuHeader}>Move to…</div>
+                  {statuses.map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      className={`${styles.menuOption} ${st.id === task.status_id ? styles.menuOptionActive : ''}`}
+                      onClick={() => {
+                        setShowStatusMenu(false);
+                        if (st.id !== task.status_id) {
+                          onMoveStatus(task.id, st.id);
+                        }
+                      }}
+                    >
+                      <span className={styles.menuStatusDot} style={{ background: st.color }} />
+                      <span>{st.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
-        <PriorityIcon priority={task.priority || 'none'} showLabel />
       </div>
 
       {/* Title */}

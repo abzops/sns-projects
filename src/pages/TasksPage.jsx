@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTasks } from '../hooks/useTasks';
 import { useTaskStatuses } from '../hooks/useTaskStatuses';
@@ -7,21 +7,28 @@ import { useProjects } from '../hooks/useProjects';
 import { useDepartments } from '../hooks/useDepartments';
 import { useMilestones } from '../hooks/useMilestones';
 import { useTaskLists } from '../hooks/useTaskLists';
+import { useUserContext } from '../hooks/useUserContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 import { getMemberDisplayName } from '../lib/identity';
 import {
   DndContext,
-  closestCorners,
   DragOverlay,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
+  useDroppable,
+  pointerWithin,
+  rectIntersection,
+  closestCorners,
 } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
+  arrayMove,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -59,30 +66,119 @@ const PRIORITY_LABELS = {
 };
 
 /* ───── Sortable Task Card Wrapper (Kanban) ───── */
-function SortableTaskCardWrapper({ task, onClick }) {
+function SortableTaskCardWrapper({ task, onClick, disabled = false, statuses = [], onMoveStatus = null }) {
   const {
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({
+    id: task.id,
+    data: {
+      type: 'task',
+      task,
+    },
+    disabled,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab',
   };
 
+  const dragHandleProps = disabled
+    ? null
+    : {
+        ref: setActivatorNodeRef,
+        ...attributes,
+        ...listeners,
+      };
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} className={styles.sortableCardContainer}>
       <TaskCard
         task={task}
         onClick={() => onClick(task)}
         isDragging={isDragging}
+        dragHandleProps={dragHandleProps}
+        statuses={statuses}
+        onMoveStatus={onMoveStatus}
       />
+    </div>
+  );
+}
+
+/* ───── Droppable Kanban Column (Kanban) ───── */
+function KanbanColumn({
+  status,
+  tasks: columnTasks,
+  onTaskClick,
+  onAddTask,
+  disabled = false,
+  statuses = [],
+  onMoveStatus = null,
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: status.system_code,
+    data: {
+      type: 'column',
+      status,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${styles.column} ${isOver ? styles.columnOver : ''}`}
+      data-status-code={status.system_code}
+    >
+      <div className={styles.colHeader}>
+        <div className={styles.colTitleWrap}>
+          <span
+            className={styles.colDot}
+            style={{ background: status.color }}
+          />
+          <h3 className={styles.colTitle}>{status.name}</h3>
+        </div>
+        <span className={styles.colCount}>{columnTasks.length}</span>
+      </div>
+
+      <SortableContext
+        items={columnTasks.map((t) => t.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className={styles.taskList}>
+          {columnTasks.length === 0 ? (
+            <div className={styles.emptyDropZone}>
+              <span>Drop task here</span>
+            </div>
+          ) : (
+            columnTasks.map((task) => (
+              <SortableTaskCardWrapper
+                key={task.id}
+                task={task}
+                onClick={onTaskClick}
+                disabled={disabled}
+                statuses={statuses}
+                onMoveStatus={onMoveStatus}
+              />
+            ))
+          )}
+        </div>
+      </SortableContext>
+
+      <button
+        className={styles.colAddBtn}
+        onClick={() => onAddTask(status.id)}
+        disabled={disabled}
+        type="button"
+      >
+        <Plus size={14} />
+        <span>Add Task</span>
+      </button>
     </div>
   );
 }
@@ -115,6 +211,26 @@ export default function TasksPage() {
 
   const project = projects?.find((p) => p.id === projectId);
 
+  // User context & task mutation permissions
+  const {
+    workspaceRole,
+    isAdmin,
+    isProjectAdmin,
+    isCEO,
+    isCTO,
+    loading: userContextLoading,
+  } = useUserContext(workspaceId);
+
+  const canMutateTasks =
+    !userContextLoading &&
+    (isAdmin ||
+      isProjectAdmin ||
+      isCEO ||
+      isCTO ||
+      workspaceRole === 'member' ||
+      workspaceRole === 'owner' ||
+      workspaceRole === 'admin');
+
   // View state: 'hierarchy' | 'kanban' | 'list'
   const [view, setView] = useState('hierarchy');
   const [search, setSearch] = useState('');
@@ -135,8 +251,13 @@ export default function TasksPage() {
   const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
   const [showAddTaskListModal, setShowAddTaskListModal] = useState(false);
 
-  // Drag state
+  // Kanban local board state & dragging refs
   const [activeId, setActiveId] = useState(null);
+  const [boardTasks, setBoardTasks] = useState({});
+  const boardSnapshotRef = useRef(null);
+  const initialContainerRef = useRef(null);
+  const boardScrollRef = useRef(null);
+  const autoScrollAnimationRef = useRef(null);
 
   // New task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -165,9 +286,25 @@ export default function TasksPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Custom collision strategy: pointer intersection first, fallback to closest corners
+  const customCollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    const rectCollisions = rectIntersection(args);
+    if (rectCollisions.length > 0) {
+      return rectCollisions;
+    }
+    return closestCorners(args);
+  }, []);
 
   // Accordion toggle helpers
   const toggleMilestoneCollapse = (milestoneId) => {
@@ -246,25 +383,6 @@ export default function TasksPage() {
     });
     return sorted;
   }, [filteredTasks, sortColumn, sortDir]);
-
-  /* ── Tasks grouped by status (for Kanban) ── */
-  const tasksByStatus = useMemo(() => {
-    const map = {};
-    (statuses || []).forEach((s) => {
-      map[s.id] = [];
-    });
-    filteredTasks.forEach((t) => {
-      if (map[t.status_id]) {
-        map[t.status_id].push(t);
-      } else if (statuses && statuses[0]) {
-        map[statuses[0].id]?.push(t);
-      }
-    });
-    Object.keys(map).forEach((k) => {
-      map[k].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-    });
-    return map;
-  }, [filteredTasks, statuses]);
 
   /* ── Legacy Uncategorized Tasks ── */
   const uncategorizedTasks = useMemo(() => {
@@ -402,61 +520,271 @@ export default function TasksPage() {
     }
   };
 
+  /* ── Synchronize normalized board tasks from filtered tasks ── */
+  useEffect(() => {
+    if (activeId) return;
+
+    const map = {};
+    (statuses || []).forEach((s) => {
+      const code = s.system_code || s.id;
+      map[code] = [];
+    });
+
+    filteredTasks.forEach((t) => {
+      const st = (statuses || []).find((s) => s.id === t.status_id);
+      const code = st?.system_code || (statuses[0]?.system_code || 'todo');
+      if (!map[code]) map[code] = [];
+      map[code].push(t);
+    });
+
+    Object.keys(map).forEach((code) => {
+      map[code].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    });
+
+    setBoardTasks(map);
+  }, [filteredTasks, statuses, activeId]);
+
+  const findContainer = useCallback(
+    (id, currentBoard = boardTasks) => {
+      if (!id || !currentBoard) return null;
+      if (id in currentBoard) return id;
+      return (
+        Object.keys(currentBoard).find((key) =>
+          (currentBoard[key] || []).some((t) => t.id === id)
+        ) || null
+      );
+    },
+    [boardTasks]
+  );
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollAnimationRef.current) {
+      cancelAnimationFrame(autoScrollAnimationRef.current);
+      autoScrollAnimationRef.current = null;
+    }
+  }, []);
+
   /* ── Drag & Drop Handlers (Kanban) ── */
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id);
-  };
+  const handleDragStart = useCallback(
+    (event) => {
+      if (!canMutateTasks) return;
+      const { active } = event;
+      setActiveId(active.id);
+      boardSnapshotRef.current = JSON.parse(JSON.stringify(boardTasks));
+      initialContainerRef.current = findContainer(active.id, boardTasks);
+    },
+    [boardTasks, canMutateTasks, findContainer]
+  );
 
-  const handleDragOver = (event) => {
-    const { active, over } = event;
-    if (!over) return;
+  const handleDragMove = useCallback((event) => {
+    const container = boardScrollRef.current;
+    if (!container) return;
 
-    const activeTaskId = active.id;
-    const overId = over.id;
-
-    const activeTask = tasks.find((t) => t.id === activeTaskId);
-    if (!activeTask) return;
-
-    let targetStatusId = null;
-    const isOverColumn = statuses.some((s) => s.id === overId);
-    if (isOverColumn) {
-      targetStatusId = overId;
-    } else {
-      const overTask = tasks.find((t) => t.id === overId);
-      if (overTask) targetStatusId = overTask.status_id;
+    if (autoScrollAnimationRef.current) {
+      cancelAnimationFrame(autoScrollAnimationRef.current);
+      autoScrollAnimationRef.current = null;
     }
 
-    if (targetStatusId && activeTask.status_id !== targetStatusId) {
-      const overColumnTasks = tasksByStatus[targetStatusId] || [];
-      const newPos = overColumnTasks.length;
-      reorderTask(activeTaskId, targetStatusId, newPos);
+    const pointerX = event.pointerCoordinates?.x;
+    if (pointerX == null) return;
+
+    const rect = container.getBoundingClientRect();
+    const leftEdgeZone = rect.left + 90;
+    const rightEdgeZone = rect.right - 90;
+
+    let speed = 0;
+    if (pointerX < leftEdgeZone) {
+      const intensity = Math.min(1, Math.max(0.1, (leftEdgeZone - pointerX) / 90));
+      speed = -Math.round(18 * intensity);
+    } else if (pointerX > rightEdgeZone) {
+      const intensity = Math.min(1, Math.max(0.1, (pointerX - rightEdgeZone) / 90));
+      speed = Math.round(18 * intensity);
     }
-  };
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    setActiveId(null);
-    if (!over) return;
+    if (speed !== 0) {
+      const scrollStep = () => {
+        if (boardScrollRef.current) {
+          boardScrollRef.current.scrollLeft += speed;
+          autoScrollAnimationRef.current = requestAnimationFrame(scrollStep);
+        }
+      };
+      autoScrollAnimationRef.current = requestAnimationFrame(scrollStep);
+    }
+  }, []);
 
-    const activeTaskId = active.id;
-    const overId = over.id;
+  const handleDragOver = useCallback(
+    (event) => {
+      const { active, over } = event;
+      if (!over || !canMutateTasks) return;
 
-    const activeTask = tasks.find((t) => t.id === activeTaskId);
-    if (!activeTask) return;
+      const activeTaskId = active.id;
+      const overId = over.id;
 
-    const isOverColumn = statuses.some((s) => s.id === overId);
-    if (isOverColumn) {
-      const colTasks = tasksByStatus[overId] || [];
-      reorderTask(activeTaskId, overId, colTasks.length);
-    } else {
-      const overTask = tasks.find((t) => t.id === overId);
-      if (overTask) {
-        const colTasks = tasksByStatus[overTask.status_id] || [];
-        const newIndex = colTasks.findIndex((t) => t.id === overId);
-        reorderTask(activeTaskId, overTask.status_id, Math.max(0, newIndex));
+      if (activeTaskId === overId) return;
+
+      setBoardTasks((prev) => {
+        const activeContainer = findContainer(activeTaskId, prev);
+        const overContainer = findContainer(overId, prev);
+
+        if (!activeContainer || !overContainer || activeContainer === overContainer) {
+          return prev;
+        }
+
+        const activeItems = prev[activeContainer] || [];
+        const overItems = prev[overContainer] || [];
+
+        const activeIndex = activeItems.findIndex((t) => t.id === activeTaskId);
+        if (activeIndex === -1) return prev;
+
+        const activeTask = activeItems[activeIndex];
+
+        let newIndex;
+        if (overId in prev) {
+          // Dropped directly on column droppable / empty zone
+          newIndex = overItems.length;
+        } else {
+          const overIndex = overItems.findIndex((t) => t.id === overId);
+          if (overIndex === -1) {
+            newIndex = overItems.length;
+          } else {
+            const isBelowOverItem =
+              active.rect.current.translated &&
+              over.rect &&
+              active.rect.current.translated.top > over.rect.top + over.rect.height / 2;
+            newIndex = isBelowOverItem ? overIndex + 1 : overIndex;
+          }
+        }
+
+        return {
+          ...prev,
+          [activeContainer]: activeItems.filter((t) => t.id !== activeTaskId),
+          [overContainer]: [
+            ...overItems.slice(0, newIndex),
+            activeTask,
+            ...overItems.slice(newIndex),
+          ],
+        };
+      });
+    },
+    [canMutateTasks, findContainer]
+  );
+
+  const handleDragEnd = useCallback(
+    async (event) => {
+      stopAutoScroll();
+      const { active, over } = event;
+      setActiveId(null);
+
+      if (!over || !canMutateTasks) {
+        if (boardSnapshotRef.current) {
+          setBoardTasks(boardSnapshotRef.current);
+        }
+        return;
       }
+
+      const activeTaskId = active.id;
+      const overId = over.id;
+
+      setBoardTasks((currentBoard) => {
+        const activeContainer = findContainer(activeTaskId, currentBoard);
+        const overContainer = findContainer(overId, currentBoard);
+
+        if (!activeContainer || !overContainer) {
+          if (boardSnapshotRef.current) return boardSnapshotRef.current;
+          return currentBoard;
+        }
+
+        let finalBoard = { ...currentBoard };
+
+        if (activeContainer === overContainer) {
+          const items = currentBoard[activeContainer] || [];
+          const activeIndex = items.findIndex((t) => t.id === activeTaskId);
+          const overIndex = items.findIndex((t) => t.id === overId);
+
+          if (activeIndex !== overIndex && activeIndex !== -1 && overIndex !== -1) {
+            finalBoard = {
+              ...currentBoard,
+              [activeContainer]: arrayMove(items, activeIndex, overIndex),
+            };
+          }
+        }
+
+        const destStatus = statuses.find(
+          (s) => s.system_code === activeContainer || s.id === activeContainer
+        );
+
+        if (!destStatus) {
+          if (boardSnapshotRef.current) return boardSnapshotRef.current;
+          return currentBoard;
+        }
+
+        const initialSnapshot = boardSnapshotRef.current;
+        const initialContainer = initialContainerRef.current;
+        const initialItems = initialSnapshot?.[initialContainer] || [];
+        const initialIndex = initialItems.findIndex((t) => t.id === activeTaskId);
+
+        const currentItems = finalBoard[activeContainer] || [];
+        const currentIndex = currentItems.findIndex((t) => t.id === activeTaskId);
+
+        const hasChanged = initialContainer !== activeContainer || initialIndex !== currentIndex;
+
+        if (hasChanged) {
+          const destinationTaskIds = currentItems.map((t) => t.id);
+          (async () => {
+            try {
+              const { error: rpcErr } = await reorderTask(
+                activeTaskId,
+                destStatus.id,
+                destinationTaskIds
+              );
+              if (rpcErr) throw rpcErr;
+            } catch (err) {
+              console.error('Failed to persist task reorder:', err);
+              if (boardSnapshotRef.current) {
+                setBoardTasks(boardSnapshotRef.current);
+              }
+              showToast('Unable to move task. Changes were restored.', 'error');
+            }
+          })();
+        }
+
+        return finalBoard;
+      });
+    },
+    [canMutateTasks, findContainer, reorderTask, showToast, statuses, stopAutoScroll]
+  );
+
+  const handleDragCancel = useCallback(() => {
+    stopAutoScroll();
+    setActiveId(null);
+    if (boardSnapshotRef.current) {
+      setBoardTasks(boardSnapshotRef.current);
     }
-  };
+  }, [stopAutoScroll]);
+
+  const handleMoveStatus = useCallback(
+    async (taskId, targetStatusId) => {
+      if (!canMutateTasks) return;
+      const targetStatus = statuses.find((s) => s.id === targetStatusId);
+      if (!targetStatus) return;
+
+      const targetCode = targetStatus.system_code || targetStatus.name.toLowerCase().replace(/\s+/g, '_');
+      const targetList = (boardTasks[targetCode] || []).map((t) => t.id);
+      if (!targetList.includes(taskId)) {
+        targetList.push(taskId);
+      }
+
+      try {
+        const { error: rpcErr } = await reorderTask(taskId, targetStatusId, targetList);
+        if (rpcErr) throw rpcErr;
+        showToast(`Task moved to ${targetStatus.name}`, 'success');
+      } catch (err) {
+        console.error('Failed to move task status:', err);
+        showToast('Failed to update task status', 'error');
+      }
+    },
+    [boardTasks, canMutateTasks, reorderTask, showToast, statuses]
+  );
 
   const activeTask = useMemo(
     () => (activeId ? tasks.find((t) => t.id === activeId) : null),
@@ -923,58 +1251,43 @@ export default function TasksPage() {
       {view === 'kanban' && (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={customCollisionDetection}
           onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+          autoScroll={false}
         >
-          <div className={styles.board}>
+          <div className={styles.board} ref={boardScrollRef}>
             {statuses.map((status) => {
-              const colTasks = tasksByStatus[status.id] || [];
+              const code = status.system_code || status.id;
+              const colTasks = boardTasks[code] || [];
 
               return (
-                <div key={status.id} className={styles.column}>
-                  <div className={styles.colHeader}>
-                    <div className={styles.colTitleWrap}>
-                      <span
-                        className={styles.colDot}
-                        style={{ background: status.color }}
-                      />
-                      <h3 className={styles.colTitle}>{status.name}</h3>
-                    </div>
-                    <span className={styles.colCount}>{colTasks.length}</span>
-                  </div>
-
-                  <SortableContext
-                    items={colTasks.map((t) => t.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className={styles.taskList}>
-                      {colTasks.map((task) => (
-                        <SortableTaskCardWrapper
-                          key={task.id}
-                          task={task}
-                          onClick={() => setSelectedTask(task)}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-
-                  <button
-                    className={styles.colAddBtn}
-                    onClick={() => handleOpenAddTask()}
-                  >
-                    <Plus size={14} />
-                    <span>Add Task</span>
-                  </button>
-                </div>
+                <KanbanColumn
+                  key={status.id}
+                  status={status}
+                  tasks={colTasks}
+                  onTaskClick={(task) => setSelectedTask(task)}
+                  onAddTask={(statusId) => handleOpenAddTask('', '', statusId)}
+                  disabled={!canMutateTasks}
+                  statuses={statuses}
+                  onMoveStatus={handleMoveStatus}
+                />
               );
             })}
           </div>
 
-          <DragOverlay>
+          <DragOverlay dropAnimation={null}>
             {activeTask ? (
-              <TaskCard task={activeTask} isDragging />
+              <div style={{ width: 280 }}>
+                <TaskCard
+                  task={activeTask}
+                  isDragging={false}
+                  isOverlay={true}
+                />
+              </div>
             ) : null}
           </DragOverlay>
         </DndContext>

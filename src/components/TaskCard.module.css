@@ -7,10 +7,11 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   text-align: left;
+  user-select: none;
 }
 
 .card:hover {
@@ -20,10 +21,21 @@
 }
 
 .dragging {
-  opacity: 0.6;
-  transform: scale(1.02) rotate(1deg);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
-  border-color: var(--yellow);
+  opacity: 0.35;
+  border: 1px dashed var(--yellow) !important;
+  background: rgba(253, 226, 21, 0.03) !important;
+  box-shadow: none !important;
+}
+
+.overlayCard {
+  opacity: 1 !important;
+  cursor: grabbing !important;
+  transform: scale(1.03) rotate(1deg);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--yellow) !important;
+  border-color: var(--yellow) !important;
+  background: var(--panel-strong) !important;
+  pointer-events: none;
+  z-index: 9999;
 }
 
 .blockedCard {
@@ -38,10 +50,46 @@
   gap: 8px;
 }
 
+.leftTopGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rightTopGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--muted-2);
+  cursor: grab;
+  transition: background 0.15s ease, color 0.15s ease;
+  touch-action: none;
+  margin-left: -4px;
+}
+
+.dragHandle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--yellow);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
 .statusTags {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .statusPill {
@@ -174,4 +222,89 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Quick status change menu */
+.menuContainer {
+  position: relative;
+  display: inline-flex;
+}
+
+.menuTriggerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted-2);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.menuTriggerBtn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.statusDropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 150px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-xs);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuHeader {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  padding: 4px 8px 2px 8px;
+  letter-spacing: 0.04em;
+}
+
+.menuOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s ease;
+}
+
+.menuOption:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menuOptionActive {
+  background: rgba(253, 226, 21, 0.12);
+  color: var(--yellow);
+}
+
+.menuStatusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }

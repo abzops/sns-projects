@@ -396,34 +396,32 @@ export function useTasks(projectId, workspaceId) {
     return { error: deleteError };
   };
 
-  const reorderTask = async (taskId, newStatusId, newPosition) => {
-    const updates = buildReorderUpdates(tasks, taskId, newStatusId, newPosition);
-
-    if (updates.length === 0) {
-      return { error: new Error('Task not found') };
-    }
-
+  const reorderTask = async (taskId, newStatusId, taskIdsOrPosition) => {
     const supabase = getSupabase();
-    const results = await Promise.all(
-      updates.map((update) =>
-        supabase
-          .from('tasks')
-          .update({
-            status_id: update.status_id,
-            position: update.position,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', update.id)
-      )
-    );
 
-    const failed = results.find((result) => result.error);
-
-    if (!failed) {
-      await fetchTasks();
+    let orderedTaskIds = [];
+    if (Array.isArray(taskIdsOrPosition)) {
+      orderedTaskIds = taskIdsOrPosition;
+    } else if (typeof taskIdsOrPosition === 'number') {
+      const updates = buildReorderUpdates(tasks, taskId, newStatusId, taskIdsOrPosition);
+      orderedTaskIds = updates.map((u) => u.id);
+    } else {
+      orderedTaskIds = [taskId];
     }
 
-    return { error: failed?.error || null };
+    const { data, error: rpcError } = await supabase.rpc('reorder_kanban_tasks', {
+      p_task_id: taskId,
+      p_new_status_id: newStatusId,
+      p_task_ids: orderedTaskIds.length > 0 ? orderedTaskIds : [taskId],
+    });
+
+    if (rpcError) {
+      console.error('Failed to atomically reorder task:', rpcError);
+      return { data: null, error: rpcError };
+    }
+
+    await fetchTasks();
+    return { data, error: null };
   };
 
   return { tasks, loading, error, createTask, updateTask, deleteTask, reorderTask, refetch: fetchTasks };
