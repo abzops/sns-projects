@@ -1,7 +1,8 @@
 .row {
   cursor: pointer;
-  transition: background var(--transition);
+  transition: background var(--transition), transform var(--transition);
   border-bottom: 1px solid var(--line);
+  height: 60px;
 }
 
 .row:hover {
@@ -17,34 +18,111 @@
   background: rgba(232, 97, 74, 0.04);
 }
 
-.titleCell {
-  min-width: 200px;
-  max-width: 380px;
+.blockedRow:hover {
+  background: rgba(232, 97, 74, 0.08);
 }
 
-.titleWrapper {
+/* ───── Title Cell & Two-Level Hierarchy ───── */
+.titleCell {
+  padding: 10px 16px;
+  vertical-align: middle;
+}
+
+.titleContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.primaryTitleRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .blockedBadge {
   color: #ff7d6b;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .taskTitle {
   font-weight: 700;
   color: var(--text);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .projectName {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--muted-2);
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.secondaryMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--muted-2);
+  line-height: 1.2;
+}
+
+.hierarchyMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.subtaskMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+  font-weight: 500;
+}
+
+.metaDot {
+  color: var(--muted-2);
+  opacity: 0.6;
+}
+
+.metaIcon {
+  color: var(--muted-2);
+  flex-shrink: 0;
+}
+
+/* ───── Column Cells ───── */
+.statusCell {
+  padding: 10px 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.priorityCell {
+  padding: 10px 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.raciCell {
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+
+.dateCell {
+  padding: 10px 16px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .legacyAssignee {
@@ -64,6 +142,7 @@
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .overdue {
@@ -78,28 +157,27 @@
   background: var(--red);
 }
 
-.subtaskBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--muted);
-  padding: 1px 5px;
-  background: var(--panel-soft);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+@media (max-width: 1024px) {
+  .titleCell {
+    padding: 8px 12px;
+  }
+  .statusCell,
+  .priorityCell,
+  .raciCell,
+  .dateCell {
+    padding: 8px 10px;
+  }
+  .taskTitle {
+    max-width: 220px;
+  }
 }
 
-.hierarchyBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--yellow);
-  padding: 1px 5px;
-  background: rgba(253, 226, 21, 0.08);
-  border: 1px solid rgba(253, 226, 21, 0.25);
-  border-radius: 4px;
+@media (max-width: 640px) {
+  .row {
+    height: auto;
+  }
+  .taskTitle {
+    max-width: 170px;
+  }
 }
+

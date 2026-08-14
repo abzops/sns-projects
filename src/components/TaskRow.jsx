@@ -15,16 +15,21 @@ function isOverdue(dateStr, isDone) {
 function formatDate(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Returns clean "25 Oct 2026"
+  const day = d.getDate();
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
-export default function TaskRow({ task, onClick, showProjectName = false, showHierarchy = false }) {
+export default function TaskRow({ task, onClick, showProjectName = false, showHierarchy = true }) {
   if (!task) return null;
 
   const isDone = task.task_statuses?.system_code === 'done' || task.task_statuses?.name?.toLowerCase().includes('done');
   const isBlocked = task.task_statuses?.system_code === 'blocked' || task.task_statuses?.name?.toLowerCase().includes('blocked');
   const overdue = isOverdue(task.due_date, isDone);
   const hasSubtasks = (task.subtask_count || 0) > 0;
+  const hierarchyName = task.task_lists?.name || task.milestones?.name;
 
   return (
     <tr
@@ -33,50 +38,56 @@ export default function TaskRow({ task, onClick, showProjectName = false, showHi
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick?.(task)}
     >
-      {/* Title & Project & Hierarchy */}
+      {/* Title & Hierarchy (2 Clean Visual Levels) */}
       <td className={styles.titleCell}>
-        <div className={styles.titleWrapper}>
-          {isBlocked && (
-            <span className={styles.blockedBadge} title="Task is blocked">
-              <ShieldAlert size={12} />
-            </span>
-          )}
-          <span className={styles.taskTitle}>{task.title}</span>
+        <div className={styles.titleContainer}>
+          <div className={styles.primaryTitleRow}>
+            {isBlocked && (
+              <span className={styles.blockedBadge} title="Task is blocked">
+                <ShieldAlert size={13} />
+              </span>
+            )}
+            <span className={styles.taskTitle}>{task.title}</span>
+            {showProjectName && task.projects?.name && (
+              <span className={styles.projectName}>({task.projects.name})</span>
+            )}
+          </div>
 
-          {hasSubtasks && (
-            <span className={styles.subtaskBadge} title="Subtasks completed">
-              <ListTodo size={11} />
-              <span>{task.subtasks_completed_count || 0}/{task.subtask_count}</span>
-            </span>
-          )}
+          <div className={styles.secondaryMetaRow}>
+            {showHierarchy && hierarchyName && (
+              <span className={styles.hierarchyMeta} title={task.milestones?.name ? `Milestone: ${task.milestones.name}` : ''}>
+                <Layers size={11} className={styles.metaIcon} />
+                <span>{hierarchyName}</span>
+              </span>
+            )}
 
-          {showHierarchy && (task.milestones?.name || task.task_lists?.name) && (
-            <span className={styles.hierarchyBadge}>
-              <Layers size={10} />
-              <span>{task.task_lists?.name || task.milestones?.name}</span>
-            </span>
-          )}
-
-          {showProjectName && task.projects?.name && (
-            <span className={styles.projectName}>in {task.projects.name}</span>
-          )}
+            {hasSubtasks && (
+              <span className={styles.subtaskMeta} title="Subtask completion">
+                {showHierarchy && hierarchyName && <span className={styles.metaDot}>·</span>}
+                <ListTodo size={11} className={styles.metaIcon} />
+                <span>{task.subtasks_completed_count || 0}/{task.subtask_count} subtasks</span>
+              </span>
+            )}
+          </div>
         </div>
       </td>
 
       {/* Status */}
-      <td>
-        {task.task_statuses && (
+      <td className={styles.statusCell}>
+        {task.task_statuses ? (
           <StatusBadge status={{ name: task.task_statuses.name, color: task.task_statuses.color }} size="sm" />
+        ) : (
+          <span className={styles.unassigned}>—</span>
         )}
       </td>
 
       {/* Priority */}
-      <td>
+      <td className={styles.priorityCell}>
         <PriorityIcon priority={task.priority || 'none'} showLabel />
       </td>
 
       {/* RACI Column */}
-      <td>
+      <td className={styles.raciCell}>
         {task.raci ? (
           <RaciBadge raci={task.raci} compact />
         ) : task.assignee?.full_name ? (
@@ -87,10 +98,8 @@ export default function TaskRow({ task, onClick, showProjectName = false, showHi
       </td>
 
       {/* Due Date */}
-      <td>
-        <span
-          className={`${styles.date} ${overdue ? styles.overdue : ''}`}
-        >
+      <td className={styles.dateCell}>
+        <span className={`${styles.date} ${overdue ? styles.overdue : ''}`}>
           {formatDate(task.due_date)}
           {overdue && <span className={styles.overdueDot} title="Overdue" />}
         </span>

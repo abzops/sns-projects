@@ -819,9 +819,13 @@ export default function TasksPage() {
     [activeId, tasks]
   );
 
-  const loading = tasksLoading || statusesLoading || milestonesLoading || taskListsLoading;
+  const isInitialLoading =
+    (tasksLoading && tasks.length === 0) ||
+    (statusesLoading && statuses.length === 0) ||
+    (milestonesLoading && milestones.length === 0) ||
+    (taskListsLoading && taskLists.length === 0);
 
-  if (loading) {
+  if (isInitialLoading) {
     return (
       <div className={styles.loadingState}>
         <Spinner size="lg" />
@@ -1337,13 +1341,13 @@ export default function TasksPage() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th onClick={() => handleSort('title')} className={styles.sortableHeader}>
+                    <th onClick={() => handleSort('title')} className={`${styles.sortableHeader} ${styles.colHeaderTitle}`}>
                       Title
                     </th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>RACI Assignment</th>
-                    <th onClick={() => handleSort('due_date')} className={styles.sortableHeader}>
+                    <th className={styles.colHeaderStatus}>Status</th>
+                    <th className={styles.colHeaderPriority}>Priority</th>
+                    <th className={styles.colHeaderRaci}>RACI Assignment</th>
+                    <th onClick={() => handleSort('due_date')} className={`${styles.sortableHeader} ${styles.colHeaderDate}`}>
                       Due Date
                     </th>
                   </tr>

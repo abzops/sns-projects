@@ -34,6 +34,14 @@ async function main() {
   });
   await pgClient.connect();
 
+  // Find To Do status of Warehouse
+  const { rows: todoRows } = await pgClient.query(`
+    SELECT ts.id FROM public.task_statuses ts
+    JOIN public.projects p ON p.id = ts.project_id
+    WHERE p.name ILIKE '%Warehouse%' AND ts.system_code = 'todo';
+  `);
+  const todoStatusId = todoRows[0]?.id;
+
   // Find In Review status of Warehouse
   const { rows: statusRows } = await pgClient.query(`
     SELECT ts.id FROM public.task_statuses ts
@@ -50,7 +58,15 @@ async function main() {
     AND project_id IN (SELECT id FROM public.projects WHERE name ILIKE '%Warehouse%');
   `);
 
-  console.log('Restored "Freeze Integrated Deployment Schedule" back to In Review');
+  // Update Commission PLC & HMI back to todo
+  await pgClient.query(`
+    UPDATE public.tasks
+    SET status_id = '${todoStatusId}', position = 2000
+    WHERE title = 'Commission PLC & HMI'
+    AND project_id IN (SELECT id FROM public.projects WHERE name ILIKE '%Warehouse%');
+  `);
+
+  console.log('Restored Warehouse tasks to canonical status distribution');
   await pgClient.end();
 }
 

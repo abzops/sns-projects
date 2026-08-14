@@ -82,8 +82,22 @@ export default function RaciBadge({ raci, compact = false, showDetails = false }
   }
 
   if (compact) {
+    const aName = accountable?.profiles?.full_name || accountable?.departments?.name || 'Accountable Owner';
+    const rNames = responsible.map((r) => r.profiles?.full_name || r.departments?.name || r.departments?.code || 'Responsible').join(', ');
+    const cCount = consulted.length;
+    const iCount = informed.length;
+    const cNames = consulted.map((c) => c.profiles?.full_name || c.departments?.name || c.departments?.code).join(', ');
+    const iNames = informed.map((i) => i.profiles?.full_name || i.departments?.name || i.departments?.code).join(', ');
+
+    const tooltipParts = [];
+    if (accountable) tooltipParts.push(`Accountable (A): ${aName}`);
+    if (responsible.length > 0) tooltipParts.push(`Responsible (R): ${rNames}`);
+    if (cCount > 0) tooltipParts.push(`Consulted (C): ${cNames}`);
+    if (iCount > 0) tooltipParts.push(`Informed (I): ${iNames}`);
+    const fullTooltip = tooltipParts.join('\n');
+
     return (
-      <div className={styles.compactRow}>
+      <div className={styles.compactRow} title={fullTooltip}>
         {!isComplete && (
           <span className={styles.miniIncomplete} title="Incomplete RACI: Requires 1 Accountable and ≥1 Responsible">
             <AlertCircle size={12} />
@@ -91,21 +105,31 @@ export default function RaciBadge({ raci, compact = false, showDetails = false }
         )}
 
         {accountable && (
-          <div className={styles.compactA} title={`Accountable: ${accountable.profiles?.full_name || 'Assigned'}`}>
+          <div className={styles.compactA} title={`Accountable: ${aName}`}>
             <span className={styles.roleLetterA}>A</span>
-            <Avatar
-              name={accountable.profiles?.full_name || 'Accountable'}
-              src={accountable.profiles?.avatar_url}
-              size="sm"
-            />
+            <span className={styles.compactName}>{aName}</span>
           </div>
         )}
 
         {responsible.length > 0 && (
-          <div className={styles.compactR}>
+          <div className={styles.compactR} title={`Responsible: ${rNames}`}>
             <span className={styles.roleLetterR}>R</span>
             <RaciAvatarStack items={responsible} max={2} size="xs" />
           </div>
+        )}
+
+        {cCount > 0 && (
+          <span className={styles.compactC} title={`Consulted (${cCount}): ${cNames}`}>
+            <span className={styles.roleLetterC}>C</span>
+            <span className={styles.compactCount}>+{cCount}</span>
+          </span>
+        )}
+
+        {iCount > 0 && (
+          <span className={styles.compactI} title={`Informed (${iCount}): ${iNames}`}>
+            <span className={styles.roleLetterI}>I</span>
+            <span className={styles.compactCount}>+{iCount}</span>
+          </span>
         )}
       </div>
     );

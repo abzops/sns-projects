@@ -95,121 +95,132 @@ function buildReorderUpdates(tasks, taskId, newStatusId, newPosition) {
 export function useTasks(projectId, workspaceId) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const { statuses } = useTaskStatuses(projectId);
   const { members } = useMembers(workspaceId);
 
-  const fetchTasks = useCallback(async () => {
-    if (!projectId || !user) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    const supabase = getSupabase();
-    const { data, error: fetchError } = await supabase
-      .from('tasks')
-      .select(`
-        id,
-        project_id,
-        milestone_id,
-        task_list_id,
-        title,
-        description,
-        status_id,
-        priority,
-        assignee_id,
-        due_date,
-        position,
-        created_by,
-        created_at,
-        updated_at,
-        milestones:milestone_id (
-          id,
-          name,
-          start_date,
-          end_date
-        ),
-        task_lists:task_list_id (
-          id,
-          name
-        )
-      `)
-      .eq('project_id', projectId)
-      .order('position', { ascending: true });
-
-    if (fetchError) {
-      console.error('Error fetching tasks:', fetchError);
-      setError(fetchError);
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-
-    const taskIds = (data || []).map((t) => t.id);
-    let raciRows = [];
-    const subtasksByTaskId = new Map();
-
-    if (taskIds.length > 0) {
-      // 1. Fetch RACI assignments
-      const { data: raciData, error: raciError } = await supabase
-        .from('task_raci_assignments')
-        .select(`
-          id,
-          task_id,
-          raci_role,
-          user_id,
-          department_id,
-          created_by,
-          created_at,
-          profiles:user_id (
-            id,
-            full_name,
-            avatar_url
-          ),
-          departments:department_id (
-            id,
-            code,
-            name,
-            color
-          )
-        `)
-        .in('task_id', taskIds);
-
-      if (!raciError) {
-        raciRows = raciData || [];
+  const fetchTasks = useCallback(
+    async (options = {}) => {
+      const isSilent = options?.silent ?? false;
+      if (!projectId || !user) {
+        setTasks([]);
+        setInitialLoading(false);
+        setRefreshing(false);
+        return;
       }
 
-      // 2. Fetch Subtask stats
-      const { data: subtaskData } = await supabase
-        .from('subtasks')
-        .select('id, task_id, status')
-        .in('task_id', taskIds);
+      if (!isSilent) {
+        setInitialLoading((prev) => (tasks.length === 0 ? true : prev));
+        setRefreshing(true);
+      }
 
-      if (subtaskData) {
-        for (const st of subtaskData) {
-          if (!subtasksByTaskId.has(st.task_id)) {
-            subtasksByTaskId.set(st.task_id, { total: 0, completed: 0 });
-          }
-          const s = subtasksByTaskId.get(st.task_id);
-          if (st.status !== 'cancelled') {
-            s.total += 1;
-            if (st.status === 'done') {
-              s.completed += 1;
+      setError(null);
+
+      const supabase = getSupabase();
+      const { data, error: fetchError } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          project_id,
+          milestone_id,
+          task_list_id,
+          title,
+          description,
+          status_id,
+          priority,
+          assignee_id,
+          due_date,
+          position,
+          created_by,
+          created_at,
+          updated_at,
+          milestones:milestone_id (
+            id,
+            name,
+            start_date,
+            end_date
+          ),
+          task_lists:task_list_id (
+            id,
+            name
+          )
+        `)
+        .eq('project_id', projectId)
+        .order('position', { ascending: true });
+
+      if (fetchError) {
+        console.error('Error fetching tasks:', fetchError);
+        setError(fetchError);
+        setInitialLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const taskIds = (data || []).map((t) => t.id);
+      let raciRows = [];
+      const subtasksByTaskId = new Map();
+
+      if (taskIds.length > 0) {
+        // 1. Fetch RACI assignments
+        const { data: raciData, error: raciError } = await supabase
+          .from('task_raci_assignments')
+          .select(`
+            id,
+            task_id,
+            raci_role,
+            user_id,
+            department_id,
+            created_by,
+            created_at,
+            profiles:user_id (
+              id,
+              full_name,
+              avatar_url
+            ),
+            departments:department_id (
+              id,
+              code,
+              name,
+              color
+            )
+          `)
+          .in('task_id', taskIds);
+
+        if (!raciError) {
+          raciRows = raciData || [];
+        }
+
+        // 2. Fetch Subtask stats
+        const { data: subtaskData } = await supabase
+          .from('subtasks')
+          .select('id, task_id, status')
+          .in('task_id', taskIds);
+
+        if (subtaskData) {
+          for (const st of subtaskData) {
+            if (!subtasksByTaskId.has(st.task_id)) {
+              subtasksByTaskId.set(st.task_id, { total: 0, completed: 0 });
+            }
+            const s = subtasksByTaskId.get(st.task_id);
+            if (st.status !== 'cancelled') {
+              s.total += 1;
+              if (st.status === 'done') {
+                s.completed += 1;
+              }
             }
           }
         }
       }
-    }
 
-    setTasks(enrichTasks(data || [], statuses, members, raciRows, subtasksByTaskId));
-    setLoading(false);
-  }, [projectId, user, statuses, members]);
+      setTasks(enrichTasks(data || [], statuses, members, raciRows, subtasksByTaskId));
+      setInitialLoading(false);
+      setRefreshing(false);
+    },
+    [projectId, user, statuses, members, tasks.length]
+  );
 
   useEffect(() => {
     fetchTasks();
@@ -326,13 +337,12 @@ export function useTasks(projectId, workspaceId) {
       .insert(raciInserts);
 
     if (raciInsertErr) {
-      // Compensating rollback: delete created task so no incomplete task is left
       console.error('RACI insertion failed; rolling back task creation:', raciInsertErr);
       await supabase.from('tasks').delete().eq('id', createdTask.id);
       return { data: null, error: new Error(`Failed to assign mandatory RACI: ${raciInsertErr.message}`) };
     }
 
-    await fetchTasks();
+    await fetchTasks({ silent: true });
     return { data: createdTask, error: null };
   };
 
@@ -376,7 +386,7 @@ export function useTasks(projectId, workspaceId) {
       .single();
 
     if (!updateError) {
-      await fetchTasks();
+      await fetchTasks({ silent: true });
     }
 
     return { data, error: updateError };
@@ -390,7 +400,7 @@ export function useTasks(projectId, workspaceId) {
       .eq('id', id);
 
     if (!deleteError) {
-      await fetchTasks();
+      await fetchTasks({ silent: true });
     }
 
     return { error: deleteError };
@@ -409,6 +419,23 @@ export function useTasks(projectId, workspaceId) {
       orderedTaskIds = [taskId];
     }
 
+    // Optimistically update local tasks cache without causing unmount/flicker
+    const targetStatus = statuses?.find((s) => s.id === newStatusId);
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            status_id: newStatusId,
+            task_statuses: targetStatus
+              ? { id: targetStatus.id, name: targetStatus.name, color: targetStatus.color, system_code: targetStatus.system_code }
+              : t.task_statuses,
+          };
+        }
+        return t;
+      })
+    );
+
     const { data, error: rpcError } = await supabase.rpc('reorder_kanban_tasks', {
       p_task_id: taskId,
       p_new_status_id: newStatusId,
@@ -417,12 +444,25 @@ export function useTasks(projectId, workspaceId) {
 
     if (rpcError) {
       console.error('Failed to atomically reorder task:', rpcError);
+      await fetchTasks({ silent: true });
       return { data: null, error: rpcError };
     }
 
-    await fetchTasks();
+    // Silently revalidate canonical task state in background
+    await fetchTasks({ silent: true });
     return { data, error: null };
   };
 
-  return { tasks, loading, error, createTask, updateTask, deleteTask, reorderTask, refetch: fetchTasks };
+  return {
+    tasks,
+    loading: initialLoading,
+    initialLoading,
+    refreshing,
+    error,
+    createTask,
+    updateTask,
+    deleteTask,
+    reorderTask,
+    refetch: fetchTasks,
+  };
 }
