@@ -6,6 +6,8 @@ import {
   Search,
   ShieldAlert,
   Inbox,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../hooks/useDepartments';
@@ -14,14 +16,20 @@ import PageHeader from '../components/PageHeader';
 import TaskCard from '../components/TaskCard';
 import TaskRow from '../components/TaskRow';
 import TaskDetailPanel from '../components/TaskDetailPanel';
-import Spinner from '../components/Spinner';
+import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import styles from './MyWorkPage.module.css';
+
+// In-memory session cache scoped by workspaceId:userId
+const myWorkCache = new Map();
 
 export default function MyWorkPage() {
   const { workspaceId } = useParams();
   const { user } = useAuth();
   const { departments = [] } = useDepartments(workspaceId);
+
+  const cacheKey = `${workspaceId}:${user?.id || ''}`;
+  const cachedData = myWorkCache.get(cacheKey) || null;
 
   const [activeTab, setActiveTab] = useState('R'); // 'R' | 'A' | 'C' | 'I' | 'all'
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'cards'
@@ -30,203 +38,214 @@ export default function MyWorkPage() {
   const [filterOnlyOverdue, setFilterOnlyOverdue] = useState(false);
   const [filterOnlyBlocked, setFilterOnlyBlocked] = useState(false);
 
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState(() => cachedData || []);
+  const [initialLoading, setInitialLoading] = useState(() => !cachedData);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
 
-  // Fetch all tasks relevant to user via RACI or primary assignee in this workspace
-  const fetchMyWork = useCallback(async () => {
-    if (!workspaceId || !user) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // 1. Fetch user's RACI assignments in this workspace
-      const { data: userRaci, error: raciErr } = await supabase
-        .from('task_raci_assignments')
-        .select(`
-          id,
-          task_id,
-          raci_role,
-          user_id,
-          department_id,
-          tasks:task_id (
-            id,
-            project_id,
-            milestone_id,
-            task_list_id,
-            title,
-            description,
-            status_id,
-            priority,
-            assignee_id,
-            due_date,
-            position,
-            created_at,
-            projects:project_id (
-              id,
-              name,
-              color,
-              workspace_id
-            ),
-            milestones:milestone_id (
-              id,
-              name
-            ),
-            task_lists:task_list_id (
-              id,
-              name
-            ),
-            task_statuses:status_id (
-              id,
-              name,
-              color,
-              system_code
-            ),
-            assignee:assignee_id (
-              id,
-              full_name,
-              avatar_url
-            )
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (raciErr) throw raciErr;
-
-      // 2. Also fetch tasks directly assigned to user as primary assignee
-      const { data: directTasks, error: directErr } = await supabase
-        .from('tasks')
-        .select(`
-          id,
-          project_id,
-          milestone_id,
-          task_list_id,
-          title,
-          description,
-          status_id,
-          priority,
-          assignee_id,
-          due_date,
-          position,
-          created_at,
-          projects:project_id (
-            id,
-            name,
-            color,
-            workspace_id
-          ),
-          milestones:milestone_id (
-            id,
-            name
-          ),
-          task_lists:task_list_id (
-            id,
-            name
-          ),
-          task_statuses:status_id (
-            id,
-            name,
-            color,
-            system_code
-          ),
-          assignee:assignee_id (
-            id,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('assignee_id', user.id);
-
-      if (directErr) throw directErr;
-
-      // Collect unique tasks for this workspace
-      const taskMap = new Map();
-      const userRolesByTaskId = new Map(); // taskId -> Set of 'R','A','C','I'
-
-      // Process RACI items
-      for (const item of userRaci || []) {
-        const t = item.tasks;
-        if (!t || t.projects?.workspace_id !== workspaceId) continue;
-
-        if (!taskMap.has(t.id)) {
-          taskMap.set(t.id, t);
-        }
-        if (!userRolesByTaskId.has(t.id)) {
-          userRolesByTaskId.set(t.id, new Set());
-        }
-        userRolesByTaskId.get(t.id).add(item.raci_role);
+  // Parallelized, non-blocking fetch
+  const fetchMyWork = useCallback(
+    async (options = {}) => {
+      const isSilent = options?.silent ?? false;
+      if (!workspaceId || !user) {
+        setTasks([]);
+        setInitialLoading(false);
+        setRefreshing(false);
+        return;
       }
 
-      // Process direct tasks
-      for (const t of directTasks || []) {
-        if (!t || t.projects?.workspace_id !== workspaceId) continue;
-        if (!taskMap.has(t.id)) {
-          taskMap.set(t.id, t);
-        }
-        if (!userRolesByTaskId.has(t.id)) {
-          userRolesByTaskId.set(t.id, new Set());
-        }
-        // Direct assignee defaults to Responsible if not already assigned
-        if (userRolesByTaskId.get(t.id).size === 0) {
-          userRolesByTaskId.get(t.id).add('R');
-        }
+      if (!isSilent && !myWorkCache.has(cacheKey)) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
       }
+      setError(null);
 
-      // 3. Batch load full RACI info for these tasks
-      const allTaskIds = Array.from(taskMap.keys());
-      let fullRaciMap = new Map();
-
-      if (allTaskIds.length > 0) {
-        const { data: allRaci } = await supabase
-          .from('task_raci_assignments')
-          .select(`
-            id,
-            task_id,
-            raci_role,
-            user_id,
-            department_id,
-            profiles:user_id (
+      try {
+        // Step 1: Concurrently fetch user's RACI assignments AND direct assignee tasks
+        const [raciRes, directRes] = await Promise.all([
+          supabase
+            .from('task_raci_assignments')
+            .select(`
               id,
-              full_name,
-              avatar_url
-            ),
-            departments:department_id (
-              id,
-              code,
-              name,
-              color
-            )
-          `)
-          .in('task_id', allTaskIds);
+              task_id,
+              raci_role,
+              user_id,
+              department_id,
+              tasks:task_id (
+                id,
+                project_id,
+                milestone_id,
+                task_list_id,
+                title,
+                description,
+                status_id,
+                priority,
+                assignee_id,
+                due_date,
+                position,
+                created_at,
+                projects:project_id (
+                  id,
+                  name,
+                  color,
+                  workspace_id
+                ),
+                milestones:milestone_id (
+                  id,
+                  name
+                ),
+                task_lists:task_list_id (
+                  id,
+                  name
+                ),
+                task_statuses:status_id (
+                  id,
+                  name,
+                  color,
+                  system_code
+                ),
+                assignee:assignee_id (
+                  id,
+                  full_name,
+                  avatar_url
+                )
+              )
+            `)
+            .eq('user_id', user.id),
 
-        if (allRaci) {
-          for (const r of allRaci) {
-            if (!fullRaciMap.has(r.task_id)) fullRaciMap.set(r.task_id, []);
-            fullRaciMap.get(r.task_id).push(r);
+          supabase
+            .from('tasks')
+            .select(`
+              id,
+              project_id,
+              milestone_id,
+              task_list_id,
+              title,
+              description,
+              status_id,
+              priority,
+              assignee_id,
+              due_date,
+              position,
+              created_at,
+              projects:project_id (
+                id,
+                name,
+                color,
+                workspace_id
+              ),
+              milestones:milestone_id (
+                id,
+                name
+              ),
+              task_lists:task_list_id (
+                id,
+                name
+              ),
+              task_statuses:status_id (
+                id,
+                name,
+                color,
+                system_code
+              ),
+              assignee:assignee_id (
+                id,
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('assignee_id', user.id),
+        ]);
+
+        if (raciRes.error) throw raciRes.error;
+        if (directRes.error) throw directRes.error;
+
+        // Combine unique tasks for this workspace
+        const taskMap = new Map();
+        const userRolesByTaskId = new Map();
+
+        // Process RACI items
+        for (const item of raciRes.data || []) {
+          const t = item.tasks;
+          if (!t || t.projects?.workspace_id !== workspaceId) continue;
+
+          if (!taskMap.has(t.id)) {
+            taskMap.set(t.id, t);
+          }
+          if (!userRolesByTaskId.has(t.id)) {
+            userRolesByTaskId.set(t.id, new Set());
+          }
+          userRolesByTaskId.get(t.id).add(item.raci_role);
+        }
+
+        // Process direct tasks
+        for (const t of directRes.data || []) {
+          if (!t || t.projects?.workspace_id !== workspaceId) continue;
+          if (!taskMap.has(t.id)) {
+            taskMap.set(t.id, t);
+          }
+          if (!userRolesByTaskId.has(t.id)) {
+            userRolesByTaskId.set(t.id, new Set());
+          }
+          if (userRolesByTaskId.get(t.id).size === 0) {
+            userRolesByTaskId.get(t.id).add('R');
           }
         }
 
-        // Batch load subtasks stats
-        const { data: subtaskRows } = await supabase
-          .from('subtasks')
-          .select('id, task_id, status')
-          .in('task_id', allTaskIds);
-
+        const allTaskIds = Array.from(taskMap.keys());
+        let fullRaciMap = new Map();
         const subtaskMap = new Map();
-        if (subtaskRows) {
-          for (const st of subtaskRows) {
-            if (!subtaskMap.has(st.task_id)) {
-              subtaskMap.set(st.task_id, { total: 0, completed: 0 });
+
+        // Step 2: Concurrently fetch full RACI metadata and Subtask counts in parallel
+        if (allTaskIds.length > 0) {
+          const [allRaciRes, subtasksRes] = await Promise.all([
+            supabase
+              .from('task_raci_assignments')
+              .select(`
+                id,
+                task_id,
+                raci_role,
+                user_id,
+                department_id,
+                profiles:user_id (
+                  id,
+                  full_name,
+                  avatar_url
+                ),
+                departments:department_id (
+                  id,
+                  code,
+                  name,
+                  color
+                )
+              `)
+              .in('task_id', allTaskIds),
+
+            supabase
+              .from('subtasks')
+              .select('id, task_id, status')
+              .in('task_id', allTaskIds),
+          ]);
+
+          if (allRaciRes.data) {
+            for (const r of allRaciRes.data) {
+              if (!fullRaciMap.has(r.task_id)) fullRaciMap.set(r.task_id, []);
+              fullRaciMap.get(r.task_id).push(r);
             }
-            const s = subtaskMap.get(st.task_id);
-            if (st.status !== 'cancelled') {
-              s.total += 1;
-              if (st.status === 'done') s.completed += 1;
+          }
+
+          if (subtasksRes.data) {
+            for (const st of subtasksRes.data) {
+              if (!subtaskMap.has(st.task_id)) {
+                subtaskMap.set(st.task_id, { total: 0, completed: 0 });
+              }
+              const s = subtaskMap.get(st.task_id);
+              if (st.status !== 'cancelled') {
+                s.total += 1;
+                if (st.status === 'done') s.completed += 1;
+              }
             }
           }
         }
@@ -259,22 +278,28 @@ export default function MyWorkPage() {
           };
         });
 
+        myWorkCache.set(cacheKey, enrichedList);
         setTasks(enrichedList);
-      } else {
-        setTasks([]);
+      } catch (err) {
+        console.error('Error fetching My Work:', err);
+        setError(err);
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
       }
-    } catch (err) {
-      console.error('Error fetching My Work:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId, user]);
+    },
+    [cacheKey, user, workspaceId]
+  );
 
   useEffect(() => {
+    if (myWorkCache.has(cacheKey)) {
+      setTasks(myWorkCache.get(cacheKey));
+      setInitialLoading(false);
+    }
     fetchMyWork();
-  }, [fetchMyWork]);
+  }, [cacheKey, fetchMyWork]);
 
-  // Counts per RACI role
+  // Counts per RACI role computed locally
   const tabCounts = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -286,12 +311,16 @@ export default function MyWorkPage() {
 
     const overdueCount = tasks.filter((t) => {
       if (!t.due_date) return false;
-      const isDone = t.task_statuses?.system_code === 'done' || t.task_statuses?.name?.toLowerCase().includes('done');
+      const isDone =
+        t.task_statuses?.system_code === 'done' ||
+        t.task_statuses?.name?.toLowerCase().includes('done');
       return !isDone && new Date(t.due_date) < today;
     }).length;
 
     const blockedCount = tasks.filter(
-      (t) => t.task_statuses?.system_code === 'blocked' || t.task_statuses?.name?.toLowerCase().includes('blocked')
+      (t) =>
+        t.task_statuses?.system_code === 'blocked' ||
+        t.task_statuses?.name?.toLowerCase().includes('blocked')
     ).length;
 
     return {
@@ -305,35 +334,34 @@ export default function MyWorkPage() {
     };
   }, [tasks]);
 
-  // Filtered tasks for active tab & controls
+  // Filtered tasks for active tab & controls (Pure In-Memory)
   const filteredTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     return tasks.filter((t) => {
-      // 1. Tab filter
       if (activeTab !== 'all' && !t.myRoles?.includes(activeTab)) {
         return false;
       }
 
-      // 2. Overdue filter
       if (filterOnlyOverdue) {
-        const isDone = t.task_statuses?.system_code === 'done' || t.task_statuses?.name?.toLowerCase().includes('done');
+        const isDone =
+          t.task_statuses?.system_code === 'done' ||
+          t.task_statuses?.name?.toLowerCase().includes('done');
         if (isDone || !t.due_date || new Date(t.due_date) >= today) return false;
       }
 
-      // 3. Blocked filter
       if (filterOnlyBlocked) {
-        const isBlocked = t.task_statuses?.system_code === 'blocked' || t.task_statuses?.name?.toLowerCase().includes('blocked');
+        const isBlocked =
+          t.task_statuses?.system_code === 'blocked' ||
+          t.task_statuses?.name?.toLowerCase().includes('blocked');
         if (!isBlocked) return false;
       }
 
-      // 4. Priority filter
       if (filterPriority && t.priority !== filterPriority) {
         return false;
       }
 
-      // 5. Search text
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchTitle = t.title?.toLowerCase().includes(q);
@@ -344,11 +372,11 @@ export default function MyWorkPage() {
 
       return true;
     });
-  }, [tasks, activeTab, filterOnlyOverdue, filterOnlyBlocked, filterPriority, search]);
+  }, [activeTab, filterOnlyBlocked, filterOnlyOverdue, filterPriority, search, tasks]);
 
   const handleTaskSave = async (updatedTask) => {
     try {
-      const { error } = await supabase
+      const { error: saveErr } = await supabase
         .from('tasks')
         .update({
           title: updatedTask.title,
@@ -361,8 +389,8 @@ export default function MyWorkPage() {
         })
         .eq('id', updatedTask.id);
 
-      if (error) throw error;
-      await fetchMyWork();
+      if (saveErr) throw saveErr;
+      await fetchMyWork({ silent: true });
       setSelectedTask(null);
     } catch (err) {
       console.error('Error saving task:', err);
@@ -371,34 +399,32 @@ export default function MyWorkPage() {
 
   const handleTaskDelete = async (taskId) => {
     try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-      if (error) throw error;
-      await fetchMyWork();
+      const { error: delErr } = await supabase.from('tasks').delete().eq('id', taskId);
+      if (delErr) throw delErr;
+      await fetchMyWork({ silent: true });
       setSelectedTask(null);
     } catch (err) {
       console.error('Error deleting task:', err);
     }
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading your work items…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
-      {/* Page Header */}
+      {/* Page Header (Always Rendered Immediately) */}
       <PageHeader
         title="My Work"
         subtitle="Operational inbox and tasks assigned to you across the organization"
         badge={
-          <span className={styles.totalTasksPill}>
-            <CheckSquare size={13} /> {tabCounts.all} Active Tasks
-          </span>
+          <div className={styles.headerBadges}>
+            <span className={styles.totalTasksPill}>
+              <CheckSquare size={13} /> {tabCounts.all} Active Tasks
+            </span>
+            {refreshing && (
+              <span className={styles.refreshingPill} title="Revalidating latest assignments...">
+                <RefreshCw size={12} className={styles.spinIcon} /> Refreshing…
+              </span>
+            )}
+          </div>
         }
       />
 
@@ -408,34 +434,42 @@ export default function MyWorkPage() {
           {tabCounts.overdue > 0 && (
             <button
               type="button"
-              className={`${styles.highlightPill} ${styles.highlightDanger} ${filterOnlyOverdue ? styles.highlightActive : ''}`}
+              className={`${styles.highlightPill} ${styles.highlightDanger} ${
+                filterOnlyOverdue ? styles.highlightActive : ''
+              }`}
               onClick={() => {
                 setFilterOnlyOverdue(!filterOnlyOverdue);
                 setFilterOnlyBlocked(false);
               }}
             >
               <Clock size={14} />
-              <span><strong>{tabCounts.overdue}</strong> Overdue Tasks</span>
+              <span>
+                <strong>{tabCounts.overdue}</strong> Overdue Tasks
+              </span>
             </button>
           )}
 
           {tabCounts.blocked > 0 && (
             <button
               type="button"
-              className={`${styles.highlightPill} ${styles.highlightWarning} ${filterOnlyBlocked ? styles.highlightActive : ''}`}
+              className={`${styles.highlightPill} ${styles.highlightWarning} ${
+                filterOnlyBlocked ? styles.highlightActive : ''
+              }`}
               onClick={() => {
                 setFilterOnlyBlocked(!filterOnlyBlocked);
                 setFilterOnlyOverdue(false);
               }}
             >
               <ShieldAlert size={14} />
-              <span><strong>{tabCounts.blocked}</strong> Blocked Tasks</span>
+              <span>
+                <strong>{tabCounts.blocked}</strong> Blocked Tasks
+              </span>
             </button>
           )}
         </div>
       )}
 
-      {/* RACI Perspective Tabs */}
+      {/* RACI Perspective Tabs (Always Visible & Responsive) */}
       <div className={styles.tabsHeader}>
         <div className={styles.tabsList}>
           <button
@@ -547,8 +581,28 @@ export default function MyWorkPage() {
         </div>
       </div>
 
-      {/* Task Content */}
-      {filteredTasks.length === 0 ? (
+      {/* Non-Blocking Error State if fetch failed with no cache */}
+      {error && tasks.length === 0 && !initialLoading && (
+        <div className={styles.errorNotice}>
+          <AlertTriangle size={18} className={styles.errorIcon} />
+          <div className={styles.errorMsg}>
+            <strong>Could not load My Work</strong>
+            <p>{error.message || 'Please check your connection and retry.'}</p>
+          </div>
+          <button type="button" className={styles.retryBtn} onClick={() => fetchMyWork()}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Task Content: Skeleton vs Empty vs Loaded */}
+      {initialLoading && tasks.length === 0 ? (
+        viewMode === 'list' ? (
+          <TaskRowSkeleton count={5} />
+        ) : (
+          <CardGridSkeleton count={4} />
+        )
+      ) : filteredTasks.length === 0 ? (
         <EmptyState
           icon={Inbox}
           title={
@@ -595,7 +649,10 @@ export default function MyWorkPage() {
         <div className={styles.cardsGrid}>
           {filteredTasks.map((t) => (
             <div key={t.id} className={styles.cardItemWrap}>
-              <div className={styles.cardProjectTag} style={{ borderColor: t.projects?.color || 'var(--yellow)' }}>
+              <div
+                className={styles.cardProjectTag}
+                style={{ borderColor: t.projects?.color || 'var(--yellow)' }}
+              >
                 <span>{t.projects?.name}</span>
               </div>
               <TaskCard

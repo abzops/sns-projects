@@ -15,7 +15,7 @@ import PageHeader from '../components/PageHeader';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
 import Modal from '../components/Modal';
-import Spinner from '../components/Spinner';
+import { TaskRowSkeleton } from '../components/Skeleton';
 import { getMemberDisplayName, getMemberEmail } from '../lib/identity';
 import styles from './UsersAdminPage.module.css';
 
@@ -126,15 +126,6 @@ export default function UsersAdminPage() {
     }
   };
 
-  if (membersLoading || rolesLoading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading users and system roles…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <PageHeader
@@ -169,17 +160,20 @@ export default function UsersAdminPage() {
       </div>
 
       {/* Users Table */}
-      <div className={styles.tableCard}>
-        <table className={styles.usersTable}>
-          <thead>
-            <tr>
-              <th>Personnel</th>
-              <th>Workspace Role</th>
-              <th>System Roles (Executive / Admin)</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+      {membersLoading && members.length === 0 ? (
+        <TaskRowSkeleton count={4} />
+      ) : (
+        <div className={styles.tableCard}>
+          <table className={styles.usersTable}>
+            <thead>
+              <tr>
+                <th>Personnel</th>
+                <th>Workspace Role</th>
+                <th>System Roles (Executive / Admin)</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
           <tbody>
             {filteredMembers.map((member) => {
               const displayName = getMemberDisplayName(member, user);
@@ -278,7 +272,7 @@ export default function UsersAdminPage() {
                         type="button"
                         className={styles.removeBtn}
                         onClick={async () => {
-                          if (confirm(`Remove ${name} from this workspace?`)) {
+                          if (confirm(`Remove ${displayName} from this workspace?`)) {
                             await removeMember(member.id);
                             showToast('Member removed', 'success');
                           }
@@ -295,6 +289,7 @@ export default function UsersAdminPage() {
           </tbody>
         </table>
       </div>
+    )}
 
       {/* Invite Member Modal */}
       <Modal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} title="Invite Team Member">

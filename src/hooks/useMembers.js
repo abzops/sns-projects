@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+const membersCache = new Map(); // workspaceId -> members[]
+
 async function attachProfilesFallback(supabase, members) {
   const userIds = [...new Set((members || []).map((member) => member.user_id).filter(Boolean))];
 
@@ -40,24 +42,30 @@ function normalizeMemberProfiles(members) {
 
 export function useMembers(workspaceId) {
   const { user } = useAuth();
-  const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState(() => membersCache.get(workspaceId) || []);
+  const [loading, setLoading] = useState(() => !membersCache.has(workspaceId));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!workspaceId || !user) {
       setMembers([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
-    setLoading(true);
+    if (!isSilent && !membersCache.has(workspaceId)) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setError(null);
 
     const supabase = getSupabase();
 
     try {
-      // Primary: Query with explicit foreign key relationship
       const { data, error: fetchError } = await supabase
         .from('workspace_members')
         .select(`
@@ -80,7 +88,6 @@ export function useMembers(workspaceId) {
 
       if (fetchError) {
         console.warn('Direct FK join returned error, falling back to batch profile lookup:', fetchError);
-        // Fallback: Two-step query if schema embedding encounters any issue
         const { data: rawMembers, error: rawError } = await supabase
           .from('workspace_members')
           .select('id, workspace_id, user_id, invited_email, role, status, invited_by, created_at')
@@ -90,22 +97,29 @@ export function useMembers(workspaceId) {
         if (rawError) throw rawError;
 
         const resolved = await attachProfilesFallback(supabase, rawMembers || []);
+        membersCache.set(workspaceId, resolved);
         setMembers(resolved);
       } else {
-        setMembers(normalizeMemberProfiles(data || []));
+        const normalized = normalizeMemberProfiles(data || []);
+        membersCache.set(workspaceId, normalized);
+        setMembers(normalized);
       }
     } catch (err) {
       console.error('Error fetching workspace members:', err);
       setError(err);
-      setMembers([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [workspaceId, user]);
 
   useEffect(() => {
+    if (membersCache.has(workspaceId)) {
+      setMembers(membersCache.get(workspaceId));
+      setLoading(false);
+    }
     fetchMembers();
-  }, [fetchMembers]);
+  }, [fetchMembers, workspaceId]);
 
   const inviteMember = async (email, role) => {
     const supabase = getSupabase();
@@ -120,7 +134,7 @@ export function useMembers(workspaceId) {
       });
 
     if (!insertError) {
-      await fetchMembers();
+      await fetchMembers({ silent: true });
     }
 
     return { error: insertError };
@@ -134,7 +148,7 @@ export function useMembers(workspaceId) {
       .eq('id', memberId);
 
     if (!updateError) {
-      await fetchMembers();
+      await fetchMembers({ silent: true });
     }
 
     return { error: updateError };
@@ -148,7 +162,7 @@ export function useMembers(workspaceId) {
       .eq('id', memberId);
 
     if (!deleteError) {
-      await fetchMembers();
+      await fetchMembers({ silent: true });
     }
 
     return { error: deleteError };
@@ -157,6 +171,7 @@ export function useMembers(workspaceId) {
   return {
     members,
     loading,
+    refreshing,
     error,
     inviteMember,
     updateRole,

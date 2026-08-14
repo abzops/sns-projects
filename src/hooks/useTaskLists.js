@@ -1,20 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
+const taskListsCache = new Map(); // `${projectId}:${milestoneId || 'all'}` -> taskLists[]
+
 export function useTaskLists(projectId, milestoneId = null) {
-  const [taskLists, setTaskLists] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${projectId}:${milestoneId || 'all'}`;
+  const [taskLists, setTaskLists] = useState(() => taskListsCache.get(cacheKey) || []);
+  const [loading, setLoading] = useState(() => !taskListsCache.has(cacheKey));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchTaskLists = useCallback(async () => {
+  const fetchTaskLists = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!projectId) {
       setTaskLists([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!isSilent && !taskListsCache.has(cacheKey)) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       setError(null);
 
       // 1. Query task lists
@@ -82,18 +92,24 @@ export function useTaskLists(projectId, milestoneId = null) {
         };
       });
 
+      taskListsCache.set(cacheKey, enriched);
       setTaskLists(enriched);
     } catch (err) {
       console.error('Error fetching task lists:', err);
       setError(err.message || 'Failed to load task lists');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [projectId, milestoneId]);
+  }, [projectId, milestoneId, cacheKey]);
 
   useEffect(() => {
+    if (taskListsCache.has(cacheKey)) {
+      setTaskLists(taskListsCache.get(cacheKey));
+      setLoading(false);
+    }
     fetchTaskLists();
-  }, [fetchTaskLists]);
+  }, [fetchTaskLists, cacheKey]);
 
   const createTaskList = async ({ milestoneId: targetMilestoneId, name, description }) => {
     const finalMilestoneId = targetMilestoneId || milestoneId;
@@ -116,7 +132,7 @@ export function useTaskLists(projectId, milestoneId = null) {
         .single();
 
       if (insertErr) throw insertErr;
-      await fetchTaskLists();
+      await fetchTaskLists({ silent: true });
       return { data, error: null };
     } catch (err) {
       console.error('Error creating task list:', err);
@@ -137,7 +153,7 @@ export function useTaskLists(projectId, milestoneId = null) {
         .single();
 
       if (updateErr) throw updateErr;
-      await fetchTaskLists();
+      await fetchTaskLists({ silent: true });
       return { data, error: null };
     } catch (err) {
       console.error('Error updating task list:', err);
@@ -153,7 +169,7 @@ export function useTaskLists(projectId, milestoneId = null) {
         .eq('id', id);
 
       if (deleteErr) throw deleteErr;
-      await fetchTaskLists();
+      await fetchTaskLists({ silent: true });
       return { error: null };
     } catch (err) {
       console.error('Error deleting task list:', err);
@@ -164,6 +180,7 @@ export function useTaskLists(projectId, milestoneId = null) {
   return {
     taskLists,
     loading,
+    refreshing,
     error,
     createTaskList,
     updateTaskList,

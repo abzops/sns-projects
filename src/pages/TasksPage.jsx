@@ -51,7 +51,7 @@ import TaskRow from '../components/TaskRow';
 import TaskCard from '../components/TaskCard';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import Modal from '../components/Modal';
-import Spinner from '../components/Spinner';
+import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 
 import styles from './TasksPage.module.css';
@@ -825,15 +825,6 @@ export default function TasksPage() {
     (milestonesLoading && milestones.length === 0) ||
     (taskListsLoading && taskLists.length === 0);
 
-  if (isInitialLoading) {
-    return (
-      <div className={styles.loadingState}>
-        <Spinner size="lg" />
-        <p>Loading project workspace & hierarchy…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.page}>
       {/* Project Command Header */}
@@ -1028,10 +1019,14 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* ═════════════════════════════════════════════════════════════════ */}
-      {/* 1. HIERARCHY / TREE VIEW (Canonical Business View)               */}
-      {/* ═════════════════════════════════════════════════════════════════ */}
-      {view === 'hierarchy' && (
+      {isInitialLoading ? (
+        view === 'kanban' ? <CardGridSkeleton count={5} /> : <TaskRowSkeleton count={5} />
+      ) : (
+        <>
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* 1. HIERARCHY / TREE VIEW (Canonical Business View)               */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {view === 'hierarchy' && (
         <div className={styles.hierarchyView}>
           {/* Milestones Tree */}
           {milestones.length === 0 && uncategorizedTasks.length === 0 ? (
@@ -1367,6 +1362,8 @@ export default function TasksPage() {
           )}
         </div>
       )}
+    </>
+  )}
 
       {/* ───── Task Detail Slide-in Panel with Subtasks & RACI ───── */}
       {selectedTask && (

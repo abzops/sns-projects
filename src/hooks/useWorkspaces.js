@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
+let workspacesCache = null;
+
 function countByWorkspace(rows = []) {
   return rows.reduce((counts, row) => {
     counts[row.workspace_id] = (counts[row.workspace_id] || 0) + 1
@@ -11,18 +13,25 @@ function countByWorkspace(rows = []) {
 
 export function useWorkspaces() {
   const { user } = useAuth()
-  const [workspaces, setWorkspaces] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [workspaces, setWorkspaces] = useState(() => workspacesCache || [])
+  const [loading, setLoading] = useState(() => workspacesCache === null)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetchWorkspaces = useCallback(async () => {
+  const fetchWorkspaces = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!user) {
       setWorkspaces([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
 
-    setLoading(true)
+    if (!isSilent && workspacesCache === null) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
     setError(null)
 
     const supabase = getSupabase()
@@ -33,8 +42,8 @@ export function useWorkspaces() {
 
     if (fetchError) {
       setError(fetchError)
-      setWorkspaces([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
 
@@ -58,17 +67,23 @@ export function useWorkspaces() {
       projectCounts = countByWorkspace(projects || [])
     }
 
-    setWorkspaces(
-      (data || []).map((workspace) => ({
-        ...workspace,
-        member_count: memberCounts[workspace.id] || 0,
-        project_count: projectCounts[workspace.id] || 0,
-      }))
-    )
+    const enriched = (data || []).map((workspace) => ({
+      ...workspace,
+      member_count: memberCounts[workspace.id] || 0,
+      project_count: projectCounts[workspace.id] || 0,
+    }))
+
+    workspacesCache = enriched
+    setWorkspaces(enriched)
     setLoading(false)
+    setRefreshing(false)
   }, [user])
 
   useEffect(() => {
+    if (workspacesCache !== null) {
+      setWorkspaces(workspacesCache)
+      setLoading(false)
+    }
     fetchWorkspaces()
   }, [fetchWorkspaces])
 
@@ -107,7 +122,7 @@ export function useWorkspaces() {
       return { data: null, error: memberError }
     }
 
-    await fetchWorkspaces()
+    await fetchWorkspaces({ silent: true })
     return { data: { id, name: name.trim() }, error: null }
   }
 
@@ -119,7 +134,7 @@ export function useWorkspaces() {
       .eq('id', id)
 
     if (!updateError) {
-      await fetchWorkspaces()
+      await fetchWorkspaces({ silent: true })
     }
 
     return { error: updateError }
@@ -133,11 +148,20 @@ export function useWorkspaces() {
       .eq('id', id)
 
     if (!deleteError) {
-      await fetchWorkspaces()
+      await fetchWorkspaces({ silent: true })
     }
 
     return { error: deleteError }
   }
 
-  return { workspaces, loading, error, createWorkspace, updateWorkspace, deleteWorkspace, refetch: fetchWorkspaces }
+  return {
+    workspaces,
+    loading,
+    refreshing,
+    error,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
+    refetch: fetchWorkspaces,
+  }
 }

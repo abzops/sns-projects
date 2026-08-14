@@ -4,6 +4,7 @@ import { useWorkspaces } from '../hooks/useWorkspaces';
 import { useMembers } from '../hooks/useMembers';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import { TaskRowSkeleton } from '../components/Skeleton';
 import Spinner from '../components/Spinner';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
@@ -63,11 +64,14 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
     setWorkspaceName(workspace.name);
   }
 
-  if (workspacesLoading) {
+  if (workspacesLoading && workspaces.length === 0) {
     return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading workspace settings…</p>
+      <div className={styles.container}>
+        <PageHeader
+          title="Workspace Settings"
+          subtitle="Loading workspace preferences…"
+        />
+        <TaskRowSkeleton count={3} />
       </div>
     );
   }

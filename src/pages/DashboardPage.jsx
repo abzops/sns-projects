@@ -22,7 +22,7 @@ import PageHeader from '../components/PageHeader';
 import MetricCard from '../components/MetricCard';
 import RoleBadge from '../components/RoleBadge';
 import Avatar from '../components/Avatar';
-import Spinner from '../components/Spinner';
+import { MetricCardsSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import styles from './DashboardPage.module.css';
 
@@ -63,6 +63,9 @@ function calculateProjectHealth(project) {
   return { status: 'on_track', label: 'On Track', variant: 'success' };
 }
 
+// In-memory cache for dashboard tasks
+const dashboardTasksCache = new Map();
+
 export default function DashboardPage() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
@@ -83,22 +86,26 @@ export default function DashboardPage() {
     workspaceRole,
   } = userContext;
 
-  // Real open tasks and attention tasks state
-  const [allTasks, setAllTasks] = useState([]);
-  const [tasksLoading, setTasksLoading] = useState(true);
+  const cachedTasks = dashboardTasksCache.get(workspaceId) || null;
+  const [allTasks, setAllTasks] = useState(() => cachedTasks || []);
+  const [tasksLoading, setTasksLoading] = useState(() => !cachedTasks);
   const [selectedTask, setSelectedTask] = useState(null);
 
   // Fetch all tasks for the workspace across projects
   useEffect(() => {
     async function loadWorkspaceTasks() {
       if (!workspaceId || projects.length === 0) {
-        setAllTasks([]);
-        setTasksLoading(false);
+        if (!projectsLoading) {
+          setAllTasks([]);
+          setTasksLoading(false);
+        }
         return;
       }
 
       try {
-        setTasksLoading(true);
+        if (!dashboardTasksCache.has(workspaceId)) {
+          setTasksLoading(true);
+        }
         const projectIds = projects.map((p) => p.id);
 
         const { data: tasksData, error: tasksError } = await supabase
@@ -137,43 +144,30 @@ export default function DashboardPage() {
 
         if (tasksError) throw tasksError;
 
-        // Fetch RACI assignments for all loaded tasks
         const taskIds = (tasksData || []).map((t) => t.id);
-        let raciMap = new Map();
+        let raciRows = [];
 
         if (taskIds.length > 0) {
           const { data: raciData } = await supabase
             .from('task_raci_assignments')
-            .select(`
-              id,
-              task_id,
-              raci_role,
-              user_id,
-              department_id,
-              profiles:user_id (
-                id,
-                full_name,
-                avatar_url
-              ),
-              departments:department_id (
-                id,
-                code,
-                name,
-                color
-              )
-            `)
+            .select('task_id, raci_role, user_id, department_id')
             .in('task_id', taskIds);
 
           if (raciData) {
-            for (const r of raciData) {
-              if (!raciMap.has(r.task_id)) raciMap.set(r.task_id, []);
-              raciMap.get(r.task_id).push(r);
-            }
+            raciRows = raciData;
           }
         }
 
+        const raciByTaskId = new Map();
+        for (const raci of raciRows) {
+          if (!raciByTaskId.has(raci.task_id)) {
+            raciByTaskId.set(raci.task_id, []);
+          }
+          raciByTaskId.get(raci.task_id).push(raci);
+        }
+
         const enriched = (tasksData || []).map((t) => {
-          const taskRaci = raciMap.get(t.id) || [];
+          const taskRaci = raciByTaskId.get(t.id) || [];
           const responsible = taskRaci.filter((r) => r.raci_role === 'R');
           const accountable = taskRaci.find((r) => r.raci_role === 'A') || null;
           const isComplete = responsible.length > 0 && !!accountable;
@@ -189,6 +183,7 @@ export default function DashboardPage() {
           };
         });
 
+        dashboardTasksCache.set(workspaceId, enriched);
         setAllTasks(enriched);
       } catch (err) {
         console.error('Error loading dashboard tasks:', err);
@@ -198,7 +193,7 @@ export default function DashboardPage() {
     }
 
     loadWorkspaceTasks();
-  }, [workspaceId, projects]);
+  }, [workspaceId, projects, projectsLoading]);
 
   // Aggregate Metrics
   const metrics = useMemo(() => {
@@ -239,13 +234,13 @@ export default function DashboardPage() {
       criticalProjectsCount: criticalProjects.length,
       totalOpenTasksCount: openTasks.length,
       overdueTasksCount: overdueTasks.length,
-      raciIncompleteTasksCount: raciIncompleteTasks.length,
+      raciIncompleteCount: raciIncompleteTasks.length,
       unassignedTasksCount: unassignedTasks.length,
       blockedTasksCount: blockedTasks.length,
-      openTasks,
       overdueTasks,
-      raciIncompleteTasks,
       blockedTasks,
+      openTasks,
+      criticalProjects,
     };
   }, [projects, allTasks]);
 
@@ -280,32 +275,22 @@ export default function DashboardPage() {
     });
 
     // Critical / Overdue Projects
-    projects
-      .filter((p) => calculateProjectHealth(p).status === 'critical')
-      .slice(0, 3)
-      .forEach((p) => {
-        items.push({
-          id: `crit-proj-${p.id}`,
-          type: 'critical_project',
-          title: `Project: ${p.name}`,
-          subtitle: `Target End: ${p.target_end_date || 'None'} • Progress: ${p.progress || 0}%`,
-          badgeText: 'Project Critical',
-          badgeVariant: 'danger',
-          link: `/workspace/${workspaceId}/project/${p.id}`,
-        });
+    metrics.criticalProjects.slice(0, 3).forEach((p) => {
+      items.push({
+        id: `crit-proj-${p.id}`,
+        type: 'critical_project',
+        title: `Project: ${p.name}`,
+        subtitle: `Target End: ${p.target_end_date || 'None'} • Progress: ${p.progress || 0}%`,
+        badgeText: 'Project Critical',
+        badgeVariant: 'danger',
+        link: `/workspace/${workspaceId}/project/${p.id}`,
       });
+    });
 
     return items;
-  }, [metrics, projects, workspaceId]);
+  }, [metrics, workspaceId]);
 
-  if (projectsLoading || tasksLoading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading operational dashboard…</p>
-      </div>
-    );
-  }
+  const isInitialLoading = (projectsLoading && projects.length === 0) || (tasksLoading && allTasks.length === 0);
 
   // Determine Persona Title & Badge
   let personaTitle = 'Project Administration';
@@ -356,51 +341,55 @@ export default function DashboardPage() {
       />
 
       {/* Top Operational KPI Cards */}
-      <div className={styles.kpiGrid}>
-        <MetricCard
-          title="Active Projects"
-          value={metrics.activeProjectsCount}
-          subtitle={`Across ${departments.length} departments`}
-          icon={FolderKanban}
-          variant="accent"
-          onClick={() => navigate(`/workspace/${workspaceId}/projects`)}
-        />
-        <MetricCard
-          title="Critical Projects"
-          value={metrics.criticalProjectsCount}
-          subtitle={metrics.criticalProjectsCount > 0 ? 'Require immediate review' : 'All projects healthy'}
-          icon={AlertTriangle}
-          variant={metrics.criticalProjectsCount > 0 ? 'danger' : 'success'}
-        />
-        <MetricCard
-          title="Open Tasks"
-          value={metrics.totalOpenTasksCount}
-          subtitle="Currently in progress"
-          icon={CheckSquare}
-          variant="info"
-        />
-        <MetricCard
-          title="Overdue Tasks"
-          value={metrics.overdueTasksCount}
-          subtitle={metrics.overdueTasksCount > 0 ? 'Exceeded scheduled due date' : 'No overdue tasks'}
-          icon={Clock}
-          variant={metrics.overdueTasksCount > 0 ? 'danger' : 'default'}
-        />
-        <MetricCard
-          title="RACI Incomplete"
-          value={metrics.raciIncompleteTasksCount}
-          subtitle="Tasks missing Accountable / Responsible"
-          icon={ShieldAlert}
-          variant={metrics.raciIncompleteTasksCount > 0 ? 'warning' : 'success'}
-        />
-        <MetricCard
-          title="Blocked Tasks"
-          value={metrics.blockedTasksCount}
-          subtitle={metrics.blockedTasksCount > 0 ? 'Blocked dependencies / issues' : 'No blocked tasks'}
-          icon={ShieldAlert}
-          variant={metrics.blockedTasksCount > 0 ? 'warning' : 'default'}
-        />
-      </div>
+      {isInitialLoading ? (
+        <MetricCardsSkeleton count={6} />
+      ) : (
+        <div className={styles.kpiGrid}>
+          <MetricCard
+            title="Active Projects"
+            value={metrics.activeProjectsCount}
+            subtitle={`Across ${departments.length} departments`}
+            icon={FolderKanban}
+            variant="accent"
+            onClick={() => navigate(`/workspace/${workspaceId}/projects`)}
+          />
+          <MetricCard
+            title="Critical Projects"
+            value={metrics.criticalProjectsCount}
+            subtitle={metrics.criticalProjectsCount > 0 ? 'Require immediate review' : 'All projects healthy'}
+            icon={AlertTriangle}
+            variant={metrics.criticalProjectsCount > 0 ? 'danger' : 'success'}
+          />
+          <MetricCard
+            title="Open Tasks"
+            value={metrics.totalOpenTasksCount}
+            subtitle="Currently in progress"
+            icon={CheckSquare}
+            variant="info"
+          />
+          <MetricCard
+            title="Overdue Tasks"
+            value={metrics.overdueTasksCount}
+            subtitle={metrics.overdueTasksCount > 0 ? 'Exceeded scheduled due date' : 'No overdue tasks'}
+            icon={Clock}
+            variant={metrics.overdueTasksCount > 0 ? 'danger' : 'default'}
+          />
+          <MetricCard
+            title="RACI Incomplete"
+            value={metrics.raciIncompleteCount}
+            subtitle="Tasks missing Accountable / Responsible"
+            icon={ShieldAlert}
+            variant={metrics.raciIncompleteCount > 0 ? 'warning' : 'success'}
+          />
+          <MetricCard
+            title="Blocked Tasks"
+            value={metrics.blockedTasksCount}
+            subtitle={metrics.blockedTasksCount > 0 ? 'Blocked dependencies / issues' : 'No blocked tasks'}
+            icon={ShieldAlert}
+            variant={metrics.blockedTasksCount > 0 ? 'warning' : 'default'}
+          />
+        </div>
+      )}
 
       {/* Main Content Layout: Attention Required & Project Portfolio */}
       <div className={styles.mainGrid}>
@@ -415,7 +404,9 @@ export default function DashboardPage() {
             <span className={styles.healthLabelNote}>Calculated UI Project Health</span>
           </div>
 
-          {projects.length === 0 ? (
+          {isInitialLoading ? (
+            <CardGridSkeleton count={2} />
+          ) : projects.length === 0 ? (
             <div className={styles.emptyCard}>
               <FolderKanban size={36} />
               <h3>No projects created yet</h3>

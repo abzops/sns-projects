@@ -1,0 +1,110 @@
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+  display: inline-block;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Table Skeleton */
+.tableSkeleton {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.rowSkeleton {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 16px;
+  height: 60px;
+}
+
+.rowSkeleton:last-child {
+  border-bottom: none;
+}
+
+.colTitle {
+  flex: 4;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.colStatus {
+  flex: 1.2;
+  min-width: 90px;
+}
+
+.colPriority {
+  flex: 1;
+  min-width: 70px;
+}
+
+.colRaci {
+  flex: 1.8;
+  min-width: 130px;
+}
+
+.colDate {
+  flex: 1.2;
+  min-width: 90px;
+}
+
+/* Card Grid Skeleton */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.cardSkeleton {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardFooterSkeleton {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* Metrics Skeleton */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.metricCardSkeleton {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+}

@@ -20,6 +20,7 @@ import PageHeader from '../components/PageHeader';
 import Avatar from '../components/Avatar';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
+import { CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { getMemberDisplayName } from '../lib/identity';
 import styles from './DepartmentsAdminPage.module.css';
@@ -320,15 +321,6 @@ export default function DepartmentsAdminPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading departments…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <PageHeader
@@ -376,7 +368,9 @@ export default function DepartmentsAdminPage() {
       )}
 
       {/* Departments Grid */}
-      {departments.length === 0 ? (
+      {loading && departments.length === 0 ? (
+        <CardGridSkeleton count={4} />
+      ) : departments.length === 0 ? (
         <EmptyState
           icon={Building2}
           title="No departments configured"

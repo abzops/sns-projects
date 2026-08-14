@@ -1,20 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
+const milestonesCache = new Map(); // projectId -> milestones[]
+
 export function useMilestones(projectId) {
-  const [milestones, setMilestones] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [milestones, setMilestones] = useState(() => milestonesCache.get(projectId) || []);
+  const [loading, setLoading] = useState(() => !milestonesCache.has(projectId));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchMilestones = useCallback(async () => {
+  const fetchMilestones = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!projectId) {
       setMilestones([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!isSilent && !milestonesCache.has(projectId)) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       setError(null);
 
       // 1. Fetch milestones
@@ -76,18 +85,24 @@ export function useMilestones(projectId) {
         };
       });
 
+      milestonesCache.set(projectId, enriched);
       setMilestones(enriched);
     } catch (err) {
       console.error('Error fetching milestones:', err);
       setError(err.message || 'Failed to load milestones');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [projectId]);
 
   useEffect(() => {
+    if (milestonesCache.has(projectId)) {
+      setMilestones(milestonesCache.get(projectId));
+      setLoading(false);
+    }
     fetchMilestones();
-  }, [fetchMilestones]);
+  }, [fetchMilestones, projectId]);
 
   const createMilestone = async ({ name, description, start_date, end_date }) => {
     if (!projectId || !name?.trim()) return { data: null, error: new Error('Project ID and Milestone name are required') };
@@ -108,7 +123,7 @@ export function useMilestones(projectId) {
         .single();
 
       if (insertErr) throw insertErr;
-      await fetchMilestones();
+      await fetchMilestones({ silent: true });
       return { data, error: null };
     } catch (err) {
       console.error('Error creating milestone:', err);
@@ -129,7 +144,7 @@ export function useMilestones(projectId) {
         .single();
 
       if (updateErr) throw updateErr;
-      await fetchMilestones();
+      await fetchMilestones({ silent: true });
       return { data, error: null };
     } catch (err) {
       console.error('Error updating milestone:', err);
@@ -145,7 +160,7 @@ export function useMilestones(projectId) {
         .eq('id', id);
 
       if (deleteErr) throw deleteErr;
-      await fetchMilestones();
+      await fetchMilestones({ silent: true });
       return { error: null };
     } catch (err) {
       console.error('Error deleting milestone:', err);
@@ -156,6 +171,7 @@ export function useMilestones(projectId) {
   return {
     milestones,
     loading,
+    refreshing,
     error,
     createMilestone,
     updateMilestone,

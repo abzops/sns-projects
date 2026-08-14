@@ -1,20 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
+const departmentsCache = new Map(); // workspaceId -> departments[]
+
 export function useDepartments(workspaceId) {
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [departments, setDepartments] = useState(() => departmentsCache.get(workspaceId) || []);
+  const [loading, setLoading] = useState(() => !departmentsCache.has(workspaceId));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchDepartments = useCallback(async () => {
+  const fetchDepartments = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!workspaceId) {
       setDepartments([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!isSilent && !departmentsCache.has(workspaceId)) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       setError(null);
 
       const { data, error: fetchError } = await supabase
@@ -35,18 +44,25 @@ export function useDepartments(workspaceId) {
         .order('name', { ascending: true });
 
       if (fetchError) throw fetchError;
-      setDepartments(data || []);
+      const list = data || [];
+      departmentsCache.set(workspaceId, list);
+      setDepartments(list);
     } catch (err) {
       console.error('Error fetching departments:', err);
       setError(err.message || 'Failed to load departments');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [workspaceId]);
 
   useEffect(() => {
+    if (departmentsCache.has(workspaceId)) {
+      setDepartments(departmentsCache.get(workspaceId));
+      setLoading(false);
+    }
     fetchDepartments();
-  }, [fetchDepartments]);
+  }, [fetchDepartments, workspaceId]);
 
   const createDepartment = async ({ code, name, description = '', color = '#FDE215' }) => {
     if (!workspaceId || !code || !name) return null;
@@ -69,7 +85,7 @@ export function useDepartments(workspaceId) {
         .single();
 
       if (insertError) throw insertError;
-      await fetchDepartments();
+      await fetchDepartments({ silent: true });
       return data;
     } catch (err) {
       console.error('Error creating department:', err);
@@ -95,7 +111,11 @@ export function useDepartments(workspaceId) {
         .single();
 
       if (updateError) throw updateError;
-      setDepartments((prev) => prev.map((d) => (d.id === id ? data : d)));
+      setDepartments((prev) => {
+        const next = prev.map((d) => (d.id === id ? data : d));
+        departmentsCache.set(workspaceId, next);
+        return next;
+      });
       return data;
     } catch (err) {
       console.error('Error updating department:', err);
@@ -111,7 +131,11 @@ export function useDepartments(workspaceId) {
         .eq('id', id);
 
       if (deleteError) throw deleteError;
-      setDepartments((prev) => prev.filter((d) => d.id !== id));
+      setDepartments((prev) => {
+        const next = prev.filter((d) => d.id !== id);
+        departmentsCache.set(workspaceId, next);
+        return next;
+      });
     } catch (err) {
       console.error('Error deleting department:', err);
       throw err;
@@ -121,6 +145,7 @@ export function useDepartments(workspaceId) {
   return {
     departments,
     loading,
+    refreshing,
     error,
     createDepartment,
     updateDepartment,

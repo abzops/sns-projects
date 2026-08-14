@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
+const projectsCache = new Map();
+
 function computeTaskMetrics(taskRows = []) {
   const counts = {};
   const completed = {};
@@ -13,7 +15,6 @@ function computeTaskMetrics(taskRows = []) {
     const pid = task.project_id;
     const systemCode = task.task_statuses?.system_code || '';
 
-    // Eligible tasks exclude cancelled tasks
     if (systemCode === 'cancelled') continue;
 
     counts[pid] = (counts[pid] || 0) + 1;
@@ -33,18 +34,25 @@ function computeTaskMetrics(taskRows = []) {
 
 export function useProjects(workspaceId) {
   const { user } = useAuth()
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [projects, setProjects] = useState(() => projectsCache.get(workspaceId) || [])
+  const [loading, setLoading] = useState(() => !projectsCache.has(workspaceId))
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = useCallback(async (options = {}) => {
+    const isSilent = options?.silent ?? false;
     if (!workspaceId || !user) {
       setProjects([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
 
-    setLoading(true)
+    if (!isSilent && !projectsCache.has(workspaceId)) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
     setError(null)
 
     const supabase = getSupabase()
@@ -76,8 +84,8 @@ export function useProjects(workspaceId) {
     if (fetchError) {
       console.error('Error fetching projects:', fetchError)
       setError(fetchError)
-      setProjects([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
 
@@ -101,28 +109,35 @@ export function useProjects(workspaceId) {
       metrics = computeTaskMetrics(taskRows || [])
     }
 
-    setProjects(
-      (data || []).map((project) => {
-        const taskCount = metrics.counts[project.id] || 0
-        const completedCount = metrics.completed[project.id] || 0
-        const overdueCount = metrics.overdue[project.id] || 0
-        const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
+    const enriched = (data || []).map((project) => {
+      const taskCount = metrics.counts[project.id] || 0
+      const completedCount = metrics.completed[project.id] || 0
+      const overdueCount = metrics.overdue[project.id] || 0
+      const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
 
-        return {
-          ...project,
-          task_count: taskCount,
-          completed_count: completedCount,
-          overdue_count: overdueCount,
-          progress,
-        }
-      })
-    )
+      return {
+        ...project,
+        task_count: taskCount,
+        completed_count: completedCount,
+        overdue_count: overdueCount,
+        progress,
+      }
+    })
+
+    projectsCache.set(workspaceId, enriched)
+    setProjects(enriched)
     setLoading(false)
+    setRefreshing(false)
   }, [workspaceId, user])
 
   useEffect(() => {
+    // If workspace changed, pick up cache or set empty
+    if (projectsCache.has(workspaceId)) {
+      setProjects(projectsCache.get(workspaceId))
+      setLoading(false)
+    }
     fetchProjects()
-  }, [fetchProjects])
+  }, [fetchProjects, workspaceId])
 
   const createProject = async (input) => {
     const supabase = getSupabase()
@@ -169,7 +184,7 @@ export function useProjects(workspaceId) {
       .single()
 
     if (!insertError) {
-      await fetchProjects()
+      await fetchProjects({ silent: true })
     }
 
     return { data, error: insertError }
@@ -209,7 +224,7 @@ export function useProjects(workspaceId) {
       .single()
 
     if (!updateError) {
-      await fetchProjects()
+      await fetchProjects({ silent: true })
     }
 
     return { data, error: updateError }
@@ -223,11 +238,20 @@ export function useProjects(workspaceId) {
       .eq('id', id)
 
     if (!deleteError) {
-      await fetchProjects()
+      await fetchProjects({ silent: true })
     }
 
     return { error: deleteError }
   }
 
-  return { projects, loading, error, createProject, updateProject, deleteProject, refetch: fetchProjects }
+  return {
+    projects,
+    loading,
+    refreshing,
+    error,
+    createProject,
+    updateProject,
+    deleteProject,
+    refetch: fetchProjects,
+  }
 }

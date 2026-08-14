@@ -8,8 +8,8 @@ import { useDepartments } from '../hooks/useDepartments';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { useUserContext } from '../hooks/useUserContext';
 import PageHeader from '../components/PageHeader';
-import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
+import { CardGridSkeleton } from '../components/Skeleton';
 import styles from './DepartmentsPage.module.css';
 
 export default function DepartmentsPage() {
@@ -22,15 +22,6 @@ export default function DepartmentsPage() {
 
   const { isOwner, isSystemAdmin, isAdmin } = useUserContext(workspaceId);
   const canAdmin = isOwner || isSystemAdmin || isAdmin;
-
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading departments…</p>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.container}>
@@ -49,7 +40,9 @@ export default function DepartmentsPage() {
         }
       />
 
-      {departments.length === 0 ? (
+      {loading && departments.length === 0 ? (
+        <CardGridSkeleton count={4} />
+      ) : departments.length === 0 ? (
         <EmptyState
           icon={Building2}
           title="No departments configured"

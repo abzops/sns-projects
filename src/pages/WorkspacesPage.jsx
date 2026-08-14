@@ -5,7 +5,7 @@ import { Plus, Building2, Users, FolderOpen, Calendar, Loader2, ArrowRight } fro
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
-import Spinner from '../components/Spinner';
+import { CardGridSkeleton } from '../components/Skeleton';
 import styles from './WorkspacesPage.module.css';
 
 export default function WorkspacesPage() {
@@ -42,15 +42,6 @@ export default function WorkspacesPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingState}>
-        <Spinner size="lg" />
-        <p>Loading workspaces…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.page}>
       <PageHeader
@@ -64,7 +55,9 @@ export default function WorkspacesPage() {
         }
       />
 
-      {workspaces.length === 0 ? (
+      {loading && workspaces.length === 0 ? (
+        <CardGridSkeleton count={2} />
+      ) : workspaces.length === 0 ? (
         <EmptyState
           icon={Building2}
           title="No workspaces yet"

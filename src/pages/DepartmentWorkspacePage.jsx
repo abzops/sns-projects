@@ -21,7 +21,7 @@ import TaskRow from '../components/TaskRow';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
-import Spinner from '../components/Spinner';
+import { TaskRowSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { getMemberDisplayName } from '../lib/identity';
 import styles from './DepartmentWorkspacePage.module.css';
@@ -31,7 +31,7 @@ export default function DepartmentWorkspacePage() {
   const { user } = useAuth();
 
   const { departments = [], loading: deptLoading } = useDepartments(workspaceId);
-  const { members: deptMembers = [], loading: membersLoading } = useDepartmentMembers(departmentId);
+  const { members: deptMembers = [] } = useDepartmentMembers(departmentId);
 
   const currentDept = departments.find((d) => d.id === departmentId);
 
@@ -268,11 +268,14 @@ export default function DepartmentWorkspacePage() {
 
   const departmentHead = deptMembers.find((m) => m.role === 'head');
 
-  if (deptLoading || membersLoading) {
+  if (deptLoading && departments.length === 0) {
     return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading department workspace…</p>
+      <div className={styles.container}>
+        <PageHeader
+          title="Department Workspace"
+          subtitle="Loading organizational department…"
+        />
+        <TaskRowSkeleton count={4} />
       </div>
     );
   }

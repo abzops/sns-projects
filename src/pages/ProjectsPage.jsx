@@ -18,7 +18,7 @@ import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
-import Spinner from '../components/Spinner';
+import { CardGridSkeleton } from '../components/Skeleton';
 import styles from './ProjectsPage.module.css';
 
 const PRESET_COLORS = [
@@ -136,15 +136,6 @@ export default function ProjectsPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="lg" />
-        <p>Loading projects portfolio…</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <PageHeader
@@ -202,8 +193,10 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Project Cards Grid */}
-      {filteredProjects.length === 0 ? (
+      {/* Project Grid */}
+      {loading && projects.length === 0 ? (
+        <CardGridSkeleton count={3} />
+      ) : filteredProjects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
           title={search || filterStatus || filterPriority ? "No matching projects" : "No projects yet"}
