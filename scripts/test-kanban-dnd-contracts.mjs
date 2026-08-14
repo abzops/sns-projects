@@ -177,7 +177,7 @@ async function runTests() {
   await pgClient.query(`
     SELECT public.reorder_kanban_tasks(
       '${taskA.id}'::uuid,
-      '${todoStatus.id}'::uuid,
+      '${taskA.status_id}'::uuid,
       ARRAY['${taskA.id}'::uuid, '${taskB.id}'::uuid]
     );
   `);

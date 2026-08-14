@@ -21,7 +21,7 @@ export function useTaskStatuses(projectId) {
     const supabase = getSupabase()
     const { data, error: fetchError } = await supabase
       .from('task_statuses')
-      .select('id, project_id, name, color, position, created_at')
+      .select('*')
       .eq('project_id', projectId)
       .order('position', { ascending: true })
 

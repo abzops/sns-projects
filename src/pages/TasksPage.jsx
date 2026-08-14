@@ -65,6 +65,49 @@ const PRIORITY_LABELS = {
   none: 'None',
 };
 
+/* ───── Canonical Status Resolution Helper ───── */
+function getStatusSystemCode(status) {
+  if (!status) return 'todo';
+  if (status.system_code) return status.system_code;
+  const name = (status.name || '').toLowerCase().trim();
+  if (name.includes('progress')) return 'in_progress';
+  if (name.includes('review')) return 'in_review';
+  if (name.includes('blocked') || name.includes('hold')) return 'blocked';
+  if (name.includes('done') || name.includes('complete')) return 'done';
+  return 'todo';
+}
+
+/* ───── Canonical Board State Builder ───── */
+function buildBoardState(tasks, statuses) {
+  const map = {
+    todo: [],
+    in_progress: [],
+    in_review: [],
+    blocked: [],
+    done: [],
+  };
+
+  (statuses || []).forEach((s) => {
+    const code = getStatusSystemCode(s);
+    if (!map[code]) map[code] = [];
+  });
+
+  const statusesById = new Map((statuses || []).map((s) => [s.id, s]));
+
+  (tasks || []).forEach((t) => {
+    const st = statusesById.get(t.status_id) || t.task_statuses;
+    const code = getStatusSystemCode(st);
+    if (!map[code]) map[code] = [];
+    map[code].push(t);
+  });
+
+  Object.keys(map).forEach((code) => {
+    map[code].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  });
+
+  return map;
+}
+
 /* ───── Sortable Task Card Wrapper (Kanban) ───── */
 function SortableTaskCardWrapper({ task, onClick, disabled = false, statuses = [], onMoveStatus = null }) {
   const {
@@ -121,11 +164,13 @@ function KanbanColumn({
   statuses = [],
   onMoveStatus = null,
 }) {
+  const statusCode = getStatusSystemCode(status);
   const { setNodeRef, isOver } = useDroppable({
-    id: status.system_code,
+    id: statusCode,
     data: {
       type: 'column',
       status,
+      statusCode,
     },
   });
 
@@ -133,7 +178,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={`${styles.column} ${isOver ? styles.columnOver : ''}`}
-      data-status-code={status.system_code}
+      data-status-code={statusCode}
     >
       <div className={styles.colHeader}>
         <div className={styles.colTitleWrap}>
@@ -523,26 +568,8 @@ export default function TasksPage() {
   /* ── Synchronize normalized board tasks from filtered tasks ── */
   useEffect(() => {
     if (activeId) return;
-
-    const map = {};
-    (statuses || []).forEach((s) => {
-      const code = s.system_code || s.id;
-      map[code] = [];
-    });
-
-    filteredTasks.forEach((t) => {
-      const st = (statuses || []).find((s) => s.id === t.status_id);
-      const code = st?.system_code || (statuses[0]?.system_code || 'todo');
-      if (!map[code]) map[code] = [];
-      map[code].push(t);
-    });
-
-    Object.keys(map).forEach((code) => {
-      map[code].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-    });
-
-    setBoardTasks(map);
-  }, [filteredTasks, statuses, activeId]);
+    setBoardTasks(buildBoardState(filteredTasks, statuses));
+  }, [filteredTasks, statuses, activeId, projectId]);
 
   const findContainer = useCallback(
     (id, currentBoard = boardTasks) => {
@@ -709,9 +736,10 @@ export default function TasksPage() {
           }
         }
 
-        const destStatus = statuses.find(
-          (s) => s.system_code === activeContainer || s.id === activeContainer
-        );
+        const destStatus = statuses.find((s) => {
+          const code = getStatusSystemCode(s);
+          return code === activeContainer || s.id === activeContainer;
+        });
 
         if (!destStatus) {
           if (boardSnapshotRef.current) return boardSnapshotRef.current;
@@ -768,7 +796,7 @@ export default function TasksPage() {
       const targetStatus = statuses.find((s) => s.id === targetStatusId);
       if (!targetStatus) return;
 
-      const targetCode = targetStatus.system_code || targetStatus.name.toLowerCase().replace(/\s+/g, '_');
+      const targetCode = getStatusSystemCode(targetStatus);
       const targetList = (boardTasks[targetCode] || []).map((t) => t.id);
       if (!targetList.includes(taskId)) {
         targetList.push(taskId);
@@ -1261,7 +1289,7 @@ export default function TasksPage() {
         >
           <div className={styles.board} ref={boardScrollRef}>
             {statuses.map((status) => {
-              const code = status.system_code || status.id;
+              const code = getStatusSystemCode(status);
               const colTasks = boardTasks[code] || [];
 
               return (
