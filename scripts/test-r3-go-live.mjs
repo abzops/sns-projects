@@ -55,19 +55,17 @@ async function runTests() {
     // -------------------------------------------------------------
     // SETUP TEST FIXTURE (Clean temporary project & entities)
     // -------------------------------------------------------------
-    const { rows: testUsers } = await pgClient.query(`SELECT id FROM auth.users LIMIT 2;`);
+    const { rows: testUsers } = await pgClient.query(`SELECT id FROM auth.users WHERE email <> 'test.engineer2@stacknstock.in' LIMIT 1;`);
     const testUser1 = testUsers[0]?.id;
-    let testUser2 = testUsers[1]?.id;
-    let createdDummyUser = false;
+    const testUser2 = '00000000-0000-0000-0000-000000000002';
 
     const { rows: wsRows } = await pgClient.query(`SELECT id FROM public.workspaces LIMIT 1;`);
     const workspaceId = wsRows[0]?.id;
 
-    if (!testUser2 || testUser2 === testUser1) {
-      testUser2 = '00000000-0000-0000-0000-000000000002';
-      createdDummyUser = true;
-      // Clean before insert
-      await pgClient.query(`DELETE FROM auth.users WHERE id = '${testUser2}';`);
+    // Clean before insert
+    await pgClient.query(`DELETE FROM public.workspace_members WHERE user_id = '${testUser2}';`);
+    await pgClient.query(`DELETE FROM public.profiles WHERE id = '${testUser2}';`);
+    await pgClient.query(`DELETE FROM auth.users WHERE id = '${testUser2}';`);
       await pgClient.query(`
         INSERT INTO auth.users (
           id,
@@ -97,7 +95,6 @@ async function runTests() {
         VALUES ('${workspaceId}', '${testUser2}', 'member', 'active')
         ON CONFLICT DO NOTHING;
       `);
-    }
 
     // Clean any previous test artifacts
     await pgClient.query(`DELETE FROM public.projects WHERE name = 'R3 Go-Live Test Project';`);
@@ -481,15 +478,13 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n=== CLEANUP & BASELINE INTEGRITY ===');
 
-    // Delete test project and all associated notifications/entities
     await pgClient.query(`DELETE FROM public.projects WHERE id = '${testProjId}';`);
     await pgClient.query(`DELETE FROM public.departments WHERE id = '${testDeptId}';`);
+    await pgClient.query(`DELETE FROM public.notifications WHERE workspace_id = '${workspaceId}';`);
 
-    if (createdDummyUser) {
-      await pgClient.query(`DELETE FROM public.workspace_members WHERE user_id = '${testUser2}';`);
-      await pgClient.query(`DELETE FROM public.profiles WHERE id = '${testUser2}';`);
-      await pgClient.query(`DELETE FROM auth.users WHERE id = '${testUser2}';`);
-    }
+    await pgClient.query(`DELETE FROM public.workspace_members WHERE user_id = '${testUser2}';`);
+    await pgClient.query(`DELETE FROM public.profiles WHERE id = '${testUser2}';`);
+    await pgClient.query(`DELETE FROM auth.users WHERE id = '${testUser2}';`);
 
     // 25. Project/task/baseline counts remain 100% intact after cleanup
     const { rows: finalProjects } = await pgClient.query(`SELECT count(*)::int as count FROM public.projects;`);

@@ -20,14 +20,7 @@ export function useTaskLists(projectId, milestoneId = null) {
       // 1. Query task lists
       let query = supabase
         .from('task_lists')
-        .select(`
-          *,
-          milestones:milestone_id (
-            id,
-            name,
-            project_id
-          )
-        `)
+        .select('*')
         .eq('project_id', projectId);
 
       if (milestoneId) {
