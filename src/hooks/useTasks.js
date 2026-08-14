@@ -47,50 +47,6 @@ function enrichTasks(tasks, statuses, members, raciRows = [], subtasksByTaskId =
   });
 }
 
-function buildReorderUpdates(tasks, taskId, newStatusId, newPosition) {
-  const task = tasks.find((candidate) => candidate.id === taskId);
-  if (!task) return [];
-
-  const oldStatusId = task.status_id;
-
-  if (oldStatusId === newStatusId) {
-    const column = tasks
-      .filter((candidate) => candidate.status_id === newStatusId && candidate.id !== taskId)
-      .sort((a, b) => a.position - b.position);
-
-    column.splice(newPosition, 0, { ...task, status_id: newStatusId });
-
-    return column.map((candidate, index) => ({
-      id: candidate.id,
-      status_id: newStatusId,
-      position: index,
-    }));
-  }
-
-  const oldColumn = tasks
-    .filter((candidate) => candidate.status_id === oldStatusId && candidate.id !== taskId)
-    .sort((a, b) => a.position - b.position)
-    .map((candidate, index) => ({
-      id: candidate.id,
-      status_id: oldStatusId,
-      position: index,
-    }));
-
-  const newColumn = tasks
-    .filter((candidate) => candidate.status_id === newStatusId && candidate.id !== taskId)
-    .sort((a, b) => a.position - b.position);
-
-  newColumn.splice(newPosition, 0, { ...task, status_id: newStatusId });
-
-  return [
-    ...oldColumn,
-    ...newColumn.map((candidate, index) => ({
-      id: candidate.id,
-      status_id: newStatusId,
-      position: index,
-    })),
-  ];
-}
 
 export function useTasks(projectId, workspaceId) {
   const { user } = useAuth();
@@ -406,17 +362,43 @@ export function useTasks(projectId, workspaceId) {
     return { error: deleteError };
   };
 
-  const reorderTask = async (taskId, newStatusId, taskIdsOrPosition) => {
+  const reorderTask = async (taskId, newStatusId, sourceTaskIdsOrOptions, destinationTaskIdsParam) => {
     const supabase = getSupabase();
 
-    let orderedTaskIds = [];
-    if (Array.isArray(taskIdsOrPosition)) {
-      orderedTaskIds = taskIdsOrPosition;
-    } else if (typeof taskIdsOrPosition === 'number') {
-      const updates = buildReorderUpdates(tasks, taskId, newStatusId, taskIdsOrPosition);
-      orderedTaskIds = updates.map((u) => u.id);
+    let sourceTaskIds = [];
+    let destinationTaskIds = [];
+
+    const currentTask = tasks.find((t) => t.id === taskId);
+    const oldStatusId = currentTask ? currentTask.status_id : newStatusId;
+
+    if (Array.isArray(sourceTaskIdsOrOptions) && Array.isArray(destinationTaskIdsParam)) {
+      sourceTaskIds = sourceTaskIdsOrOptions;
+      destinationTaskIds = destinationTaskIdsParam;
+    } else if (
+      sourceTaskIdsOrOptions &&
+      typeof sourceTaskIdsOrOptions === 'object' &&
+      !Array.isArray(sourceTaskIdsOrOptions)
+    ) {
+      sourceTaskIds = sourceTaskIdsOrOptions.sourceTaskIds || [];
+      destinationTaskIds = sourceTaskIdsOrOptions.destinationTaskIds || [];
+    } else if (Array.isArray(sourceTaskIdsOrOptions)) {
+      if (oldStatusId === newStatusId) {
+        sourceTaskIds = sourceTaskIdsOrOptions;
+        destinationTaskIds = sourceTaskIdsOrOptions;
+      } else {
+        sourceTaskIds = tasks
+          .filter((t) => t.status_id === oldStatusId && t.id !== taskId)
+          .map((t) => t.id);
+        destinationTaskIds = sourceTaskIdsOrOptions;
+      }
     } else {
-      orderedTaskIds = [taskId];
+      sourceTaskIds = tasks
+        .filter((t) => t.status_id === oldStatusId && t.id !== taskId)
+        .map((t) => t.id);
+      destinationTaskIds = [
+        ...tasks.filter((t) => t.status_id === newStatusId && t.id !== taskId).map((t) => t.id),
+        taskId,
+      ];
     }
 
     // Optimistically update local tasks cache without causing unmount/flicker
@@ -439,7 +421,8 @@ export function useTasks(projectId, workspaceId) {
     const { data, error: rpcError } = await supabase.rpc('reorder_kanban_tasks', {
       p_task_id: taskId,
       p_new_status_id: newStatusId,
-      p_task_ids: orderedTaskIds.length > 0 ? orderedTaskIds : [taskId],
+      p_source_task_ids: sourceTaskIds,
+      p_destination_task_ids: destinationTaskIds,
     });
 
     if (rpcError) {

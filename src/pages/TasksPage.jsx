@@ -757,13 +757,80 @@ export default function TasksPage() {
         const hasChanged = initialContainer !== activeContainer || initialIndex !== currentIndex;
 
         if (hasChanged) {
-          const destinationTaskIds = currentItems.map((t) => t.id);
+          const movedTask = tasks.find((t) => t.id === activeTaskId);
+          const initialStatusId = movedTask ? movedTask.status_id : destStatus.id;
+          const isSameColumn = initialStatusId === destStatus.id;
+
+          let fullSourceTaskIds = [];
+          let fullDestinationTaskIds = [];
+
+          if (isSameColumn) {
+            const allInStatus = tasks
+              .filter((t) => t.status_id === destStatus.id)
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            const visibleOrderedIds = currentItems.map((t) => t.id);
+            const visibleSet = new Set(visibleOrderedIds);
+            let vIdx = 0;
+            for (const t of allInStatus) {
+              if (visibleSet.has(t.id)) {
+                fullDestinationTaskIds.push(visibleOrderedIds[vIdx++]);
+              } else {
+                fullDestinationTaskIds.push(t.id);
+              }
+            }
+            while (vIdx < visibleOrderedIds.length) {
+              fullDestinationTaskIds.push(visibleOrderedIds[vIdx++]);
+            }
+            fullSourceTaskIds = fullDestinationTaskIds;
+          } else {
+            // Cross-column move
+            // 1. Source column (remaining tasks)
+            const allInSource = tasks
+              .filter((t) => t.status_id === initialStatusId && t.id !== activeTaskId)
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            const initialVisibleItems = finalBoard[initialContainer] || [];
+            const visibleSourceOrderedIds = initialVisibleItems
+              .filter((t) => t.id !== activeTaskId)
+              .map((t) => t.id);
+            const visibleSourceSet = new Set(visibleSourceOrderedIds);
+            let vsIdx = 0;
+            for (const t of allInSource) {
+              if (visibleSourceSet.has(t.id)) {
+                fullSourceTaskIds.push(visibleSourceOrderedIds[vsIdx++]);
+              } else {
+                fullSourceTaskIds.push(t.id);
+              }
+            }
+            while (vsIdx < visibleSourceOrderedIds.length) {
+              fullSourceTaskIds.push(visibleSourceOrderedIds[vsIdx++]);
+            }
+
+            // 2. Destination column (with moved task included)
+            const allInDest = tasks
+              .filter((t) => t.status_id === destStatus.id && t.id !== activeTaskId)
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            const visibleDestOrderedIds = currentItems.map((t) => t.id);
+
+            const destResult = [];
+            for (const vId of visibleDestOrderedIds) {
+              destResult.push(vId);
+            }
+            const destSet = new Set(destResult);
+            for (const t of allInDest) {
+              if (!destSet.has(t.id)) {
+                destResult.push(t.id);
+              }
+            }
+            fullDestinationTaskIds = destResult;
+          }
+
           (async () => {
             try {
               const { error: rpcErr } = await reorderTask(
                 activeTaskId,
                 destStatus.id,
-                destinationTaskIds
+                fullSourceTaskIds,
+                fullDestinationTaskIds
               );
               if (rpcErr) throw rpcErr;
             } catch (err) {
@@ -779,7 +846,7 @@ export default function TasksPage() {
         return finalBoard;
       });
     },
-    [canMutateTasks, findContainer, reorderTask, showToast, statuses, stopAutoScroll]
+    [canMutateTasks, findContainer, reorderTask, showToast, statuses, stopAutoScroll, tasks]
   );
 
   const handleDragCancel = useCallback(() => {
@@ -796,14 +863,24 @@ export default function TasksPage() {
       const targetStatus = statuses.find((s) => s.id === targetStatusId);
       if (!targetStatus) return;
 
-      const targetCode = getStatusSystemCode(targetStatus);
-      const targetList = (boardTasks[targetCode] || []).map((t) => t.id);
-      if (!targetList.includes(taskId)) {
-        targetList.push(taskId);
-      }
+      const movedTask = tasks.find((t) => t.id === taskId);
+      if (!movedTask || movedTask.status_id === targetStatusId) return;
+
+      const sourceTasks = tasks
+        .filter((t) => t.status_id === movedTask.status_id && t.id !== taskId)
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .map((t) => t.id);
+
+      const destTasks = [
+        ...tasks
+          .filter((t) => t.status_id === targetStatusId && t.id !== taskId)
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map((t) => t.id),
+        taskId,
+      ];
 
       try {
-        const { error: rpcErr } = await reorderTask(taskId, targetStatusId, targetList);
+        const { error: rpcErr } = await reorderTask(taskId, targetStatusId, sourceTasks, destTasks);
         if (rpcErr) throw rpcErr;
         showToast(`Task moved to ${targetStatus.name}`, 'success');
       } catch (err) {
@@ -811,7 +888,7 @@ export default function TasksPage() {
         showToast('Failed to update task status', 'error');
       }
     },
-    [boardTasks, canMutateTasks, reorderTask, showToast, statuses]
+    [canMutateTasks, reorderTask, showToast, statuses, tasks]
   );
 
   const activeTask = useMemo(

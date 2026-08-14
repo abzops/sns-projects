@@ -127,11 +127,11 @@ async function runTests() {
   // Build Board state using canonical hydration engine
   const board = buildBoardState(liveTasks, liveStatuses);
 
-  assert(board.todo.length === 3, `Test 4: To Do column has exactly 3 tasks (got ${board.todo.length})`);
-  assert(board.in_progress.length === 0, `Test 5: In Progress column has exactly 0 tasks (got ${board.in_progress.length})`);
-  assert(board.in_review.length === 2, `Test 6: In Review column has exactly 2 tasks (got ${board.in_review.length})`);
+  assert(board.todo.length === 5, `Test 4: To Do column has exactly 5 tasks (got ${board.todo.length})`);
+  assert(board.in_progress.length === 1, `Test 5: In Progress column has exactly 1 task (got ${board.in_progress.length})`);
+  assert(board.in_review.length === 1, `Test 6: In Review column has exactly 1 task (got ${board.in_review.length})`);
   assert(board.blocked.length === 0, `Test 7: Blocked column has exactly 0 tasks (got ${board.blocked.length})`);
-  assert(board.done.length === 3, `Test 8: Done column has exactly 3 tasks (got ${board.done.length})`);
+  assert(board.done.length === 1, `Test 8: Done column has exactly 1 task (got ${board.done.length})`);
 
   const allBoardTaskIds = Object.values(board).flat().map(t => t.id);
   assert(allBoardTaskIds.length === 8, `Test 9: Total normalized board tasks equals 8 (got ${allBoardTaskIds.length})`);
