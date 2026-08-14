@@ -12,6 +12,7 @@ import {
 import { useDepartmentMembers } from '../hooks/useDepartmentMembers';
 import { useDepartments } from '../hooks/useDepartments';
 import { useUserContext } from '../hooks/useUserContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import PageHeader from '../components/PageHeader';
 import MetricCard from '../components/MetricCard';
@@ -22,10 +23,12 @@ import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
+import { getMemberDisplayName } from '../lib/identity';
 import styles from './DepartmentWorkspacePage.module.css';
 
 export default function DepartmentWorkspacePage() {
   const { workspaceId, departmentId } = useParams();
+  const { user } = useAuth();
 
   const { departments = [], loading: deptLoading } = useDepartments(workspaceId);
   const { members: deptMembers = [], loading: membersLoading } = useDepartmentMembers(departmentId);
@@ -313,14 +316,14 @@ export default function DepartmentWorkspacePage() {
       <div className={styles.teamBar}>
         <div className={styles.headInfo}>
           <span className={styles.barLabel}>Head of Department:</span>
-          {departmentHead?.profiles ? (
+          {departmentHead ? (
             <div className={styles.headUser}>
               <Avatar
-                name={departmentHead.profiles.full_name || 'Head'}
-                src={departmentHead.profiles.avatar_url}
+                name={getMemberDisplayName(departmentHead, user)}
+                src={departmentHead.profile?.avatar_url || departmentHead.profiles?.avatar_url}
                 size="sm"
               />
-              <strong>{departmentHead.profiles.full_name}</strong>
+              <strong>{getMemberDisplayName(departmentHead, user)}</strong>
               <RoleBadge role="head" size="xs" />
             </div>
           ) : (
@@ -331,14 +334,18 @@ export default function DepartmentWorkspacePage() {
         <div className={styles.membersSummary}>
           <span className={styles.barLabel}>Team Members ({deptMembers.length}):</span>
           <div className={styles.memberAvatars}>
-            {deptMembers.slice(0, 6).map((m) => (
-              <Avatar
-                key={m.id}
-                name={m.profiles?.full_name || 'Member'}
-                src={m.profiles?.avatar_url}
-                size="sm"
-              />
-            ))}
+            {deptMembers.slice(0, 6).map((m) => {
+              const name = getMemberDisplayName(m, user);
+              const avatarSrc = m.profile?.avatar_url || m.profiles?.avatar_url;
+              return (
+                <Avatar
+                  key={m.id}
+                  name={name}
+                  src={avatarSrc}
+                  size="sm"
+                />
+              );
+            })}
             {deptMembers.length > 6 && (
               <span className={styles.overflowCount}>+{deptMembers.length - 6}</span>
             )}

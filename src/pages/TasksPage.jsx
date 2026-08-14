@@ -7,7 +7,9 @@ import { useProjects } from '../hooks/useProjects';
 import { useDepartments } from '../hooks/useDepartments';
 import { useMilestones } from '../hooks/useMilestones';
 import { useTaskLists } from '../hooks/useTaskLists';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import { getMemberDisplayName } from '../lib/identity';
 import {
   DndContext,
   closestCorners,
@@ -89,6 +91,7 @@ function SortableTaskCardWrapper({ task, onClick }) {
 export default function TasksPage() {
   const { projectId, workspaceId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const { tasks = [], loading: tasksLoading, createTask, updateTask, deleteTask, reorderTask } =
@@ -657,7 +660,7 @@ export default function TasksPage() {
               <option value="">All Personnel</option>
               {members.map((m) => (
                 <option key={m.id} value={m.user_id || ''}>
-                  {m.profiles?.full_name || m.invited_email}
+                  {getMemberDisplayName(m, user)}
                 </option>
               ))}
             </select>
@@ -1320,7 +1323,7 @@ export default function TasksPage() {
                   <option value="">Select Accountable User…</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.user_id || ''}>
-                      {m.profiles?.full_name || m.invited_email}
+                      {getMemberDisplayName(m, user)}
                     </option>
                   ))}
                 </select>
@@ -1341,7 +1344,7 @@ export default function TasksPage() {
                   <option value="">Select Responsible User…</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.user_id || ''}>
-                      {m.profiles?.full_name || m.invited_email}
+                      {getMemberDisplayName(m, user)}
                     </option>
                   ))}
                 </select>

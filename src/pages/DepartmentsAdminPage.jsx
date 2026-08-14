@@ -14,12 +14,14 @@ import {
 import { useDepartments } from '../hooks/useDepartments';
 import { useDepartmentMembers } from '../hooks/useDepartmentMembers';
 import { useMembers } from '../hooks/useMembers';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 import PageHeader from '../components/PageHeader';
 import Avatar from '../components/Avatar';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
+import { getMemberDisplayName } from '../lib/identity';
 import styles from './DepartmentsAdminPage.module.css';
 
 const SUGGESTED_DEPTS = [
@@ -36,6 +38,7 @@ const PRESET_COLORS = [
 
 // Department Members Manager Sub-Component
 function DepartmentMembersManager({ department, onClose }) {
+  const { user } = useAuth();
   const { members = [], loading, addMember, updateMember, removeMember } = useDepartmentMembers(department.id);
   const { members: workspaceMembers = [] } = useMembers(department.workspace_id);
   const { showToast } = useToast();
@@ -116,7 +119,7 @@ function DepartmentMembersManager({ department, onClose }) {
             <option value="">Select Team Member…</option>
             {availableUsers.map((m) => (
               <option key={m.id} value={m.user_id}>
-                {m.profiles?.full_name || m.invited_email}
+                {getMemberDisplayName(m, user)}
               </option>
             ))}
           </select>
@@ -160,7 +163,7 @@ function DepartmentMembersManager({ department, onClose }) {
         ) : (
           <div className={styles.membersList}>
             {members.map((m) => {
-              const name = m.profiles?.full_name || 'User';
+              const name = getMemberDisplayName(m, user);
               return (
                 <div key={m.id} className={styles.memberRow}>
                   <div className={styles.memberInfo}>

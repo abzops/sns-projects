@@ -120,10 +120,116 @@
   margin: 0 0 4px;
 }
 
-.cardHeader p {
-  margin: 0;
+.cardHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manageRolesLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--yellow);
+  background: rgba(253, 226, 21, 0.08);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-pill);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.manageRolesLink:hover {
+  background: rgba(253, 226, 21, 0.16);
+  transform: translateY(-1px);
+}
+
+.tabLoadingBox {
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   color: var(--muted);
   font-size: 0.88rem;
+  font-weight: 600;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.errorBox {
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid rgba(232, 97, 74, 0.3);
+  border-radius: var(--radius);
+}
+
+.errorIcon {
+  color: var(--red);
+}
+
+.errorBox p {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.retryBtn:hover {
+  background: var(--panel-strong);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.emptyBox {
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.emptyIcon {
+  color: var(--muted-2);
+}
+
+.emptyBox p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .form {

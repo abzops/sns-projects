@@ -9,12 +9,14 @@ import {
 import { useMembers } from '../hooks/useMembers';
 import { useUserSystemRoles } from '../hooks/useUserSystemRoles';
 import { useUserContext } from '../hooks/useUserContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 import PageHeader from '../components/PageHeader';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
+import { getMemberDisplayName, getMemberEmail } from '../lib/identity';
 import styles from './UsersAdminPage.module.css';
 
 const SYSTEM_ROLE_KEYS = [
@@ -26,6 +28,7 @@ const SYSTEM_ROLE_KEYS = [
 
 export default function UsersAdminPage() {
   const { workspaceId } = useParams();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const { members = [], loading: membersLoading, inviteMember, updateRole, removeMember } = useMembers(workspaceId);
@@ -51,12 +54,12 @@ export default function UsersAdminPage() {
   // Filtered members list
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
-      const name = m.profiles?.full_name || '';
-      const email = m.invited_email || m.profiles?.email || '';
+      const name = getMemberDisplayName(m, user);
+      const email = getMemberEmail(m, user) || '';
       const q = search.toLowerCase();
       return name.toLowerCase().includes(q) || email.toLowerCase().includes(q);
     });
-  }, [members, search]);
+  }, [members, search, user]);
 
   const handleToggleSystemRole = async (userId, roleKey) => {
     if (!isOwner && !isSystemAdmin) {
@@ -179,8 +182,9 @@ export default function UsersAdminPage() {
           </thead>
           <tbody>
             {filteredMembers.map((member) => {
-              const name = member.profiles?.full_name || member.invited_email || 'User';
-              const email = member.invited_email || member.profiles?.email;
+              const displayName = getMemberDisplayName(member, user);
+              const email = getMemberEmail(member, user);
+              const avatarSrc = member.profile?.avatar_url || member.profiles?.avatar_url;
               const userId = member.user_id;
               const userRoles = userId ? systemRolesByUserId.get(userId) || [] : [];
               const userRoleKeys = userRoles.map((r) => r.role);
@@ -192,13 +196,13 @@ export default function UsersAdminPage() {
                   <td className={styles.userCell}>
                     <div className={styles.userWrap}>
                       <Avatar
-                        name={name}
-                        src={member.profiles?.avatar_url}
+                        name={displayName}
+                        src={avatarSrc}
                         size="md"
                       />
                       <div className={styles.metaWrap}>
                         <div className={styles.nameRow}>
-                          <strong>{name}</strong>
+                          <strong>{displayName}</strong>
                           {isMemberOwner && (
                             <span className={styles.ownerStar} title="Workspace Owner">
                               <Crown size={13} />

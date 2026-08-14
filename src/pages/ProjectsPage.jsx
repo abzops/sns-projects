@@ -4,6 +4,7 @@ import { useProjects } from '../hooks/useProjects';
 import { useMembers } from '../hooks/useMembers';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { useUserContext } from '../hooks/useUserContext';
+import { getMemberDisplayName } from '../lib/identity';
 import {
   Plus,
   FolderKanban,
@@ -355,7 +356,7 @@ export default function ProjectsPage() {
                 <option value="">Select Owner…</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.user_id || ''}>
-                    {m.profiles?.full_name || m.invited_email}
+                    {getMemberDisplayName(m, user)}
                   </option>
                 ))}
               </select>

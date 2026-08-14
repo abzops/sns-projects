@@ -15,8 +15,10 @@ import {
   ListTodo,
 } from 'lucide-react';
 import Avatar from './Avatar';
+import { useAuth } from '../contexts/AuthContext';
 import { useRaci } from '../hooks/useRaci';
 import { useSubtasks } from '../hooks/useSubtasks';
+import { getMemberDisplayName } from '../lib/identity';
 import styles from './TaskDetailPanel.module.css';
 
 const priorityOptions = [
@@ -37,6 +39,7 @@ export default function TaskDetailPanel({
   members = [],
   departments = [],
 }) {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -423,7 +426,7 @@ export default function TaskDetailPanel({
                 <option value="">Assignee…</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.user_id || ''}>
-                    {m.profiles?.full_name || m.invited_email}
+                    {getMemberDisplayName(m, user)}
                   </option>
                 ))}
               </select>
@@ -492,7 +495,7 @@ export default function TaskDetailPanel({
                   <option value="">Unassigned (Required)</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.user_id || ''}>
-                      {m.profiles?.full_name || m.invited_email}
+                      {getMemberDisplayName(m, user)}
                     </option>
                   ))}
                 </select>
@@ -520,38 +523,44 @@ export default function TaskDetailPanel({
 
               <div className={styles.raciContent}>
                 {responsible.length === 0 ? (
-                  <p className={styles.raciEmptyWarning}>No responsible assignee added</p>
+                  <p className={styles.raciEmpty}>At least 1 Responsible user is required.</p>
                 ) : (
                   <div className={styles.tagGrid}>
-                    {responsible.map((item) => (
-                      <div key={item.id} className={styles.raciItemPill}>
-                        {item.department_id ? (
-                          <span
-                            className={styles.deptCode}
-                            style={{ background: item.departments?.color || 'var(--yellow)' }}
-                          >
-                            {item.departments?.code || 'DEPT'}
+                    {responsible.map((item) => {
+                      const pillName = item.departments?.name
+                        || item.profiles?.full_name
+                        || (item.user_id === user?.id ? user?.email : null)
+                        || 'User';
+                      return (
+                        <div key={item.id} className={styles.raciItemPill}>
+                          {item.department_id ? (
+                            <span
+                              className={styles.deptCode}
+                              style={{ background: item.departments?.color || 'var(--yellow)' }}
+                            >
+                              {item.departments?.code || 'DEPT'}
+                            </span>
+                          ) : (
+                            <Avatar
+                              name={pillName}
+                              src={item.profiles?.avatar_url}
+                              size="xs"
+                            />
+                          )}
+                          <span className={styles.itemName}>
+                            {pillName}
                           </span>
-                        ) : (
-                          <Avatar
-                            name={item.profiles?.full_name || 'User'}
-                            src={item.profiles?.avatar_url}
-                            size="xs"
-                          />
-                        )}
-                        <span className={styles.itemName}>
-                          {item.profiles?.full_name || item.departments?.name}
-                        </span>
-                        <button
-                          type="button"
-                          className={styles.removeTagBtn}
-                          onClick={() => removeRaci(item.id)}
-                          aria-label="Remove"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                          <button
+                            type="button"
+                            className={styles.removeTagBtn}
+                            onClick={() => removeRaci(item.id)}
+                            aria-label="Remove"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -581,35 +590,41 @@ export default function TaskDetailPanel({
                   <p className={styles.raciEmptyMuted}>None assigned</p>
                 ) : (
                   <div className={styles.tagGrid}>
-                    {consulted.map((item) => (
-                      <div key={item.id} className={styles.raciItemPill}>
-                        {item.department_id ? (
-                          <span
-                            className={styles.deptCode}
-                            style={{ background: item.departments?.color || 'var(--yellow)' }}
-                          >
-                            {item.departments?.code || 'DEPT'}
+                    {consulted.map((item) => {
+                      const pillName = item.departments?.name
+                        || item.profiles?.full_name
+                        || (item.user_id === user?.id ? user?.email : null)
+                        || 'User';
+                      return (
+                        <div key={item.id} className={styles.raciItemPill}>
+                          {item.department_id ? (
+                            <span
+                              className={styles.deptCode}
+                              style={{ background: item.departments?.color || 'var(--yellow)' }}
+                            >
+                              {item.departments?.code || 'DEPT'}
+                            </span>
+                          ) : (
+                            <Avatar
+                              name={pillName}
+                              src={item.profiles?.avatar_url}
+                              size="xs"
+                            />
+                          )}
+                          <span className={styles.itemName}>
+                            {pillName}
                           </span>
-                        ) : (
-                          <Avatar
-                            name={item.profiles?.full_name || 'User'}
-                            src={item.profiles?.avatar_url}
-                            size="xs"
-                          />
-                        )}
-                        <span className={styles.itemName}>
-                          {item.profiles?.full_name || item.departments?.name}
-                        </span>
-                        <button
-                          type="button"
-                          className={styles.removeTagBtn}
-                          onClick={() => removeRaci(item.id)}
-                          aria-label="Remove"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                          <button
+                            type="button"
+                            className={styles.removeTagBtn}
+                            onClick={() => removeRaci(item.id)}
+                            aria-label="Remove"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -639,35 +654,41 @@ export default function TaskDetailPanel({
                   <p className={styles.raciEmptyMuted}>None assigned</p>
                 ) : (
                   <div className={styles.tagGrid}>
-                    {informed.map((item) => (
-                      <div key={item.id} className={styles.raciItemPill}>
-                        {item.department_id ? (
-                          <span
-                            className={styles.deptCode}
-                            style={{ background: item.departments?.color || 'var(--yellow)' }}
-                          >
-                            {item.departments?.code || 'DEPT'}
+                    {informed.map((item) => {
+                      const pillName = item.departments?.name
+                        || item.profiles?.full_name
+                        || (item.user_id === user?.id ? user?.email : null)
+                        || 'User';
+                      return (
+                        <div key={item.id} className={styles.raciItemPill}>
+                          {item.department_id ? (
+                            <span
+                              className={styles.deptCode}
+                              style={{ background: item.departments?.color || 'var(--yellow)' }}
+                            >
+                              {item.departments?.code || 'DEPT'}
+                            </span>
+                          ) : (
+                            <Avatar
+                              name={pillName}
+                              src={item.profiles?.avatar_url}
+                              size="xs"
+                            />
+                          )}
+                          <span className={styles.itemName}>
+                            {pillName}
                           </span>
-                        ) : (
-                          <Avatar
-                            name={item.profiles?.full_name || 'User'}
-                            src={item.profiles?.avatar_url}
-                            size="xs"
-                          />
-                        )}
-                        <span className={styles.itemName}>
-                          {item.profiles?.full_name || item.departments?.name}
-                        </span>
-                        <button
-                          type="button"
-                          className={styles.removeTagBtn}
-                          onClick={() => removeRaci(item.id)}
-                          aria-label="Remove"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                          <button
+                            type="button"
+                            className={styles.removeTagBtn}
+                            onClick={() => removeRaci(item.id)}
+                            aria-label="Remove"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -710,7 +731,7 @@ export default function TaskDetailPanel({
                       <option value="">Select Team Member…</option>
                       {members.map((m) => (
                         <option key={m.id} value={m.user_id || ''}>
-                          {m.profiles?.full_name || m.invited_email}
+                          {getMemberDisplayName(m, user)}
                         </option>
                       ))}
                     </select>
