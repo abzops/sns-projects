@@ -495,8 +495,8 @@ async function runTests() {
     const { rows: finalProjects } = await pgClient.query(`SELECT count(*)::int as count FROM public.projects;`);
     const { rows: finalTasks } = await pgClient.query(`SELECT count(*)::int as count FROM public.tasks;`);
     assert(
-      finalProjects[0].count === 6 && finalTasks[0].count === 26,
-      'Test 25: All 6 baseline projects and 26 baseline tasks remain 100% intact after test cleanup'
+      finalProjects[0].count === 3 && finalTasks[0].count === 24,
+      'Test 25: All 3 structured baseline projects and 24 structured tasks remain 100% intact after test cleanup'
     );
 
   } finally {

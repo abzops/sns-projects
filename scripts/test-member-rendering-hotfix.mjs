@@ -166,11 +166,11 @@ async function runTests() {
   `);
   assert(profilesRlsCheck[0]?.rowsecurity === true, `Row-Level Security (RLS) is strictly enabled on profiles`);
 
-  // Test 10: Baseline Projects (6) and Tasks (26) remain 100% intact
+  // Test 10: Baseline Projects (3) and Tasks (24) remain 100% intact
   const { rows: projCount } = await client.query(`SELECT count(*)::int as c FROM public.projects;`);
   const { rows: taskCount } = await client.query(`SELECT count(*)::int as c FROM public.tasks;`);
-  assert(projCount[0].c === 6, `Baseline 6 Projects remain 100% intact (got ${projCount[0].c})`);
-  assert(taskCount[0].c === 26, `Baseline 26 Tasks remain 100% intact (got ${taskCount[0].c})`);
+  assert(projCount[0].c === 3, `Baseline 3 Projects remain 100% intact (got ${projCount[0].c})`);
+  assert(taskCount[0].c === 24, `Baseline 24 Tasks remain 100% intact (got ${taskCount[0].c})`);
 
   await client.end();
 

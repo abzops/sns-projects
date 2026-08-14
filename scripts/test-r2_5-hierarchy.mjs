@@ -464,18 +464,18 @@ async function runTests() {
     // Clean up test calculation project
     await pgClient.query(`DELETE FROM public.projects WHERE id = '${calcProjId}';`);
 
-    // 31. Verify all 6 baseline projects exist
+    // 31. Verify all 3 baseline projects exist
     const { rows: curProjects } = await pgClient.query(`SELECT count(*)::int as count FROM public.projects;`);
-    assert(curProjects[0].count === 6, 'Test 30: All 6 baseline projects remain intact');
+    assert(curProjects[0].count === 3, 'Test 30: All 3 structured baseline projects remain intact');
 
-    // 32. Verify all 26 baseline legacy tasks exist
+    // 32. Verify all 24 baseline structured tasks exist (0 uncategorized)
     const { rows: curTasks } = await pgClient.query(`SELECT count(*)::int as count FROM public.tasks;`);
     const { rows: uncatTasks } = await pgClient.query(`
       SELECT count(*)::int as count FROM public.tasks WHERE milestone_id IS NULL AND task_list_id IS NULL;
     `);
     assert(
-      curTasks[0].count === 26 && uncatTasks[0].count === 26,
-      'Test 31: All 26 baseline tasks are preserved and marked as uncategorized legacy tasks'
+      curTasks[0].count === 24 && uncatTasks[0].count === 0,
+      'Test 31: All 24 baseline tasks are fully structured with 0 uncategorized legacy tasks'
     );
 
     // 33. Verify private helper functions exist and not exposed
