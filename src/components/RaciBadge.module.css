@@ -1,0 +1,223 @@
+.roleTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.xs {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+}
+
+.sm {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+.md {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+
+.tagR {
+  background: rgba(90, 157, 232, 0.15);
+  color: #6bb0ff;
+  border: 1px solid rgba(90, 157, 232, 0.35);
+}
+
+.tagA {
+  background: rgba(253, 226, 21, 0.18);
+  color: var(--yellow);
+  border: 1px solid rgba(253, 226, 21, 0.4);
+}
+
+.tagC {
+  background: rgba(232, 160, 58, 0.15);
+  color: #ffb752;
+  border: 1px solid rgba(232, 160, 58, 0.35);
+}
+
+.tagI {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.letter {
+  font-family: var(--font);
+}
+
+.count {
+  opacity: 0.85;
+  font-size: 0.85em;
+}
+
+/* Avatar Stack */
+.avatarStack {
+  display: flex;
+  align-items: center;
+}
+
+.stackItem {
+  margin-left: -8px;
+  position: relative;
+  transition: transform var(--transition);
+}
+
+.stackItem:first-child {
+  margin-left: 0;
+}
+
+.stackItem:hover {
+  transform: translateY(-2px) scale(1.1);
+  z-index: 20 !important;
+}
+
+.deptCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  border: 2px solid var(--panel);
+}
+
+.overflowBadge {
+  margin-left: -6px;
+  padding: 2px 6px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--muted);
+  z-index: 1;
+}
+
+/* Compact Row */
+.compactRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compactA,
+.compactR {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.roleLetterA {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--yellow);
+  background: rgba(253, 226, 21, 0.15);
+  border-radius: 4px;
+  padding: 1px 3px;
+  line-height: 1;
+}
+
+.roleLetterR {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #6bb0ff;
+  background: rgba(90, 157, 232, 0.15);
+  border-radius: 4px;
+  padding: 1px 3px;
+  line-height: 1;
+}
+
+.miniIncomplete {
+  color: var(--orange);
+  display: inline-flex;
+  align-items: center;
+}
+
+.incompleteBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: rgba(232, 160, 58, 0.12);
+  color: #ffb752;
+  border: 1px solid rgba(232, 160, 58, 0.3);
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.incompleteBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(232, 160, 58, 0.1);
+  color: #ffb752;
+  border: 1px solid rgba(232, 160, 58, 0.25);
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.completeBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(74, 207, 130, 0.1);
+  color: #61de96;
+  border: 1px solid rgba(74, 207, 130, 0.25);
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.roleBox {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roleHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roleHeader small {
+  color: var(--muted-2);
+  font-size: 0.7rem;
+}
+
+.singleUser {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.unassigned {
+  color: var(--muted-2);
+  font-size: 0.75rem;
+  font-style: italic;
+}

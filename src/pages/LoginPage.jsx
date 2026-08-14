@@ -1,35 +1,35 @@
-import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { Loader2, Mail, Lock } from 'lucide-react'
-import styles from './LoginPage.module.css'
+import { useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { Loader2, Mail, Lock } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
+import styles from './LoginPage.module.css';
 
 export default function LoginPage() {
-  const { user, signIn, configError } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const logoSrc = `${import.meta.env.BASE_URL}stacknstock-logo.png`
+  const { user, signIn, configError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      const { error: signInError } = await signIn(email, password)
+      const { error: signInError } = await signIn(email, password);
       if (signInError) {
-        setError(signInError.message || 'Invalid email or password')
+        setError(signInError.message || 'Invalid email or password');
       }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.')
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className={styles.page}>
@@ -37,13 +37,9 @@ export default function LoginPage() {
 
       <form className={styles.card} onSubmit={handleSubmit}>
         <div className={styles.logoSection}>
-          <img
-            src={logoSrc}
-            alt="Stack n Stock"
-            className={styles.logo}
-          />
-          <h1 className={styles.title}>StacknStock Projects</h1>
-          <p className={styles.subtitle}>Sign in to your account</p>
+          <BrandLogo height={34} />
+          <h1 className={styles.title}>Projects Command Center</h1>
+          <p className={styles.subtitle}>Sign in to your organization account</p>
         </div>
 
         {(error || configError) && (
@@ -62,11 +58,12 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 className={styles.input}
-                placeholder="you@company.com"
+                placeholder="name@stacknstock.in"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
+                autoFocus
                 disabled={loading}
               />
             </div>
@@ -84,7 +81,6 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
                 autoComplete="current-password"
                 disabled={loading}
               />
@@ -95,23 +91,27 @@ export default function LoginPage() {
         <button
           type="submit"
           className={styles.submitBtn}
-          disabled={loading}
+          disabled={loading || !email.trim() || !password}
         >
           {loading ? (
             <>
               <Loader2 size={18} className={styles.spinner} />
-              Signing in…
+              <span>Signing In…</span>
             </>
           ) : (
             'Sign In'
           )}
         </button>
 
-        <p className={styles.footerText}>
-          Don't have an account?{' '}
-          <Link to="/signup" className={styles.footerLink}>Sign up</Link>
-        </p>
+        <div className={styles.footer}>
+          <p className={styles.footerText}>
+            Don&apos;t have an account?{' '}
+            <Link to="/signup" className={styles.link}>
+              Create one
+            </Link>
+          </p>
+        </div>
       </form>
     </div>
-  )
+  );
 }

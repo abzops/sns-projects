@@ -7,90 +7,208 @@
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 100;
-  width: 280px;
-  min-width: 280px;
+  width: 270px;
+  min-width: 270px;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(253, 226, 21, 0.055), transparent 22%),
-    var(--panel);
+  background: var(--panel);
   border-right: 1px solid var(--line);
-  box-shadow: 12px 0 34px rgba(0, 0, 0, 0.34);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4);
 }
 
 .brand {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 22px 18px;
+  gap: 16px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
 
-.horizontalLogo {
-  width: 172px;
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
+.logoRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 2px;
 }
 
-.productMeta {
+.wsSelectorWrapper {
+  position: relative;
+}
+
+.wsSelectorBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  text-align: left;
+  transition: all var(--transition);
+}
+
+.wsSelectorBtn:hover {
+  background: var(--panel-strong);
+  border-color: var(--line-light);
+}
+
+.wsIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(253, 226, 21, 0.12);
+  color: var(--yellow);
+  flex-shrink: 0;
+}
+
+.wsInfo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 14px;
-  border: 1px solid var(--brand-line);
-  border-radius: var(--radius-sm);
-  background: rgba(253, 226, 21, 0.06);
+  min-width: 0;
+  flex: 1;
 }
 
-.productMeta span {
+.wsName {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wsSub {
+  font-size: 0.68rem;
   color: var(--muted-2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.wsChevron {
+  color: var(--muted);
+  transition: transform var(--transition);
+}
+
+.chevronRotated {
+  transform: rotate(180deg);
+}
+
+.wsDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--panel-strong);
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-xs);
+  padding: 6px;
+  box-shadow: var(--shadow);
+  z-index: 20;
+  animation: fadeIn var(--transition);
+}
+
+.dropdownHeader {
   font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  color: var(--muted-2);
   text-transform: uppercase;
+  padding: 6px 8px;
+  letter-spacing: 0.05em;
 }
 
-.productMeta strong {
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  transition: all var(--transition);
+}
+
+.dropdownItem:hover {
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  font-size: 0.95rem;
-  letter-spacing: -0.02em;
 }
 
+.dropdownItemActive {
+  background: rgba(253, 226, 21, 0.12);
+  color: var(--yellow);
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+.dropdownManage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.dropdownManage:hover {
+  color: var(--yellow);
+}
+
+/* Nav */
 .nav {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 8px 16px 18px;
+  gap: 18px;
+  padding: 18px 14px;
 }
 
-.navDivider {
-  height: 1px;
-  margin: 8px 6px;
-  background: var(--line);
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navGroupTitle {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--muted-2);
+  padding: 4px 10px;
+  text-transform: uppercase;
 }
 
 .navLink {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 48px;
-  padding: 10px 14px;
+  min-height: 40px;
+  padding: 8px 12px;
   color: var(--muted);
   text-decoration: none;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  transition:
-    transform var(--transition),
-    background var(--transition),
-    border-color var(--transition),
-    color var(--transition);
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all var(--transition);
 }
 
 .navLink svg {
@@ -100,63 +218,66 @@
 .navLink:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--line);
   transform: translateX(2px);
 }
 
 .active,
 .active:hover {
+  color: var(--black) !important;
+  background: var(--yellow) !important;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(253, 226, 21, 0.2);
+}
+
+.active svg {
   color: var(--black);
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 12px 24px rgba(253, 226, 21, 0.18);
 }
 
-.statusCard {
-  display: grid;
-  grid-template-columns: auto 1fr;
+.active .deptColorDot {
+  border-color: #000;
+}
+
+.active .deptNavCode {
+  color: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.deptNavLink {
   gap: 10px;
-  align-items: center;
-  margin: 0 16px 14px;
-  padding: 14px;
-  border: 1px solid var(--brand-line);
-  border-radius: var(--radius-sm);
-  background: rgba(253, 226, 21, 0.055);
 }
 
-.statusDot {
-  width: 10px;
-  height: 10px;
+.deptColorDot {
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
-  background: var(--green);
-  box-shadow: 0 0 0 6px rgba(74, 207, 130, 0.12);
+  flex-shrink: 0;
 }
 
-.statusText {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
+.deptNavName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.statusText strong {
-  color: var(--text);
-  font-size: 0.82rem;
-  line-height: 1.2;
-}
-
-.statusText small {
+.deptNavCode {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--muted-2);
-  font-size: 0.72rem;
 }
 
+/* User Section Bottom */
 .userSection {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 16px;
+  padding: 14px 16px;
   border-top: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--panel-soft);
   flex-shrink: 0;
 }
 
@@ -171,6 +292,7 @@
 .userMeta {
   display: flex;
   flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -183,68 +305,110 @@
   white-space: nowrap;
 }
 
-.userEmail {
-  color: var(--muted-2);
-  font-size: 0.72rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.roleBadgesRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deptPill {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  color: var(--muted);
 }
 
 .signOutBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.035);
+  width: 32px;
+  height: 32px;
+  color: var(--muted-2);
+  background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
   flex-shrink: 0;
-  transition:
-    color var(--transition),
-    background var(--transition),
-    border-color var(--transition),
-    transform var(--transition);
+  transition: all var(--transition);
 }
 
 .signOutBtn:hover {
   color: var(--red);
   background: rgba(232, 97, 74, 0.12);
-  border-color: rgba(232, 97, 74, 0.36);
-  transform: translateY(-1px);
+  border-color: rgba(232, 97, 74, 0.3);
 }
 
+/* Main */
 .main {
   flex: 1;
   min-height: 100vh;
-  margin-left: 280px;
-  padding: 30px;
+  margin-left: 270px;
+  display: flex;
+  flex-direction: column;
   overflow-x: hidden;
+  background: var(--bg);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 30px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workspaceBreadcrumb {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.contentContainer {
+  flex: 1;
+  padding: 30px;
 }
 
 .hamburger {
   position: fixed;
-  top: 16px;
-  left: 16px;
+  top: 10px;
+  left: 12px;
   z-index: 200;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   display: none;
   align-items: center;
   justify-content: center;
   color: var(--text);
   background: var(--panel);
-  border: 1px solid var(--brand-line);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-sm);
-  transition: background var(--transition), transform var(--transition);
+  transition: all var(--transition);
 }
 
 .hamburger:hover {
   background: var(--panel-2);
-  transform: translateY(-1px);
+  border-color: var(--yellow);
 }
 
 .mobileOverlay {
@@ -252,8 +416,8 @@
   inset: 0;
   z-index: 99;
   display: none;
-  background: rgba(0, 0, 0, 0.64);
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
 }
 
 @media (max-width: 900px) {
@@ -273,22 +437,18 @@
 
   .sidebarOpen {
     transform: translateX(0);
-    box-shadow: 16px 0 42px rgba(0, 0, 0, 0.48);
+    box-shadow: 16px 0 42px rgba(0, 0, 0, 0.6);
   }
 
   .main {
     margin-left: 0;
-    padding: 76px 18px 28px;
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar {
-    width: min(86vw, 300px);
-    min-width: min(86vw, 300px);
   }
 
-  .main {
-    padding-inline: 14px;
+  .topbar {
+    padding: 12px 16px 12px 60px;
+  }
+
+  .contentContainer {
+    padding: 20px 14px;
   }
 }

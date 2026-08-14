@@ -1,0 +1,293 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+  color: var(--muted);
+}
+
+.totalTasksPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Highlights Row */
+.highlightsRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.highlightPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-xs);
+  border: 1px solid transparent;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--panel);
+}
+
+.highlightDanger {
+  color: #ff7d6b;
+  border-color: rgba(232, 97, 74, 0.3);
+  background: rgba(232, 97, 74, 0.08);
+}
+
+.highlightWarning {
+  color: #ffb752;
+  border-color: rgba(232, 160, 58, 0.3);
+  background: rgba(232, 160, 58, 0.08);
+}
+
+.highlightActive {
+  box-shadow: 0 0 0 2px var(--yellow);
+  font-weight: 800;
+}
+
+/* Tabs Header */
+.tabsHeader {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.tabsList {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tabBtn:hover {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--line-light);
+}
+
+.tabActive {
+  background: var(--panel-soft) !important;
+  color: var(--text) !important;
+  border-color: var(--yellow) !important;
+  box-shadow: 0 4px 14px rgba(253, 226, 21, 0.15);
+}
+
+.tabLabelWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabLabelWrap strong {
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.tabLabelWrap small {
+  font-size: 0.7rem;
+  color: var(--muted-2);
+}
+
+.tabBadgeR,
+.tabBadgeA,
+.tabBadgeC,
+.tabBadgeI,
+.tabBadgeAll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.tabBadgeR {
+  background: rgba(90, 157, 232, 0.2);
+  color: #6bb0ff;
+}
+
+.tabBadgeA {
+  background: rgba(253, 226, 21, 0.2);
+  color: var(--yellow);
+}
+
+.tabBadgeC {
+  background: rgba(232, 160, 58, 0.2);
+  color: #ffb752;
+}
+
+.tabBadgeI {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+}
+
+.tabBadgeAll {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+/* Filter Bar */
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  flex: 1;
+  min-width: 240px;
+  max-width: 500px;
+}
+
+.searchIcon {
+  color: var(--muted-2);
+}
+
+.searchInput {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  width: 100%;
+  outline: none;
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filterSelect {
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.toggleBtn {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toggleActive {
+  background: var(--yellow);
+  color: #000;
+}
+
+/* Table Card */
+.tableCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.taskTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.taskTable th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.taskTable td {
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+/* Cards Grid */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.cardItemWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardProjectTag {
+  display: flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-left: 3px solid var(--yellow);
+  background: var(--panel-soft);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}

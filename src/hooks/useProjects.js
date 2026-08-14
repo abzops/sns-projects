@@ -2,11 +2,33 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-function countTasks(rows = []) {
-  return rows.reduce((counts, row) => {
-    counts[row.project_id] = (counts[row.project_id] || 0) + 1
-    return counts
-  }, {})
+function computeTaskMetrics(taskRows = []) {
+  const counts = {};
+  const completed = {};
+  const overdue = {};
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const task of taskRows) {
+    const pid = task.project_id;
+    const systemCode = task.task_statuses?.system_code || '';
+
+    // Eligible tasks exclude cancelled tasks
+    if (systemCode === 'cancelled') continue;
+
+    counts[pid] = (counts[pid] || 0) + 1;
+
+    if (systemCode === 'done') {
+      completed[pid] = (completed[pid] || 0) + 1;
+    } else if (task.due_date) {
+      const dueDate = new Date(task.due_date);
+      if (dueDate < today) {
+        overdue[pid] = (overdue[pid] || 0) + 1;
+      }
+    }
+  }
+
+  return { counts, completed, overdue };
 }
 
 export function useProjects(workspaceId) {
@@ -28,11 +50,31 @@ export function useProjects(workspaceId) {
     const supabase = getSupabase()
     const { data, error: fetchError } = await supabase
       .from('projects')
-      .select('id, workspace_id, name, description, color, created_by, created_at, updated_at')
+      .select(`
+        id,
+        workspace_id,
+        name,
+        description,
+        color,
+        owner_id,
+        start_date,
+        target_end_date,
+        project_status,
+        project_priority,
+        created_by,
+        created_at,
+        updated_at,
+        owner:owner_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
 
     if (fetchError) {
+      console.error('Error fetching projects:', fetchError)
       setError(fetchError)
       setProjects([])
       setLoading(false)
@@ -40,22 +82,40 @@ export function useProjects(workspaceId) {
     }
 
     const projectIds = (data || []).map((project) => project.id)
-    let taskCounts = {}
+    let metrics = { counts: {}, completed: {}, overdue: {} }
 
     if (projectIds.length > 0) {
       const { data: taskRows } = await supabase
         .from('tasks')
-        .select('project_id')
+        .select(`
+          id,
+          project_id,
+          due_date,
+          task_statuses:status_id (
+            name,
+            system_code
+          )
+        `)
         .in('project_id', projectIds)
 
-      taskCounts = countTasks(taskRows || [])
+      metrics = computeTaskMetrics(taskRows || [])
     }
 
     setProjects(
-      (data || []).map((project) => ({
-        ...project,
-        task_count: taskCounts[project.id] || 0,
-      }))
+      (data || []).map((project) => {
+        const taskCount = metrics.counts[project.id] || 0
+        const completedCount = metrics.completed[project.id] || 0
+        const overdueCount = metrics.overdue[project.id] || 0
+        const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
+
+        return {
+          ...project,
+          task_count: taskCount,
+          completed_count: completedCount,
+          overdue_count: overdueCount,
+          progress,
+        }
+      })
     )
     setLoading(false)
   }, [workspaceId, user])
@@ -69,8 +129,13 @@ export function useProjects(workspaceId) {
     const payload = {
       workspace_id: workspaceId,
       name: input?.name?.trim(),
-      description: input?.description || null,
+      description: input?.description?.trim() || null,
       color: input?.color || '#FDE215',
+      owner_id: input?.owner_id || user.id,
+      start_date: input?.start_date || null,
+      target_end_date: input?.target_end_date || null,
+      project_status: input?.project_status || 'active',
+      project_priority: input?.project_priority || 'medium',
       created_by: user.id,
     }
 
@@ -81,7 +146,26 @@ export function useProjects(workspaceId) {
     const { data, error: insertError } = await supabase
       .from('projects')
       .insert(payload)
-      .select('id, workspace_id, name, description, color, created_by, created_at, updated_at')
+      .select(`
+        id,
+        workspace_id,
+        name,
+        description,
+        color,
+        owner_id,
+        start_date,
+        target_end_date,
+        project_status,
+        project_priority,
+        created_by,
+        created_at,
+        updated_at,
+        owner:owner_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
       .single()
 
     if (!insertError) {
@@ -93,16 +177,42 @@ export function useProjects(workspaceId) {
 
   const updateProject = async (id, updates) => {
     const supabase = getSupabase()
-    const { error: updateError } = await supabase
+    const payload = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error: updateError } = await supabase
       .from('projects')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
+      .select(`
+        id,
+        workspace_id,
+        name,
+        description,
+        color,
+        owner_id,
+        start_date,
+        target_end_date,
+        project_status,
+        project_priority,
+        created_by,
+        created_at,
+        updated_at,
+        owner:owner_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .single()
 
     if (!updateError) {
       await fetchProjects()
     }
 
-    return { error: updateError }
+    return { data, error: updateError }
   }
 
   const deleteProject = async (id) => {

@@ -60,6 +60,10 @@ BEGIN
     RAISE EXCEPTION 'No auth user found for %. Sign up in the app first, then update target_user_email.', target_user_email;
   END IF;
 
+  DELETE FROM public.workspaces
+  WHERE name = target_workspace_name
+    AND created_by = target_user_id;
+
   INSERT INTO public.workspaces (name, created_by)
   VALUES (target_workspace_name, target_user_id)
   RETURNING id INTO target_workspace_id;

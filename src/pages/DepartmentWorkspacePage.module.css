@@ -1,0 +1,341 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+  color: var(--muted);
+}
+
+.notFound {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+
+.backLink {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+.deptCodeBadge {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #000;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+}
+
+.adminSettingsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.adminSettingsBtn:hover {
+  background: var(--panel-2);
+  border-color: var(--yellow);
+  color: var(--yellow);
+  transform: translateY(-1px);
+}
+
+/* Team Bar */
+.teamBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.headInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.barLabel {
+  font-size: 0.75rem;
+  color: var(--muted-2);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.headUser {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.unassignedHead {
+  font-size: 0.8rem;
+  color: var(--muted-2);
+  font-style: italic;
+}
+
+.membersSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.memberAvatars {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+}
+
+.memberAvatars > * {
+  margin-left: -8px;
+}
+
+.memberAvatars > *:first-child {
+  margin-left: 0;
+}
+
+.overflowCount {
+  margin-left: -6px;
+  padding: 2px 7px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* KPI Grid */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* Touching Projects Section */
+.touchingProjectsSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  flex-wrap: wrap;
+}
+
+.touchingLabel {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.projPillsList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.projPill:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  transform: translateY(-1px);
+}
+
+.projDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.projArrow {
+  color: var(--muted-2);
+}
+
+/* Controls Bar */
+.controlsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filterTabs {
+  display: flex;
+  gap: 8px;
+}
+
+.filterBtn {
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.filterBtn:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.filterActive {
+  background: var(--yellow) !important;
+  color: #000 !important;
+  border-color: var(--yellow) !important;
+}
+
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+}
+
+.searchIcon {
+  color: var(--muted-2);
+}
+
+.searchInput {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.82rem;
+  outline: none;
+  width: 180px;
+}
+
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.toggleBtn {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toggleActive {
+  background: var(--yellow);
+  color: #000;
+}
+
+/* Table Card */
+.tableCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.taskTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.taskTable th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.taskTable td {
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+/* Cards Grid */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.cardWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.projTag {
+  display: flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-left: 3px solid var(--yellow);
+  background: var(--panel-soft);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}

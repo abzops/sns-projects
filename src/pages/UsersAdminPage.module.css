@@ -1,0 +1,311 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+  color: var(--muted);
+}
+
+.inviteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.inviteBtn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  flex: 1;
+  max-width: 400px;
+}
+
+.searchIcon {
+  color: var(--muted-2);
+}
+
+.searchInput {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  width: 100%;
+  outline: none;
+}
+
+.memberCountBadge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.tableCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.usersTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.usersTable th {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.userRow {
+  border-bottom: 1px solid var(--line-soft);
+  transition: background var(--transition);
+}
+
+.userRow:hover {
+  background: var(--panel-2);
+}
+
+.usersTable td {
+  padding: 14px 18px;
+  vertical-align: middle;
+}
+
+.userCell {
+  min-width: 220px;
+}
+
+.userWrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metaWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nameRow strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.ownerStar {
+  color: var(--yellow);
+  display: inline-flex;
+}
+
+.emailText {
+  color: var(--muted-2);
+  font-size: 0.75rem;
+}
+
+.roleSelect {
+  padding: 6px 10px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.systemRolesGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.systemRoleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.systemRoleToggle:hover {
+  background: var(--panel-strong);
+  color: var(--text);
+  border-color: var(--line-light);
+}
+
+.hasRoleActive {
+  background: rgba(253, 226, 21, 0.12) !important;
+  color: var(--yellow) !important;
+  border-color: rgba(253, 226, 21, 0.35) !important;
+}
+
+.toggleIndicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+}
+
+.pendingHint {
+  font-size: 0.75rem;
+  color: var(--muted-2);
+  font-style: italic;
+}
+
+.statusBadge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.statusActive {
+  background: rgba(74, 207, 130, 0.12);
+  color: #61de96;
+}
+
+.statusPending {
+  background: rgba(232, 160, 58, 0.12);
+  color: #ffb752;
+}
+
+.removeBtn {
+  background: transparent;
+  border: none;
+  color: var(--muted-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all var(--transition);
+}
+
+.removeBtn:hover {
+  color: var(--red);
+  background: rgba(232, 97, 74, 0.1);
+}
+
+/* Modal form */
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.modalLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.modalInput,
+.modalSelect {
+  padding: 10px 14px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.modalInput:focus,
+.modalSelect:focus {
+  border-color: var(--yellow);
+  outline: none;
+}
+
+.modalActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.cancelBtn {
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.confirmBtn {
+  padding: 10px 20px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.confirmBtn:hover {
+  background: var(--accent-hover);
+}

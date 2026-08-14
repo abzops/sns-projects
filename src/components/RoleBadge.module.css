@@ -1,0 +1,97 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.xs {
+  font-size: 0.62rem;
+  padding: 2px 7px;
+}
+
+.sm {
+  font-size: 0.68rem;
+  padding: 3px 9px;
+}
+
+.md {
+  font-size: 0.75rem;
+  padding: 5px 12px;
+}
+
+/* System Roles */
+.ceo {
+  background: rgba(253, 226, 21, 0.15);
+  color: var(--yellow);
+  border: 1px solid rgba(253, 226, 21, 0.35);
+  box-shadow: 0 0 10px rgba(253, 226, 21, 0.1);
+}
+
+.cto {
+  background: rgba(90, 157, 232, 0.15);
+  color: #7bb5f8;
+  border: 1px solid rgba(90, 157, 232, 0.35);
+}
+
+.systemAdmin {
+  background: rgba(232, 97, 74, 0.14);
+  color: #ff7d6b;
+  border: 1px solid rgba(232, 97, 74, 0.32);
+}
+
+.projectAdmin {
+  background: rgba(232, 160, 58, 0.15);
+  color: #ffb752;
+  border: 1px solid rgba(232, 160, 58, 0.32);
+}
+
+/* Workspace Roles */
+.owner {
+  background: rgba(253, 226, 21, 0.12);
+  color: var(--yellow);
+  border: 1px solid rgba(253, 226, 21, 0.28);
+}
+
+.admin {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.member {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.viewer {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted-2);
+  border: 1px solid var(--line-soft);
+}
+
+/* Department Roles */
+.head {
+  background: rgba(74, 207, 130, 0.14);
+  color: #61de96;
+  border: 1px solid rgba(74, 207, 130, 0.3);
+}
+
+.lead {
+  background: rgba(90, 157, 232, 0.12);
+  color: #8bbdfa;
+  border: 1px solid rgba(90, 157, 232, 0.25);
+}
+
+.default {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: 1px solid var(--line);
+}

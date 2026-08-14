@@ -1,42 +1,46 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useWorkspaces } from '../hooks/useWorkspaces'
-import { Plus, Briefcase, Users, FolderOpen, Calendar, Loader2 } from 'lucide-react'
-import Modal from '../components/Modal'
-import EmptyState from '../components/EmptyState'
-import Spinner from '../components/Spinner'
-import styles from './WorkspacesPage.module.css'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useWorkspaces } from '../hooks/useWorkspaces';
+import { Plus, Building2, Users, FolderOpen, Calendar, Loader2, ArrowRight } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
+import Modal from '../components/Modal';
+import EmptyState from '../components/EmptyState';
+import Spinner from '../components/Spinner';
+import styles from './WorkspacesPage.module.css';
 
 export default function WorkspacesPage() {
-  const { workspaces, loading, createWorkspace } = useWorkspaces()
-  const [showModal, setShowModal] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [creating, setCreating] = useState(false)
-  const navigate = useNavigate()
+  const { workspaces = [], loading, createWorkspace } = useWorkspaces();
+  const [showModal, setShowModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const navigate = useNavigate();
 
   const handleCreate = async (e) => {
-    e.preventDefault()
-    if (!newName.trim()) return
-    setCreating(true)
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreating(true);
     try {
-      await createWorkspace({ name: newName.trim() })
-      setNewName('')
-      setShowModal(false)
+      const { data } = await createWorkspace({ name: newName.trim() });
+      setNewName('');
+      setShowModal(false);
+      if (data?.id) {
+        navigate(`/workspace/${data.id}/dashboard`);
+      }
     } catch (err) {
-      console.error('Failed to create workspace:', err)
+      console.error('Failed to create workspace:', err);
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
-  }
+  };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return ''
+    if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-    })
-  }
+    });
+  };
 
   if (loading) {
     return (
@@ -44,46 +48,51 @@ export default function WorkspacesPage() {
         <Spinner size="lg" />
         <p>Loading workspaces…</p>
       </div>
-    )
+    );
   }
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.pageTitle}>Your Workspaces</h1>
-          <p className={styles.pageSubtitle}>
-            {workspaces.length} workspace{workspaces.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button className={styles.createBtn} onClick={() => setShowModal(true)}>
-          <Plus size={18} />
-          Create Workspace
-        </button>
-      </div>
+      <PageHeader
+        title="Workspaces"
+        subtitle="Organizations and operational tenants under your account"
+        actions={
+          <button type="button" className={styles.createBtn} onClick={() => setShowModal(true)}>
+            <Plus size={16} />
+            Create Workspace
+          </button>
+        }
+      />
 
       {workspaces.length === 0 ? (
-        <EmptyState 
-          icon={Briefcase}
+        <EmptyState
+          icon={Building2}
           title="No workspaces yet"
-          description="Create your first workspace to start organizing projects and collaborating with your team."
+          description="Create your first organization workspace to start managing projects, departments, and RACI matrices."
           actionLabel="Create Workspace"
           onAction={() => setShowModal(true)}
         />
       ) : (
         <div className={styles.grid}>
           {workspaces.map((ws, i) => (
-            <button
+            <div
               key={ws.id}
               className={styles.card}
-              onClick={() => navigate(`/workspace/${ws.id}`)}
+              onClick={() => navigate(`/workspace/${ws.id}/dashboard`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && navigate(`/workspace/${ws.id}/dashboard`)}
               style={{ animationDelay: `${i * 0.06}s` }}
             >
               <div className={styles.cardTop}>
                 <div className={styles.cardIcon}>
-                  <Briefcase size={20} />
+                  <Building2 size={20} />
                 </div>
-                <h3 className={styles.cardName}>{ws.name}</h3>
+                <div className={styles.cardTitleWrap}>
+                  <h3 className={styles.cardName}>{ws.name}</h3>
+                  <span className={styles.cardSub}>Command Center</span>
+                </div>
+                <ArrowRight size={16} className={styles.arrowIcon} />
               </div>
 
               <div className={styles.cardMeta}>
@@ -101,7 +110,7 @@ export default function WorkspacesPage() {
                 <Calendar size={12} />
                 <span>Created {formatDate(ws.created_at)}</span>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -111,13 +120,13 @@ export default function WorkspacesPage() {
         <form onSubmit={handleCreate}>
           <div className={styles.modalField}>
             <label className={styles.modalLabel} htmlFor="wsName">
-              Workspace Name
+              Workspace / Organization Name
             </label>
             <input
               id="wsName"
               type="text"
               className={styles.modalInput}
-              placeholder="e.g. Design Team, Engineering"
+              placeholder="e.g. Stack n Stock Core Operations"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               required
@@ -146,12 +155,12 @@ export default function WorkspacesPage() {
                   Creating…
                 </>
               ) : (
-                'Create'
+                'Create Workspace'
               )}
             </button>
           </div>
         </form>
       </Modal>
     </div>
-  )
+  );
 }

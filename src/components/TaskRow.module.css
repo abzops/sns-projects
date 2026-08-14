@@ -1,56 +1,105 @@
 .row {
-  border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background var(--transition);
+  border-bottom: 1px solid var(--line);
 }
 
 .row:hover {
-  background: rgba(253, 226, 21, 0.055);
+  background: var(--panel-2);
 }
 
-.row td {
-  padding: 14px 16px;
-  color: var(--text);
-  font-size: 0.82rem;
-  vertical-align: middle;
-  white-space: nowrap;
+.row:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: -2px;
+}
+
+.blockedRow {
+  background: rgba(232, 97, 74, 0.04);
 }
 
 .titleCell {
-  max-width: 340px;
-  white-space: normal !important;
+  min-width: 200px;
+  max-width: 380px;
 }
 
-.taskTitle {
-  color: var(--text);
-  font-size: 0.9rem;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.assignee {
+.titleWrapper {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.assigneeName {
+.blockedBadge {
+  color: #ff7d6b;
+  display: inline-flex;
+  align-items: center;
+}
+
+.taskTitle {
+  font-weight: 700;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
-.unassigned,
-.date {
-  color: var(--muted);
+.projectName {
+  font-size: 0.72rem;
+  color: var(--muted-2);
+  font-weight: 500;
+}
+
+.legacyAssignee {
   font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.unassigned {
+  color: var(--muted-2);
+  font-size: 0.8rem;
+}
+
+.date {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .overdue {
-  color: var(--red);
-  font-weight: 800;
+  color: #ff7d6b;
+  font-weight: 700;
 }
 
-.today {
-  color: var(--accent);
-  font-weight: 800;
+.overdueDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--red);
+}
+
+.subtaskBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 1px 5px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.hierarchyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--yellow);
+  padding: 1px 5px;
+  background: rgba(253, 226, 21, 0.08);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  border-radius: 4px;
 }

@@ -1,157 +1,158 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useWorkspaces } from '../hooks/useWorkspaces'
-import { useMembers } from '../hooks/useMembers'
-import { useAuth } from '../contexts/AuthContext'
-import { useToast } from '../components/Toast'
-import Spinner from '../components/Spinner'
-import Avatar from '../components/Avatar'
-import Modal from '../components/Modal'
-import { Settings, Users, Plus, Shield, Trash2, Mail, AlertTriangle } from 'lucide-react'
-import styles from './WorkspaceSettingsPage.module.css'
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useWorkspaces } from '../hooks/useWorkspaces';
+import { useMembers } from '../hooks/useMembers';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
+import Spinner from '../components/Spinner';
+import Avatar from '../components/Avatar';
+import RoleBadge from '../components/RoleBadge';
+import PageHeader from '../components/PageHeader';
+import Modal from '../components/Modal';
+import { Settings, Users, Plus, Trash2, Mail, AlertTriangle } from 'lucide-react';
+import styles from './WorkspaceSettingsPage.module.css';
 
 export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
-  const { workspaceId } = useParams()
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const { showToast } = useToast()
-  
-  const { workspaces, updateWorkspace, deleteWorkspace, loading: workspacesLoading } = useWorkspaces()
-  const { members, inviteMember, updateRole, removeMember, loading: membersLoading } = useMembers(workspaceId)
-  
-  const [activeTab, setActiveTab] = useState(defaultTab)
-  
-  // Modals state
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  
-  // Forms state
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('member')
-  const [workspaceName, setWorkspaceName] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { workspaceId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-  const workspace = workspaces.find(w => w.id === workspaceId)
-  const currentUserMember = members.find(m => m.user_id === user?.id)
-  const currentUserRole = currentUserMember?.role || 'viewer'
-  
-  const isOwner = currentUserRole === 'owner'
-  const isAdmin = currentUserRole === 'admin' || isOwner
+  const { workspaces, updateWorkspace, deleteWorkspace, loading: workspacesLoading } = useWorkspaces();
+  const { members, inviteMember, updateRole, removeMember, loading: membersLoading } = useMembers(workspaceId);
+
+  const [activeTab, setActiveTab] = useState(defaultTab);
+
+  // Modals state
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Forms state
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+  const currentUserMember = members.find((m) => m.user_id === user?.id);
+  const currentUserRole = currentUserMember?.role || 'viewer';
+
+  const isOwner = currentUserRole === 'owner';
+  const isAdmin = currentUserRole === 'admin' || isOwner;
 
   // Initialize workspace name when data loads
   if (workspace && !workspaceName && !isSubmitting) {
-    setWorkspaceName(workspace.name)
+    setWorkspaceName(workspace.name);
   }
 
   if (workspacesLoading || membersLoading) {
     return (
       <div className={styles.loadingContainer}>
         <Spinner size="lg" />
+        <p>Loading workspace settings…</p>
       </div>
-    )
+    );
   }
 
   if (!workspace) {
-    return <div>Workspace not found</div>
+    return <div className={styles.notFound}>Workspace not found</div>;
   }
 
   const handleUpdateName = async (e) => {
-    e.preventDefault()
-    if (!workspaceName.trim()) return
-    
-    setIsSubmitting(true)
-    const { error } = await updateWorkspace(workspaceId, { name: workspaceName.trim() })
-    setIsSubmitting(false)
-    
+    e.preventDefault();
+    if (!workspaceName.trim()) return;
+
+    setIsSubmitting(true);
+    const { error } = await updateWorkspace(workspaceId, { name: workspaceName.trim() });
+    setIsSubmitting(false);
+
     if (error) {
-      showToast(error.message, 'error')
+      showToast(error.message, 'error');
     } else {
-      showToast('Workspace renamed successfully', 'success')
+      showToast('Workspace renamed successfully', 'success');
     }
-  }
+  };
 
   const handleDeleteWorkspace = async () => {
-    setIsSubmitting(true)
-    const { error } = await deleteWorkspace(workspaceId)
-    setIsSubmitting(false)
-    
+    setIsSubmitting(true);
+    const { error } = await deleteWorkspace(workspaceId);
+    setIsSubmitting(false);
+
     if (error) {
-      showToast(error.message, 'error')
-      setIsDeleteModalOpen(false)
+      showToast(error.message, 'error');
+      setIsDeleteModalOpen(false);
     } else {
-      showToast('Workspace deleted', 'success')
-      navigate('/')
+      showToast('Workspace deleted', 'success');
+      navigate('/workspaces');
     }
-  }
+  };
 
   const handleInvite = async (e) => {
-    e.preventDefault()
-    if (!inviteEmail.trim()) return
-    
-    setIsSubmitting(true)
-    const { error } = await inviteMember(inviteEmail.trim(), inviteRole)
-    setIsSubmitting(false)
-    
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    setIsSubmitting(true);
+    const { error } = await inviteMember(inviteEmail.trim(), inviteRole);
+    setIsSubmitting(false);
+
     if (error) {
-      showToast(error.message, 'error')
+      showToast(error.message, 'error');
     } else {
-      showToast('Invitation sent', 'success')
-      setIsInviteModalOpen(false)
-      setInviteEmail('')
-      setInviteRole('member')
+      showToast('Invitation sent', 'success');
+      setIsInviteModalOpen(false);
+      setInviteEmail('');
+      setInviteRole('member');
     }
-  }
+  };
 
   const handleRoleChange = async (memberId, newRole, currentRole) => {
     if (currentRole === 'owner') {
-      showToast('Cannot change owner role', 'error')
-      return
+      showToast('Cannot change owner role', 'error');
+      return;
     }
-    
-    const { error } = await updateRole(memberId, newRole)
+
+    const { error } = await updateRole(memberId, newRole);
     if (error) {
-      showToast(error.message, 'error')
+      showToast(error.message, 'error');
     } else {
-      showToast('Role updated', 'success')
+      showToast('Role updated', 'success');
     }
-  }
+  };
 
   const handleRemoveMember = async (memberId, memberName) => {
     if (confirm(`Are you sure you want to remove ${memberName || 'this user'}?`)) {
-      const { error } = await removeMember(memberId)
+      const { error } = await removeMember(memberId);
       if (error) {
-        showToast(error.message, 'error')
+        showToast(error.message, 'error');
       } else {
-        showToast('Member removed', 'success')
+        showToast('Member removed', 'success');
       }
     }
-  }
+  };
 
-  const roleWeights = { owner: 4, admin: 3, member: 2, viewer: 1 }
+  const roleWeights = { owner: 4, admin: 3, member: 2, viewer: 1 };
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <div>
-          <h1>Workspace Settings</h1>
-          <p className={styles.subtitle}>Manage preferences and members for {workspace.name}</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Workspace Settings"
+        subtitle={`Preferences, general configuration, and membership for ${workspace.name}`}
+      />
 
       <div className={styles.tabs}>
-        <button 
+        <button
           className={`${styles.tab} ${activeTab === 'general' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('general')}
         >
           <Settings size={18} />
           General
         </button>
-        <button 
+        <button
           className={`${styles.tab} ${activeTab === 'members' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('members')}
         >
           <Users size={18} />
-          Members
+          Members ({members.length})
         </button>
       </div>
 
@@ -173,8 +174,12 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                   />
                 </div>
                 {isAdmin && (
-                  <button type="submit" className={styles.primaryBtn} disabled={isSubmitting || workspaceName === workspace.name}>
-                    {isSubmitting ? 'Saving...' : 'Save Changes'}
+                  <button
+                    type="submit"
+                    className={styles.primaryBtn}
+                    disabled={isSubmitting || workspaceName === workspace.name}
+                  >
+                    {isSubmitting ? 'Saving…' : 'Save Changes'}
                   </button>
                 )}
               </form>
@@ -183,10 +188,11 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
             {isOwner && (
               <div className={`${styles.card} ${styles.dangerZone}`}>
                 <h2>Danger Zone</h2>
-                <p>Once you delete a workspace, there is no going back. Please be certain.</p>
-                <button 
+                <p>Once you delete a workspace, all projects and tasks will be permanently removed.</p>
+                <button
                   className={styles.dangerBtn}
                   onClick={() => setIsDeleteModalOpen(true)}
+                  type="button"
                 >
                   <Trash2 size={16} />
                   Delete Workspace
@@ -212,7 +218,7 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
             </div>
 
             <div className={styles.memberList}>
-              {members.map(member => (
+              {members.map((member) => (
                 <div key={member.id} className={styles.memberRow}>
                   <div className={styles.memberInfo}>
                     <Avatar name={member.profiles?.full_name || member.invited_email} size="md" />
@@ -227,15 +233,12 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className={styles.memberActions}>
-                    <div className={styles.roleBadge} data-role={member.role}>
-                      <Shield size={14} />
-                      {member.role}
-                    </div>
-                    
+                    <RoleBadge role={member.role} size="sm" />
+
                     {isAdmin && member.role !== 'owner' && (
-                      <select 
+                      <select
                         className={styles.roleSelect}
                         value={member.role}
                         onChange={(e) => handleRoleChange(member.id, e.target.value, member.role)}
@@ -246,12 +249,13 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                         <option value="viewer">Viewer</option>
                       </select>
                     )}
-                    
+
                     {isAdmin && member.role !== 'owner' && (
-                      <button 
-                        className={styles.iconBtn} 
+                      <button
+                        className={styles.iconBtn}
                         onClick={() => handleRemoveMember(member.id, member.profiles?.full_name || member.invited_email)}
                         title="Remove member"
+                        type="button"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -265,9 +269,9 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
       </div>
 
       {/* Invite Modal */}
-      <Modal 
-        isOpen={isInviteModalOpen} 
-        onClose={() => setIsInviteModalOpen(false)} 
+      <Modal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
         title="Invite Team Member"
       >
         <form onSubmit={handleInvite}>
@@ -280,16 +284,16 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                 className={styles.input}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@example.com"
+                placeholder="colleague@stacknstock.in"
                 required
                 style={{ paddingLeft: '40px' }}
               />
             </div>
           </div>
-          
+
           <div className={styles.formGroup}>
             <label>Role</label>
-            <select 
+            <select
               className={styles.input}
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
@@ -299,59 +303,58 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
               {isOwner && <option value="admin">Admin - Can also manage members</option>}
             </select>
           </div>
-          
+
           <div className={styles.modalActions}>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={styles.cancelBtn}
               onClick={() => setIsInviteModalOpen(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className={styles.primaryBtn}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Sending...' : 'Send Invitation'}
+              {isSubmitting ? 'Sending…' : 'Send Invite'}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setIsDeleteModalOpen(false)} 
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
         title="Delete Workspace"
       >
         <div className={styles.deleteConfirm}>
-          <div className={styles.warningIcon}>
-            <AlertTriangle size={32} />
-          </div>
-          <h3>Are you absolutely sure?</h3>
+          <AlertTriangle size={48} className={styles.warningIcon} />
           <p>
-            This will permanently delete the <strong>{workspace.name}</strong> workspace, 
-            along with all its projects, tasks, and member associations. This action cannot be undone.
+            Are you sure you want to delete <strong>{workspace.name}</strong>? This action cannot be undone and will delete all associated projects and tasks.
           </p>
-          
-          <div className={styles.modalActions} style={{ marginTop: '24px' }}>
-            <button 
+          <div className={styles.modalActions}>
+            <button
+              type="button"
               className={styles.cancelBtn}
               onClick={() => setIsDeleteModalOpen(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </button>
-            <button 
-              className={styles.dangerBtnModal}
+            <button
+              type="button"
+              className={styles.dangerBtn}
               onClick={handleDeleteWorkspace}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Deleting...' : 'Yes, Delete Workspace'}
+              {isSubmitting ? 'Deleting…' : 'Yes, Delete Workspace'}
             </button>
           </div>
         </div>
       </Modal>
     </div>
-  )
+  );
 }
