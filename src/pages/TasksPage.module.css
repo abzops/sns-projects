@@ -1025,3 +1025,63 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Defined Task List Styles */
+.definedListTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  background: rgba(253, 226, 21, 0.15);
+  border: 1px solid rgba(253, 226, 21, 0.35);
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--yellow);
+  text-transform: uppercase;
+}
+
+.procActivePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  background: rgba(253, 226, 21, 0.1);
+  border: 1px solid rgba(253, 226, 21, 0.3);
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.procDonePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  background: rgba(96, 211, 148, 0.15);
+  border: 1px solid rgba(96, 211, 148, 0.35);
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--good);
+}
+
+.viewProcessBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.viewProcessBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+

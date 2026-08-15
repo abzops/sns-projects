@@ -45,6 +45,7 @@ import {
   FolderPlus,
   BookmarkPlus,
   AlertCircle,
+  Workflow,
 } from 'lucide-react';
 
 import TaskRow from '../components/TaskRow';
@@ -140,6 +141,8 @@ function SortableTaskCardWrapper({ task, onClick, disabled = false, statuses = [
         ...listeners,
       };
 
+  const isDefined = !!task?.process_step_id;
+
   return (
     <div ref={setNodeRef} style={style} className={styles.sortableCardContainer}>
       <TaskCard
@@ -148,7 +151,7 @@ function SortableTaskCardWrapper({ task, onClick, disabled = false, statuses = [
         isDragging={isDragging}
         dragHandleProps={dragHandleProps}
         statuses={statuses}
-        onMoveStatus={onMoveStatus}
+        onMoveStatus={isDefined ? null : onMoveStatus}
       />
     </div>
   );
@@ -665,6 +668,11 @@ export default function TasksPage() {
 
         const activeTask = activeItems[activeIndex];
 
+        // Defined Process Task cross-column DnD guard
+        if (activeTask?.process_step_id && activeContainer !== overContainer) {
+          return prev; // Do not visually drag cross-column for defined tasks
+        }
+
         let newIndex;
         if (overId in prev) {
           // Dropped directly on column droppable / empty zone
@@ -760,6 +768,13 @@ export default function TasksPage() {
           const movedTask = tasks.find((t) => t.id === activeTaskId);
           const initialStatusId = movedTask ? movedTask.status_id : destStatus.id;
           const isSameColumn = initialStatusId === destStatus.id;
+
+          // Reject cross-status drag for Defined tasks
+          if (movedTask?.process_step_id && !isSameColumn) {
+            showToast('Status controlled by Defined Process workflow', 'error');
+            if (boardSnapshotRef.current) return boardSnapshotRef.current;
+            return currentBoard;
+          }
 
           let fullSourceTaskIds = [];
           let fullDestinationTaskIds = [];
@@ -1225,8 +1240,25 @@ export default function TasksPage() {
 
                                   <div className={styles.taskListMain}>
                                     <div className={styles.taskListTitleRow}>
-                                      <span className={styles.taskListTag}>Task List</span>
+                                      {taskList.task_list_type === 'defined' ? (
+                                        <span className={styles.definedListTag}>
+                                          <Workflow size={11} /> Defined Process
+                                        </span>
+                                      ) : (
+                                        <span className={styles.taskListTag}>Task List</span>
+                                      )}
                                       <h4 className={styles.taskListName}>{taskList.name}</h4>
+                                      {taskList.task_list_type === 'defined' && (
+                                        <span
+                                          className={
+                                            taskList.process_state === 'completed'
+                                              ? styles.procDonePill
+                                              : styles.procActivePill
+                                          }
+                                        >
+                                          {taskList.process_state === 'completed' ? 'Completed' : 'Active'}
+                                        </span>
+                                      )}
                                       <span className={styles.taskListTaskCount}>
                                         ({taskList.completed_count}/{taskList.task_count} completed)
                                       </span>
@@ -1245,21 +1277,37 @@ export default function TasksPage() {
                                   <span className={styles.taskListPercent}>{taskList.progress}%</span>
 
                                   <div className={styles.taskListActions}>
-                                    <button
-                                      type="button"
-                                      className={styles.addTaskInlineBtn}
-                                      onClick={() => handleOpenAddTask(milestone.id, taskList.id)}
-                                    >
-                                      <Plus size={13} /> Add Task
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={styles.deleteTaskListBtn}
-                                      onClick={() => handleDeleteTaskListClick(taskList)}
-                                      title="Delete Task List (if empty)"
-                                    >
-                                      Delete
-                                    </button>
+                                    {taskList.task_list_type === 'defined' ? (
+                                      <button
+                                        type="button"
+                                        className={styles.viewProcessBtn}
+                                        onClick={() =>
+                                          navigate(
+                                            `/workspace/${workspaceId}/project/${projectId}/process/${taskList.id}`
+                                          )
+                                        }
+                                      >
+                                        <Workflow size={13} /> View Process
+                                      </button>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className={styles.addTaskInlineBtn}
+                                          onClick={() => handleOpenAddTask(milestone.id, taskList.id)}
+                                        >
+                                          <Plus size={13} /> Add Task
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={styles.deleteTaskListBtn}
+                                          onClick={() => handleDeleteTaskListClick(taskList)}
+                                          title="Delete Task List (if empty)"
+                                        >
+                                          Delete
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
 

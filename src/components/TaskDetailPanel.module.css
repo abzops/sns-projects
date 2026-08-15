@@ -747,3 +747,265 @@
 .saveBtn:hover {
   background: var(--accent-hover);
 }
+
+/* Defined Task & Workflow Extension Styles */
+.definedTaskBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: rgba(253, 226, 21, 0.15);
+  border: 1px solid rgba(253, 226, 21, 0.4);
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.definedBanner {
+  background: var(--panel-2);
+  border: 1px solid rgba(253, 226, 21, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.definedBannerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.definedStatePill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--yellow);
+}
+
+.cycleIndicator {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.3);
+  color: var(--bad);
+  border-radius: 4px;
+}
+
+.definedBannerNote {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.lockIcon {
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.lockedInput {
+  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.03) !important;
+  cursor: not-allowed;
+}
+
+.lockedRaciChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.reqBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  background: rgba(140, 201, 255, 0.15);
+  border: 1px solid rgba(140, 201, 255, 0.4);
+  color: var(--blue);
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.executionSection {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.execHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.execHeader h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.execIcon {
+  color: var(--yellow);
+}
+
+.execBox {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.execBoxTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.execBoxTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.execActionBtn {
+  padding: 6px 12px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.execActionBtnSec {
+  padding: 6px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.btnRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approveBtn {
+  padding: 6px 12px;
+  background: var(--good);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.rejectBtn {
+  padding: 6px 12px;
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.4);
+  color: var(--bad);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.inlineForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.execTextarea,
+.execInput {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.execTextarea:focus,
+.execInput:focus {
+  border-color: var(--yellow);
+}
+
+.typeSelectorRow {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.execSubmitBtn {
+  padding: 8px 14px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+.rejectSubmitBtn {
+  padding: 8px 14px;
+  background: var(--bad);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-end;
+}
+

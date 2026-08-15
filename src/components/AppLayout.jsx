@@ -13,6 +13,7 @@ import {
   X,
   ChevronDown,
   Layers,
+  Workflow,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import RoleBadge from './RoleBadge';
@@ -203,6 +204,17 @@ export default function AppLayout() {
                 >
                   <FolderKanban size={18} />
                   <span>Projects</span>
+                </NavLink>
+
+                <NavLink
+                  to={`/workspace/${activeWorkspaceId}/processes`}
+                  className={({ isActive }) =>
+                    `${styles.navLink} ${isActive ? styles.active : ''}`
+                  }
+                  onClick={closeSidebar}
+                >
+                  <Workflow size={18} />
+                  <span>Processes</span>
                 </NavLink>
 
                 <NavLink

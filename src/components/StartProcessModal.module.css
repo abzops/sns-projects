@@ -1,0 +1,196 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.required {
+  color: var(--bad);
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--yellow);
+}
+
+.select option {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.processMetaBox {
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.metaLabel {
+  color: var(--text-muted);
+}
+
+.versionBadge {
+  padding: 2px 8px;
+  background: rgba(96, 211, 148, 0.15);
+  border: 1px solid rgba(96, 211, 148, 0.4);
+  color: var(--good);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.draftBadge {
+  padding: 2px 8px;
+  background: rgba(255, 176, 32, 0.15);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  color: var(--accent-orange);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.demoBadgeBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--yellow);
+  font-weight: 500;
+}
+
+.authorityBanner {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.authorityPass {
+  background: rgba(96, 211, 148, 0.1);
+  border: 1px solid rgba(96, 211, 148, 0.3);
+  color: var(--good);
+}
+
+.authorityFail {
+  background: rgba(255, 102, 102, 0.1);
+  border: 1px solid rgba(255, 102, 102, 0.3);
+  color: var(--bad);
+}
+
+.authRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.authRow code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.passIcon {
+  color: var(--good);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.failIcon {
+  color: var(--bad);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.checkingText {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.cancelBtn {
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelBtn:hover:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.submitBtn {
+  padding: 10px 20px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.submitBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

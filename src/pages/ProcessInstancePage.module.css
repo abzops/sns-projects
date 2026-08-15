@@ -1,0 +1,767 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.breadcrumbBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.backLink:hover {
+  color: var(--yellow);
+}
+
+.breadcrumbPath {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.activeBreadcrumb {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.instanceHero {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.heroBadgeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.procCodeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.versionPill {
+  padding: 2px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.procStateBadge {
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.procStateActive {
+  background: rgba(253, 226, 21, 0.15);
+  border: 1px solid rgba(253, 226, 21, 0.4);
+  color: var(--yellow);
+}
+
+.procStateCompleted {
+  background: rgba(96, 211, 148, 0.15);
+  border: 1px solid rgba(96, 211, 148, 0.4);
+  color: var(--good);
+}
+
+.instanceTitle {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.procSubText {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.heroMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 260px;
+  justify-content: center;
+}
+
+.metaStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metaStatLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.metaStatValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--yellow);
+  transition: width 0.4s ease;
+}
+
+.metaMetaDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.metaDetailItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.completedAtItem {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.completedCelebrationBanner {
+  background: linear-gradient(90deg, rgba(96, 211, 148, 0.15) 0%, rgba(96, 211, 148, 0.05) 100%);
+  border: 1px solid rgba(96, 211, 148, 0.4);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.celebrationIcon {
+  color: var(--good);
+  flex-shrink: 0;
+}
+
+.celebrationText h3 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--good);
+}
+
+.celebrationText p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.stepFlowContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stepFlowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stepFlowHeader h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.refreshHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stepCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  gap: 20px;
+  position: relative;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.stepCard:hover {
+  border-color: rgba(253, 226, 21, 0.4);
+  transform: translateY(-1px);
+}
+
+.stepCardWaiting {
+  opacity: 0.65;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.stepCardDone {
+  border-color: rgba(96, 211, 148, 0.3);
+}
+
+.stepCardActive {
+  border-color: rgba(253, 226, 21, 0.3);
+}
+
+.seqCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.seqMarker {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.seqMarkerWaiting {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+}
+
+.seqMarkerActive {
+  background: var(--yellow);
+  color: #000;
+  box-shadow: 0 0 12px rgba(253, 226, 21, 0.4);
+}
+
+.seqMarkerDone {
+  background: rgba(96, 211, 148, 0.2);
+  border: 1px solid var(--good);
+  color: var(--good);
+}
+
+.seqLine {
+  width: 2px;
+  flex: 1;
+  background: var(--line);
+  margin-top: 8px;
+  margin-bottom: -24px;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.stepTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stepCodeTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stepCode {
+  font-family: monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.stepTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.stepBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stateWaiting {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+}
+
+.stateReady {
+  background: rgba(96, 211, 148, 0.15);
+  border: 1px solid rgba(96, 211, 148, 0.4);
+  color: var(--good);
+}
+
+.stateActive {
+  background: rgba(253, 226, 21, 0.15);
+  border: 1px solid rgba(253, 226, 21, 0.4);
+  color: var(--yellow);
+}
+
+.stateConsult {
+  background: rgba(140, 201, 255, 0.15);
+  border: 1px solid rgba(140, 201, 255, 0.4);
+  color: var(--blue);
+}
+
+.stateApproval {
+  background: rgba(255, 176, 32, 0.15);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  color: var(--accent-orange);
+}
+
+.stateRework {
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.4);
+  color: var(--bad);
+}
+
+.stateCompleted {
+  background: rgba(96, 211, 148, 0.15);
+  border: 1px solid rgba(96, 211, 148, 0.4);
+  color: var(--good);
+}
+
+.stateCancelled {
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.4);
+  color: var(--bad);
+}
+
+.cycleBadge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.3);
+  color: var(--bad);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.stepDescription {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stepMetadataBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metaIcon {
+  color: var(--yellow);
+}
+
+.mutedText {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.raciRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.raciLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.raciChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.raciChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  padding: 2px 8px 2px 4px;
+  font-size: 12px;
+}
+
+.raciRoleTag {
+  font-weight: 800;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: var(--line);
+  color: var(--yellow);
+}
+
+.raciName {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.actionsBar {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actionButtonGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.completePartBtn {
+  padding: 8px 14px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.completePartBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.addEvidenceBtn {
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addEvidenceBtn:hover:not(:disabled) {
+  border-color: var(--yellow);
+}
+
+.consultBtn {
+  padding: 8px 14px;
+  background: var(--blue);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.approveBtn {
+  padding: 8px 14px;
+  background: var(--good);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.rejectBtn {
+  padding: 8px 14px;
+  background: rgba(255, 102, 102, 0.15);
+  border: 1px solid rgba(255, 102, 102, 0.4);
+  color: var(--bad);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+/* Modal Overlay Styles */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modalContent {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  width: 100%;
+  max-width: 500px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.typeSelector {
+  display: flex;
+  gap: 10px;
+}
+
+.typeBtn {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.typeBtnActive {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: rgba(253, 226, 21, 0.08);
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modalLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.modalInput,
+.modalTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.modalInput:focus,
+.modalTextarea:focus {
+  border-color: var(--yellow);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.cancelBtn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submitBtn {
+  padding: 8px 16px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rejectSubmitBtn {
+  padding: 8px 16px;
+  background: var(--bad);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
