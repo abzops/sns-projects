@@ -1987,6 +1987,9 @@ CREATE INDEX IF NOT EXISTS idx_task_lists_defined_process
   ON public.task_lists (defined_process_id, defined_process_version_id)
   WHERE task_list_type = 'defined';
 
+CREATE INDEX IF NOT EXISTS idx_task_lists_process_version_fk
+  ON public.task_lists (defined_process_version_id, defined_process_id);
+
 CREATE INDEX IF NOT EXISTS idx_task_lists_project_process_state
   ON public.task_lists (project_id, process_state)
   WHERE task_list_type = 'defined';
@@ -2257,6 +2260,11 @@ CREATE POLICY "task_lists_insert_member"
       OR
       (SELECT private.has_system_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = task_lists.project_id),
+        'project_admin'
+      ))
+      OR
+      (SELECT private.has_system_role(
+        (SELECT p.workspace_id FROM public.projects p WHERE p.id = task_lists.project_id),
         'system_admin'
       ))
     )
@@ -2272,7 +2280,12 @@ CREATE POLICY "task_lists_delete_member"
     AND (
       (SELECT private.get_user_workspace_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = task_lists.project_id)
-      )) IN ('owner', 'admin', 'member')
+      )) IN ('owner', 'admin')
+      OR
+      (SELECT private.has_system_role(
+        (SELECT p.workspace_id FROM public.projects p WHERE p.id = task_lists.project_id),
+        'project_admin'
+      ))
       OR
       (SELECT private.has_system_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = task_lists.project_id),
@@ -2304,6 +2317,11 @@ CREATE POLICY "tasks_insert_member"
       OR
       (SELECT private.has_system_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = tasks.project_id),
+        'project_admin'
+      ))
+      OR
+      (SELECT private.has_system_role(
+        (SELECT p.workspace_id FROM public.projects p WHERE p.id = tasks.project_id),
         'system_admin'
       ))
     )
@@ -2320,6 +2338,11 @@ CREATE POLICY "tasks_delete_member"
       (SELECT private.get_user_workspace_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = tasks.project_id)
       )) IN ('owner', 'admin', 'member')
+      OR
+      (SELECT private.has_system_role(
+        (SELECT p.workspace_id FROM public.projects p WHERE p.id = tasks.project_id),
+        'project_admin'
+      ))
       OR
       (SELECT private.has_system_role(
         (SELECT p.workspace_id FROM public.projects p WHERE p.id = tasks.project_id),
@@ -2346,6 +2369,8 @@ CREATE POLICY "task_raci_insert_member"
         AND (
           (SELECT private.get_user_workspace_role(p.workspace_id)) IN ('owner', 'admin', 'member')
           OR
+          (SELECT private.has_system_role(p.workspace_id, 'project_admin'))
+          OR
           (SELECT private.has_system_role(p.workspace_id, 'system_admin'))
         )
     )
@@ -2364,6 +2389,8 @@ CREATE POLICY "task_raci_update_member"
         AND (
           (SELECT private.get_user_workspace_role(p.workspace_id)) IN ('owner', 'admin', 'member')
           OR
+          (SELECT private.has_system_role(p.workspace_id, 'project_admin'))
+          OR
           (SELECT private.has_system_role(p.workspace_id, 'system_admin'))
         )
     )
@@ -2376,6 +2403,8 @@ CREATE POLICY "task_raci_update_member"
         AND t.process_step_id IS NULL
         AND (
           (SELECT private.get_user_workspace_role(p.workspace_id)) IN ('owner', 'admin', 'member')
+          OR
+          (SELECT private.has_system_role(p.workspace_id, 'project_admin'))
           OR
           (SELECT private.has_system_role(p.workspace_id, 'system_admin'))
         )
@@ -2395,9 +2424,12 @@ CREATE POLICY "task_raci_delete_member"
         AND (
           (SELECT private.get_user_workspace_role(p.workspace_id)) IN ('owner', 'admin', 'member')
           OR
+          (SELECT private.has_system_role(p.workspace_id, 'project_admin'))
+          OR
           (SELECT private.has_system_role(p.workspace_id, 'system_admin'))
         )
     )
   );
+
 
 

@@ -598,6 +598,98 @@ async function runDP1DTests() {
     `);
     assert(true, 'Test 52: Custom Task RACI DELETE allowed');
 
+    // 52a. Verify ordinary workspace member CANNOT delete Task Lists
+    await client.query('SET LOCAL ROLE postgres;');
+    const memberUid = '22222222-2222-2222-2222-222222222222';
+    await client.query(`
+      INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+      VALUES ('${memberUid}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'testmember@example.com', '', now(), '{"provider":"email","providers":["email"]}', jsonb_build_object('full_name', 'Test Member'), now(), now())
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.profiles (id, full_name) VALUES ('${memberUid}', 'Test Member')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
+      VALUES ('${wsId}', '${memberUid}', 'member', 'active')
+      ON CONFLICT (workspace_id, user_id) WHERE user_id IS NOT NULL
+      DO UPDATE SET role = 'member', status = 'active';
+    `);
+    await client.query('SET LOCAL ROLE authenticated;');
+    await client.query(`SET LOCAL request.jwt.claims = '{"sub": "${memberUid}"}';`);
+
+    const memberDelRes = await client.query(`DELETE FROM public.task_lists WHERE id = '${customTl.id}';`);
+    assert(memberDelRes.rowCount === 0, 'Test 52a: ordinary workspace member CANNOT delete Task Lists');
+
+    // 52b. Verify project_admin system role has full Custom Task List / Task / RACI authority
+    await client.query('SET LOCAL ROLE postgres;');
+    const paUid = '44444444-4444-4444-4444-444444444444';
+    await client.query(`
+      INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+      VALUES ('${paUid}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'testpa@example.com', '', now(), '{"provider":"email","providers":["email"]}', jsonb_build_object('full_name', 'Test ProjAdmin'), now(), now())
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.profiles (id, full_name) VALUES ('${paUid}', 'Test ProjAdmin')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
+      VALUES ('${wsId}', '${paUid}', 'viewer', 'active')
+      ON CONFLICT (workspace_id, user_id) WHERE user_id IS NOT NULL
+      DO UPDATE SET role = 'viewer', status = 'active';
+    `);
+    await client.query(`
+      INSERT INTO public.user_system_roles (workspace_id, user_id, role, created_by)
+      VALUES ('${wsId}', '${paUid}', 'project_admin', '${testProfile.id}')
+      ON CONFLICT (workspace_id, user_id, role) DO NOTHING;
+    `);
+    await client.query('SET LOCAL ROLE authenticated;');
+    await client.query(`SET LOCAL request.jwt.claims = '{"sub": "${paUid}"}';`);
+
+    // PA Task List INSERT & DELETE
+    const { rows: [paTl] } = await client.query(`
+      INSERT INTO public.task_lists (project_id, milestone_id, name, task_list_type)
+      VALUES ('${testProj.id}', '${testMs.id}', 'PA Task List', 'custom')
+      RETURNING id;
+    `);
+    assert(!!paTl.id, 'Test 52b: project_admin custom Task List INSERT allowed');
+
+    // PA Task INSERT
+    const { rows: [paTask] } = await client.query(`
+      INSERT INTO public.tasks (project_id, milestone_id, task_list_id, title, status_id, position)
+      VALUES ('${testProj.id}', '${testMs.id}', '${paTl.id}', 'PA Task', '${statusTodo.id}', 12000)
+      RETURNING id;
+    `);
+    assert(!!paTask.id, 'Test 52c: project_admin custom Task INSERT allowed');
+
+    // PA RACI INSERT / UPDATE / DELETE
+    const { rows: [paRaci] } = await client.query(`
+      INSERT INTO public.task_raci_assignments (task_id, raci_role, user_id)
+      VALUES ('${paTask.id}', 'R', '${paUid}')
+      RETURNING id;
+    `);
+    assert(!!paRaci.id, 'Test 52d: project_admin Task RACI INSERT allowed');
+
+    await client.query(`UPDATE public.task_raci_assignments SET raci_role = 'A' WHERE id = '${paRaci.id}';`);
+    assert(true, 'Test 52e: project_admin Task RACI UPDATE allowed');
+
+    await client.query(`DELETE FROM public.task_raci_assignments WHERE id = '${paRaci.id}';`);
+    assert(true, 'Test 52f: project_admin Task RACI DELETE allowed');
+
+    // PA Task DELETE
+    const paTaskDelRes = await client.query(`DELETE FROM public.tasks WHERE id = '${paTask.id}';`);
+    assert(paTaskDelRes.rowCount === 1, 'Test 52g: project_admin custom Task DELETE allowed');
+
+    // PA Task List DELETE
+    const paTlDelRes = await client.query(`DELETE FROM public.task_lists WHERE id = '${paTl.id}';`);
+    assert(paTlDelRes.rowCount === 1, 'Test 52h: project_admin custom Task List DELETE allowed');
+
+    // Switch back to owner for remainder of tests
+    await client.query('SET LOCAL ROLE authenticated;');
+    await client.query(`SET LOCAL request.jwt.claims = '{"sub": "${testProfile.id}"}';`);
+
     // 53-55. Defined Task RACI direct mutation rejected
     await client.query('SAVEPOINT sp_auth_ins_def_raci;');
     let authInsDefRaciBlocked = false;
