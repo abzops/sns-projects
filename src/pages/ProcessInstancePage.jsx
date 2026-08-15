@@ -70,7 +70,7 @@ function getWorkflowStateBadge(state) {
 }
 
 export default function ProcessInstancePage() {
-  const { workspaceId, projectId, taskListId } = useParams();
+  const { workspaceId, taskListId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();

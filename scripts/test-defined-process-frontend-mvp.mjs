@@ -43,67 +43,105 @@ async function runFrontendMVPTests() {
   // --- 1. SOURCE CODE CONTRACTS & COMPONENT VERIFICATION ---
   console.log('--- Static Code & Route Contracts ---');
 
-  // App.jsx routing
+  // Load all source files
   const appSrc = await readFile(path.join(repoRoot, 'src/App.jsx'), 'utf8');
+  const layoutSrc = await readFile(path.join(repoRoot, 'src/components/AppLayout.jsx'), 'utf8');
+  const useProcSrc = await readFile(path.join(repoRoot, 'src/hooks/useDefinedProcesses.js'), 'utf8');
+  const useInstSrc = await readFile(path.join(repoRoot, 'src/hooks/useProcessInstance.js'), 'utf8');
+  const modalSrc = await readFile(path.join(repoRoot, 'src/components/StartProcessModal.jsx'), 'utf8');
+  const procPageSrc = await readFile(path.join(repoRoot, 'src/pages/ProcessesPage.jsx'), 'utf8');
+  const instPageSrc = await readFile(path.join(repoRoot, 'src/pages/ProcessInstancePage.jsx'), 'utf8');
+  const panelSrc = await readFile(path.join(repoRoot, 'src/components/TaskDetailPanel.jsx'), 'utf8');
+  const tasksPageSrc = await readFile(path.join(repoRoot, 'src/pages/TasksPage.jsx'), 'utf8');
+
+  // App.jsx routing
   assert(appSrc.includes('/workspace/:workspaceId/processes'), 'Test 1: App.jsx includes /workspace/:workspaceId/processes route');
   assert(appSrc.includes('/workspace/:workspaceId/project/:projectId/process/:taskListId'), 'Test 2: App.jsx includes process instance route');
   assert(appSrc.includes('ProcessesPage'), 'Test 3: App.jsx imports ProcessesPage');
   assert(appSrc.includes('ProcessInstancePage'), 'Test 4: App.jsx imports ProcessInstancePage');
 
   // AppLayout sidebar
-  const layoutSrc = await readFile(path.join(repoRoot, 'src/components/AppLayout.jsx'), 'utf8');
   assert(layoutSrc.includes('/processes'), 'Test 5: AppLayout sidebar includes Processes navigation link');
   assert(layoutSrc.includes('<Workflow'), 'Test 6: AppLayout uses Lucide Workflow icon for Processes');
 
   // useDefinedProcesses hook
-  const useProcSrc = await readFile(path.join(repoRoot, 'src/hooks/useDefinedProcesses.js'), 'utf8');
   assert(useProcSrc.includes('publish_defined_process_version'), 'Test 7: useDefinedProcesses integrates publish_defined_process_version RPC');
   assert(useProcSrc.includes('start_defined_process'), 'Test 8: useDefinedProcesses integrates start_defined_process RPC');
 
   // useProcessInstance hook
-  const useInstSrc = await readFile(path.join(repoRoot, 'src/hooks/useProcessInstance.js'), 'utf8');
   assert(useInstSrc.includes('complete_responsible_part'), 'Test 9: useProcessInstance integrates complete_responsible_part RPC');
   assert(useInstSrc.includes('submit_task_evidence'), 'Test 10: useProcessInstance integrates submit_task_evidence RPC');
   assert(useInstSrc.includes('submit_task_consultation'), 'Test 11: useProcessInstance integrates submit_task_consultation RPC');
   assert(useInstSrc.includes('approve_process_task'), 'Test 12: useProcessInstance integrates approve_process_task RPC');
   assert(useInstSrc.includes('reject_process_task'), 'Test 13: useProcessInstance integrates reject_process_task RPC');
 
+  // --- Strict Literal RPC Parameter Contract Checks ---
+  // complete_responsible_part: must use p_note, must NOT use p_notes
+  assert(useInstSrc.includes('p_note:'), 'Test 9a: useProcessInstance uses literal p_note parameter');
+  assert(!useInstSrc.includes('p_notes:'), 'Test 9b: useProcessInstance strictly avoids invalid p_notes parameter');
+  assert(panelSrc.includes('p_note:'), 'Test 9c: TaskDetailPanel uses literal p_note parameter');
+  assert(!panelSrc.includes('p_notes:'), 'Test 9d: TaskDetailPanel strictly avoids invalid p_notes parameter');
+
+  // submit_task_evidence: must use p_evidence_type, p_payload
+  assert(useInstSrc.includes('p_evidence_type:'), 'Test 10a: useProcessInstance uses literal p_evidence_type parameter');
+  assert(useInstSrc.includes('p_payload:'), 'Test 10b: useProcessInstance uses literal p_payload parameter');
+
+  // submit_task_consultation: must use p_response, must NOT use p_feedback
+  assert(useInstSrc.includes('p_response:'), 'Test 11a: useProcessInstance uses literal p_response parameter');
+  assert(!useInstSrc.includes('p_feedback:'), 'Test 11b: useProcessInstance strictly avoids invalid p_feedback parameter');
+  assert(panelSrc.includes('p_response:'), 'Test 11c: TaskDetailPanel uses literal p_response parameter');
+  assert(!panelSrc.includes('p_feedback:'), 'Test 11d: TaskDetailPanel strictly avoids invalid p_feedback parameter');
+
+  // approve_process_task: must pass ONLY p_task_id, must NOT pass p_comments
+  assert(useInstSrc.includes('approve_process_task\', {\n        p_task_id: taskId,\n      })') || useInstSrc.includes('p_task_id: taskId'), 'Test 12a: useProcessInstance passes only p_task_id to approve_process_task');
+  assert(!useInstSrc.includes('p_comments'), 'Test 12b: useProcessInstance strictly avoids invalid p_comments parameter');
+  assert(!panelSrc.includes('p_comments'), 'Test 12c: TaskDetailPanel strictly avoids invalid p_comments parameter');
+
+  // reject_process_task: must pass p_reason and p_new_due_date
+  assert(useInstSrc.includes('p_reason:'), 'Test 13a: useProcessInstance passes literal p_reason to reject_process_task');
+  assert(useInstSrc.includes('p_new_due_date:'), 'Test 13b: useProcessInstance passes literal p_new_due_date to reject_process_task');
+  assert(panelSrc.includes('p_new_due_date:'), 'Test 13c: TaskDetailPanel passes literal p_new_due_date to reject_process_task');
+  assert(instPageSrc.includes('rejectDueDate'), 'Test 13d: ProcessInstancePage requires new due date in Reject UI');
+
+  // Evidence UI: ONLY text and link, NO file_ref
+  assert(!instPageSrc.includes('file_ref'), 'Test 14a: ProcessInstancePage strictly does not offer file_ref evidence option');
+  assert(!panelSrc.includes('file_ref'), 'Test 14b: TaskDetailPanel strictly does not offer file_ref evidence option');
+
+  // Start Authority: user-specific root Responsible check, NO department membership shortcut
+  assert(modalSrc.includes('r.raci_role === \'R\' && r.user_id === user.id'), 'Test 15a: StartProcessModal enforces exact user ID root Responsible check');
+  assert(!modalSrc.includes('department_membership') && !modalSrc.includes('departmentMemberships'), 'Test 15b: StartProcessModal contains no department membership shortcut');
+
   // StartProcessModal
-  const modalSrc = await readFile(path.join(repoRoot, 'src/components/StartProcessModal.jsx'), 'utf8');
-  assert(modalSrc.includes('Only a Responsible user on the first step can start this process'), 'Test 14: StartProcessModal enforces root Responsible authority check');
-  assert(modalSrc.includes('start_defined_process'), 'Test 15: StartProcessModal calls start_defined_process RPC');
+  assert(modalSrc.includes('Only a Responsible user on the first step can start this process'), 'Test 16: StartProcessModal enforces root Responsible authority check');
+  assert(modalSrc.includes('start_defined_process'), 'Test 17: StartProcessModal calls start_defined_process RPC');
 
   // ProcessesPage
-  const procPageSrc = await readFile(path.join(repoRoot, 'src/pages/ProcessesPage.jsx'), 'utf8');
-  assert(procPageSrc.includes('INTERNAL-MVP-DEMO'), 'Test 16: ProcessesPage badges INTERNAL-MVP-DEMO as Internal Demo');
-  assert(procPageSrc.includes('StartProcessModal'), 'Test 17: ProcessesPage integrates StartProcessModal');
+  assert(procPageSrc.includes('INTERNAL-MVP-DEMO'), 'Test 18: ProcessesPage badges INTERNAL-MVP-DEMO as Internal Demo');
+  assert(procPageSrc.includes('StartProcessModal'), 'Test 19: ProcessesPage integrates StartProcessModal');
 
   // ProcessInstancePage
-  const instPageSrc = await readFile(path.join(repoRoot, 'src/pages/ProcessInstancePage.jsx'), 'utf8');
-  assert(instPageSrc.includes('stateWaiting'), 'Test 18: ProcessInstancePage has Waiting state badge styling');
-  assert(instPageSrc.includes('stateReady'), 'Test 19: ProcessInstancePage has Ready state badge styling');
-  assert(instPageSrc.includes('Process Completed'), 'Test 20: ProcessInstancePage renders Process Completed banner upon completion');
-  assert(instPageSrc.includes('completeResponsiblePart'), 'Test 21: ProcessInstancePage has Complete My Part action');
-  assert(instPageSrc.includes('submitEvidence'), 'Test 22: ProcessInstancePage has Add Evidence action');
-  assert(instPageSrc.includes('submitConsultation'), 'Test 23: ProcessInstancePage has Consultation response action');
-  assert(instPageSrc.includes('approveTask'), 'Test 24: ProcessInstancePage has Accountable Approve action');
-  assert(instPageSrc.includes('rejectTask'), 'Test 25: ProcessInstancePage has Accountable Reject/Rework action');
+  assert(instPageSrc.includes('stateWaiting'), 'Test 20: ProcessInstancePage has Waiting state badge styling');
+  assert(instPageSrc.includes('stateReady'), 'Test 21: ProcessInstancePage has Ready state badge styling');
+  assert(instPageSrc.includes('Process Completed'), 'Test 22: ProcessInstancePage renders Process Completed banner upon completion');
+  assert(instPageSrc.includes('completeResponsiblePart'), 'Test 23: ProcessInstancePage has Complete My Part action');
+  assert(instPageSrc.includes('submitEvidence'), 'Test 24: ProcessInstancePage has Add Evidence action');
+  assert(instPageSrc.includes('submitConsultation'), 'Test 25: ProcessInstancePage has Consultation response action');
+  assert(instPageSrc.includes('approveTask'), 'Test 26: ProcessInstancePage has Accountable Approve action');
+  assert(instPageSrc.includes('rejectTask'), 'Test 27: ProcessInstancePage has Accountable Reject/Rework action');
 
   // TaskDetailPanel Defined Task mode
-  const panelSrc = await readFile(path.join(repoRoot, 'src/components/TaskDetailPanel.jsx'), 'utf8');
-  assert(panelSrc.includes('isDefinedTask'), 'Test 26: TaskDetailPanel detects Defined Task mode via process_step_id');
-  assert(panelSrc.includes('complete_responsible_part'), 'Test 27: TaskDetailPanel integrates complete_responsible_part');
-  assert(panelSrc.includes('submit_task_evidence'), 'Test 28: TaskDetailPanel integrates submit_task_evidence');
-  assert(panelSrc.includes('submit_task_consultation'), 'Test 29: TaskDetailPanel integrates submit_task_consultation');
-  assert(panelSrc.includes('approve_process_task'), 'Test 30: TaskDetailPanel integrates approve_process_task');
-  assert(panelSrc.includes('reject_process_task'), 'Test 31: TaskDetailPanel integrates reject_process_task');
-  assert(panelSrc.includes('disabled={isDefinedTask}'), 'Test 32: TaskDetailPanel disables manual status, title, and due date edits on Defined Tasks');
+  assert(panelSrc.includes('isDefinedTask'), 'Test 28: TaskDetailPanel detects Defined Task mode via process_step_id');
+  assert(panelSrc.includes('complete_responsible_part'), 'Test 29: TaskDetailPanel integrates complete_responsible_part');
+  assert(panelSrc.includes('submit_task_evidence'), 'Test 30: TaskDetailPanel integrates submit_task_evidence');
+  assert(panelSrc.includes('submit_task_consultation'), 'Test 31: TaskDetailPanel integrates submit_task_consultation');
+  assert(panelSrc.includes('approve_process_task'), 'Test 32: TaskDetailPanel integrates approve_process_task');
+  assert(panelSrc.includes('reject_process_task'), 'Test 33: TaskDetailPanel integrates reject_process_task');
+  assert(panelSrc.includes('disabled={isDefinedTask}'), 'Test 34: TaskDetailPanel disables manual status, title, and due date edits on Defined Tasks');
 
   // TasksPage Kanban & Hierarchy protection
-  const tasksPageSrc = await readFile(path.join(repoRoot, 'src/pages/TasksPage.jsx'), 'utf8');
-  assert(tasksPageSrc.includes('Status controlled by Defined Process workflow'), 'Test 33: TasksPage blocks cross-column DnD for Defined Tasks with feedback toast');
-  assert(tasksPageSrc.includes('definedListTag'), 'Test 34: TasksPage differentiates Defined Task Lists in hierarchy view');
-  assert(tasksPageSrc.includes('viewProcessBtn'), 'Test 35: TasksPage provides View Process button on Defined Task Lists');
+  assert(tasksPageSrc.includes('Status controlled by Defined Process workflow'), 'Test 35: TasksPage blocks cross-column DnD for Defined Tasks with feedback toast');
+  assert(tasksPageSrc.includes('definedListTag'), 'Test 36: TasksPage differentiates Defined Task Lists in hierarchy view');
+  assert(tasksPageSrc.includes('viewProcessBtn'), 'Test 37: TasksPage provides View Process button on Defined Task Lists');
 
   // --- 2. LIVE DATABASE ARTIFACTS & SMOKE TEST VERIFICATION ---
   console.log('\n--- Production Database State Verification ---');

@@ -47,22 +47,22 @@ To support live single-user testing without requiring multi-account coordination
 
 ### 4.1. Client Data Layer Hooks
 - **`src/hooks/useDefinedProcesses.js`**: Fetches the defined process catalog, resolves active/published versions, step counts, and department metadata with in-memory caching. Exposes `publishVersion` and `startProcess`.
-- **`src/hooks/useProcessInstance.js`**: Replaces fragile monolithic PostgREST joins with clean, parallelized sub-entity fetching (`task_lists`, `tasks`, `task_raci_assignments`, `task_responsible_completions`, `task_consultation_responses`, `task_evidence_submissions`, `task_approval_cycles`, `process_audit_events`). Exposes all 5 workflow mutation actions:
-  - `completeResponsiblePart(taskId, notes)`
-  - `submitEvidence(taskId, evidenceDefId, evidenceType, payload)`
-  - `submitConsultation(taskId, feedback)`
-  - `approveTask(taskId, comments)`
-  - `rejectTask(taskId, reworkReason)`
+- **`src/hooks/useProcessInstance.js`**: Replaces fragile monolithic PostgREST joins with clean, parallelized sub-entity fetching (`task_lists`, `tasks`, `task_raci_assignments`, `task_responsible_completions`, `task_consultation_responses`, `task_evidence_submissions`, `task_approval_cycles`, `process_audit_events`). Exposes all 5 workflow mutation actions using EXACT backend parameter contracts:
+  - `completeResponsiblePart(taskId, note)` -> `{ p_task_id, p_note }`
+  - `submitEvidence(taskId, evidenceDefId, evidenceType, payload)` -> `{ p_task_id, p_evidence_def_id, p_evidence_type, p_payload }` (`text` and `link` only)
+  - `submitConsultation(taskId, responseText)` -> `{ p_task_id, p_response }`
+  - `approveTask(taskId)` -> `{ p_task_id }`
+  - `rejectTask(taskId, reason, newDueDate)` -> `{ p_task_id, p_reason, p_new_due_date }` (mandatory new due date)
 
 ### 4.2. Pages and Interactive UI
 - **`src/pages/ProcessesPage.jsx`**: Library of Defined Processes with department badges, version numbers, step counts, estimated durations, and instant "Start Process" modal triggers.
-- **`src/components/StartProcessModal.jsx`**: Target project/milestone selector, instance naming, and real-time check verifying whether the active user has Responsible authority on the root step before enabling execution.
+- **`src/components/StartProcessModal.jsx`**: Target project/milestone selector, instance naming, and real-time check verifying whether the active user's USER ID is a Responsible [R] assignment on the root step before enabling Start (department membership alone does not grant start authority).
 - **`src/pages/ProcessInstancePage.jsx`**: Live visual sequence flow featuring:
   - Sticky header with instance progress percentage and status badges.
   - Step flow cards with step code, sequence order, title, working-day SLA due dates, RACI assignment chips, and real-time lifecycle states (`waiting`, `ready`, `active`, `awaiting_consultation`, `awaiting_approval`, `rework_required`, `completed`).
-  - Action buttons tailored to the user's active role: *Complete My Part*, *Add Evidence*, *Submit Consultation*, *Approve*, and *Request Rework*.
+  - Action buttons tailored to the user's active role: *Complete My Part*, *Add Evidence* (`text` / `link`), *Submit Consultation*, *Approve*, and *Request Rework* (with required reason & new due date).
   - Full audit event timeline and celebration banner when process state reaches `completed`.
-- **`src/components/TaskDetailPanel.jsx`**: Extended with `isDefinedTask` mode to show process provenance, lock direct mutations (title, status, due date) that are strictly managed by the engine, display evidence requirements, and embed workflow execution buttons.
+- **`src/components/TaskDetailPanel.jsx`**: Extended with `isDefinedTask` mode to show process provenance, lock direct mutations (title, status, due date) that are strictly managed by the engine, display evidence requirements, and embed workflow execution buttons with exact RPC parameter names.
 - **`src/pages/TasksPage.jsx`**: Differentiates Defined Task Lists with `Defined Process` badges, links to the process instance view, and protects Kanban boards by disallowing cross-column drag-and-drop on Defined tasks while allowing same-column reordering.
 - **`src/components/AppLayout.jsx`**: Sidebar navigation extended with `Processes` link and Lucide `Workflow` icon.
 
@@ -101,9 +101,12 @@ We executed a live end-to-end smoke test against the remote production database 
 | **Task List Hierarchy Hotfix Suite** (`test-tasklist-hierarchy-hotfix.mjs`) | 17 | **17 / 17 PASSED** |
 | **Navigation & Loading UX Audit Suite** (`test-navigation-loading-ux.mjs`) | 32 | **32 / 32 PASSED** |
 | **Secret Scan** (`secret-scan.mjs`) | Scan | **0 Leaks** |
-| **Security Advisor** (`security-advisor.mjs`) | 27 Tables | **0 Vulnerabilities** |
+| **Security Advisor** (`security-advisor.mjs`) | 27 Tables | **7 Authenticated RPC Warnings (Intentional Workflow APIs) / 0 Table RLS Leaks** |
 | **ESLint** (`npm run lint`) | 134 Files | **0 Errors** |
 | **Vite Production Build** (`npm run build`) | Bundled | **SUCCESS (1.11s)** |
+
+> [!NOTE]
+> **Security Advisory Context**: The official Supabase Advisor currently notes 7 authenticated `SECURITY DEFINER` RPC warnings and Leaked Password Protection Disabled (standard for project tiers). The 7 `SECURITY DEFINER` RPCs are intentional workflow API endpoints protected by internal role/authority verification and fixed `search_path = ''`, pending formal post-MVP security review.
 
 ---
 
