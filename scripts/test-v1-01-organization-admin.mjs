@@ -650,3 +650,222 @@ runHardeningStaticTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+// =============================================================================
+// SECTION 6 — INVITATION 500 FIX: Regression Tests (DB-Independent static)
+// =============================================================================
+
+let r500Passed = 0;
+let r500Failed = 0;
+
+function r500Assert(condition, message, details = '') {
+  if (condition) {
+    console.log(`[PASS] ${message}`);
+    r500Passed++;
+  } else {
+    console.error(`[FAIL] ${message} ${details ? '- ' + details : ''}`);
+    r500Failed++;
+  }
+}
+
+async function runInvitation500FixTests() {
+  console.log('\n===============================================================');
+  console.log('SNS Projects — Invitation 500 Fix Regression Tests');
+  console.log('===============================================================\n');
+
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const repoRoot = process.cwd();
+
+  const edgeSrc = await fs.readFile(
+    path.join(repoRoot, 'supabase/functions/admin-manage-workspace-user/index.ts'),
+    'utf8',
+  );
+  const usersAdminSrc = await fs.readFile(
+    path.join(repoRoot, 'src/pages/UsersAdminPage.jsx'),
+    'utf8',
+  );
+  const envSrc = await fs.readFile(path.join(repoRoot, '.env'), 'utf8');
+  const configSrc = await fs.readFile(path.join(repoRoot, 'supabase/config.toml'), 'utf8');
+
+  console.log('--- R1–R7: workspace_members Conflict Fix ---');
+
+  // R1: invite path does NOT use workspace_members upsert
+  const hasWsMemberUpsert =
+    edgeSrc.includes('.from("workspace_members")\n') &&
+    edgeSrc.includes('.upsert(') &&
+    // Check if upsert is directly used with workspace_members (not just in comments)
+    (() => {
+      // Find all occurrences of workspace_members
+      const wmRegex = /\.from\("workspace_members"\)[^;]+\.upsert\(/g;
+      return wmRegex.test(edgeSrc);
+    })();
+  r500Assert(
+    !hasWsMemberUpsert,
+    'R1: invite path does NOT use workspace_members upsert (partial index incompatibility fixed)',
+  );
+
+  // R2: invite path uses explicit membership lookup (maybeSingle for existing check)
+  r500Assert(
+    edgeSrc.includes('existingMembership') &&
+    edgeSrc.includes('"workspace_members"') &&
+    edgeSrc.includes('.maybeSingle()'),
+    'R2: invite path uses explicit membership lookup (maybeSingle guard)',
+  );
+
+  // R3: existing workspace member returns 409
+  r500Assert(
+    edgeSrc.includes('status: 409') &&
+    edgeSrc.includes('already a member of this workspace'),
+    'R3: existing workspace member returns HTTP 409',
+  );
+
+  // R4: existing owner cannot be changed through invite (409 guard catches owner too)
+  r500Assert(
+    edgeSrc.includes('already a member of this workspace. Use Edit Member instead.'),
+    'R4: existing owner is caught by 409 guard and cannot be changed through invite',
+  );
+
+  // R5: existing admin cannot be changed through invite (same 409 guard)
+  r500Assert(
+    edgeSrc.includes('existingMembership') &&
+    edgeSrc.includes('status: 409'),
+    'R5: existing admin is caught by 409 guard and cannot be changed through invite',
+  );
+
+  // R6: new member uses workspace_members insert (not upsert)
+  r500Assert(
+    edgeSrc.includes('.from("workspace_members")') &&
+    edgeSrc.includes('.insert(') &&
+    edgeSrc.includes('.select()'),
+    'R6: new member workspace membership uses explicit .insert() + .select()',
+  );
+
+  // R7: concurrent duplicate membership returns 409 (PG_UNIQUE_VIOLATION = "23505")
+  r500Assert(
+    edgeSrc.includes('PG_UNIQUE_VIOLATION') &&
+    edgeSrc.includes('"23505"') &&
+    edgeSrc.includes('already a member or has a pending membership'),
+    'R7: concurrent duplicate membership violation returns HTTP 409 via PG error code 23505',
+  );
+
+  console.log('\n--- R8–R10: Valid Upserts Preserved ---');
+
+  // R8: profiles upsert remains valid (uses onConflict: "id" — profiles PK)
+  r500Assert(
+    edgeSrc.includes('{ onConflict: "id" }') &&
+    edgeSrc.includes('"profiles"'),
+    'R8: profiles upsert preserved with valid onConflict "id" (primary key)',
+  );
+
+  // R9: department_memberships upsert preserved with valid conflict target
+  r500Assert(
+    edgeSrc.includes('{ onConflict: "department_id,user_id" }') &&
+    edgeSrc.includes('"department_memberships"'),
+    'R9: department_memberships upsert preserved with valid onConflict "department_id,user_id"',
+  );
+
+  // R10: user_system_roles upsert preserved with valid conflict target
+  r500Assert(
+    edgeSrc.includes('{ onConflict: "workspace_id,user_id,role" }') &&
+    edgeSrc.includes('"user_system_roles"'),
+    'R10: user_system_roles upsert preserved with valid onConflict "workspace_id,user_id,role"',
+  );
+
+  console.log('\n--- R11–R12: Partial Failure & Auth User Safety ---');
+
+  // R11: partial-failure cleanup retained
+  r500Assert(
+    edgeSrc.includes('cleanupOnFailure') &&
+    edgeSrc.includes('orgRowsCreatedDuringRequest'),
+    'R11: partial-failure cleanup (cleanupOnFailure + orgRowsCreatedDuringRequest) retained',
+  );
+
+  // R12: existing auth user never deleted
+  r500Assert(
+    edgeSrc.includes('wasNewAuthUser') &&
+    edgeSrc.includes('if (wasNewAuthUser)'),
+    'R12: existing auth user is never deleted (wasNewAuthUser guard retained)',
+  );
+
+  console.log('\n--- R13–R17: Frontend Error Handling ---');
+
+  // R13: FunctionsHttpError response body is parsed
+  r500Assert(
+    usersAdminSrc.includes('FunctionsHttpError') &&
+    usersAdminSrc.includes('err.context.json()') &&
+    usersAdminSrc.includes('payload?.error'),
+    'R13: FunctionsHttpError response body is parsed to extract payload.error',
+  );
+
+  // R14: server error payload.error shown in UI
+  r500Assert(
+    usersAdminSrc.includes('parseEdgeFunctionError') &&
+    usersAdminSrc.includes('showToast(errorMsg'),
+    'R14: server error payload.error is shown in UI via parseEdgeFunctionError',
+  );
+
+  // R15: FunctionsFetchError handled
+  r500Assert(
+    usersAdminSrc.includes('FunctionsFetchError') &&
+    usersAdminSrc.includes('Could not reach the administration service'),
+    'R15: FunctionsFetchError is explicitly handled with user-friendly message',
+  );
+
+  // R16: FunctionsRelayError handled
+  r500Assert(
+    usersAdminSrc.includes('FunctionsRelayError') &&
+    usersAdminSrc.includes('relay is temporarily unavailable'),
+    'R16: FunctionsRelayError is explicitly handled with user-friendly message',
+  );
+
+  // R17: generic "non-2xx status code" is not the only message shown
+  // The structured parser means we show payload.error instead
+  r500Assert(
+    usersAdminSrc.includes('parseEdgeFunctionError') &&
+    !usersAdminSrc.includes('"Edge Function returned a non-2xx status code"'),
+    'R17: generic "non-2xx status code" is not the only/default message — structured parser used',
+  );
+
+  console.log('\n--- R18–R20: Security & Safety ---');
+
+  // R18: no service key in frontend
+  r500Assert(
+    !envSrc.includes('SERVICE_ROLE') || !envSrc.includes('eyJ'),
+    'R18: no service-role key committed to .env',
+  );
+
+  // R19: verify_jwt remains true in config
+  r500Assert(
+    configSrc.includes('verify_jwt = true'),
+    'R19: verify_jwt = true in supabase/config.toml (unchanged)',
+  );
+
+  // R20: no real invitation is sent by automated tests
+  // Verify test script does not dispatch live auth invites or live invite actions
+  const ownContent = await fs.readFile(
+    path.join(repoRoot, 'scripts/test-v1-01-organization-admin.mjs'),
+    'utf8',
+  );
+  const targetPattern = ['invite', 'UserByEmail'].join('');
+  const linesWithoutR20 = ownContent.split('\n').filter(l => !l.includes('targetPattern') && !l.includes('R20'));
+  const bodyToScan = linesWithoutR20.join('\n');
+  const hasLiveInviteCall = bodyToScan.includes(targetPattern) ||
+    bodyToScan.includes(['functions', 'invoke'].join('.'));
+  r500Assert(
+    !hasLiveInviteCall,
+    'R20: no real invitation is sent by automated tests (no live invite dispatch)',
+  );
+
+
+  console.log('\n===============================================================');
+  console.log(`Invitation 500 Fix Regression Tests: ${r500Passed} PASSED, ${r500Failed} FAILED`);
+  console.log('===============================================================\n');
+
+  if (r500Failed > 0) process.exit(1);
+}
+
+runInvitation500FixTests().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

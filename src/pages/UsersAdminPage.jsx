@@ -17,6 +17,7 @@ import {
   Sparkles,
   Info,
 } from 'lucide-react';
+import { FunctionsHttpError, FunctionsRelayError, FunctionsFetchError } from '@supabase/supabase-js';
 import { useMembers } from '../hooks/useMembers';
 import { useUserSystemRoles } from '../hooks/useUserSystemRoles';
 import { useDepartments } from '../hooks/useDepartments';
@@ -32,6 +33,34 @@ import { TaskRowSkeleton } from '../components/Skeleton';
 import { supabase } from '../lib/supabase';
 import { getMemberEmail } from '../lib/identity';
 import styles from './UsersAdminPage.module.css';
+
+// ---------------------------------------------------------------------------
+// Parse a structured error message from Edge Function invocation responses.
+// Handles FunctionsHttpError (non-2xx), FunctionsRelayError, FunctionsFetchError,
+// and plain Error objects. Never exposes JWT, service keys, DB credentials, or
+// raw SQL stack traces.
+// ---------------------------------------------------------------------------
+async function parseEdgeFunctionError(err) {
+  if (err instanceof FunctionsHttpError) {
+    try {
+      const payload = await err.context.json();
+      if (payload?.error) return payload.error;
+    } catch {
+      // JSON parse failed — use status text
+    }
+    return err.message || 'The administration service returned an error. Please retry.';
+  }
+  if (err instanceof FunctionsRelayError) {
+    return 'The administration service relay is temporarily unavailable. Please retry.';
+  }
+  if (err instanceof FunctionsFetchError) {
+    return 'Could not reach the administration service. Check your connection and retry.';
+  }
+  // Plain Error from assertNoError or other throw
+  return err?.message || 'An unexpected error occurred. Please retry.';
+}
+
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // FROZEN ONBOARDING MAPPING (V1-01)
@@ -383,15 +412,21 @@ export default function UsersAdminPage() {
         system_roles: canManageSystemRoles ? inviteSystemRoles : [],
       };
 
-      // Invoke Edge function exclusively (no privileged client fallback)
+      // Invoke Edge function exclusively (no privileged client fallback).
+      // supabase-js throws FunctionsHttpError on non-2xx, FunctionsRelayError on
+      // relay failures, and FunctionsFetchError on network errors — all caught below.
       const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
         'admin-manage-workspace-user',
         { body: payload }
       );
 
-      if (edgeErr || !edgeData?.success) {
-        const errorMsg = edgeErr?.message || edgeData?.error || 'Organization administration service unavailable.';
-        throw new Error(`Edge Function error: ${errorMsg}`);
+      if (edgeErr) {
+        // Re-throw so the catch handler can parse it with parseEdgeFunctionError
+        throw edgeErr;
+      }
+
+      if (!edgeData?.success) {
+        throw new Error(edgeData?.error || 'Organization administration service unavailable.');
       }
 
       showToast(`Invitation sent to ${inviteFullName.trim()} successfully!`, 'success');
@@ -406,7 +441,8 @@ export default function UsersAdminPage() {
       await Promise.all([refetchMembers(), fetchDeptMemberships(), refetchRoles()]);
     } catch (err) {
       console.error('Error inviting member:', err);
-      showToast(err.message || 'Failed to invite member.', 'error');
+      const errorMsg = await parseEdgeFunctionError(err);
+      showToast(errorMsg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -470,15 +506,20 @@ export default function UsersAdminPage() {
         system_roles: canManageSystemRoles ? inviteSystemRoles : undefined,
       };
 
-      // Invoke Edge function exclusively (no privileged client fallback)
+      // Invoke Edge function exclusively (no privileged client fallback).
+      // supabase-js throws FunctionsHttpError on non-2xx, FunctionsRelayError on
+      // relay failures, and FunctionsFetchError on network errors — all caught below.
       const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
         'admin-manage-workspace-user',
         { body: payload }
       );
 
-      if (edgeErr || !edgeData?.success) {
-        const errorMsg = edgeErr?.message || edgeData?.error || 'Organization administration service unavailable.';
-        throw new Error(`Edge Function error: ${errorMsg}`);
+      if (edgeErr) {
+        throw edgeErr;
+      }
+
+      if (!edgeData?.success) {
+        throw new Error(edgeData?.error || 'Organization administration service unavailable.');
       }
 
       showToast(`Updated member details for ${editingMember.profile?.full_name || 'user'}.`, 'success');
@@ -487,7 +528,8 @@ export default function UsersAdminPage() {
       await Promise.all([refetchMembers(), fetchDeptMemberships(), refetchRoles()]);
     } catch (err) {
       console.error('Error updating member:', err);
-      showToast(err.message || 'Failed to update member.', 'error');
+      const errorMsg = await parseEdgeFunctionError(err);
+      showToast(errorMsg, 'error');
     } finally {
       setSubmitting(false);
     }

@@ -43,6 +43,9 @@ const VALID_SYSTEM_ROLES = [
   "system_admin",
 ] as const;
 
+// PostgreSQL error code for unique constraint violation
+const PG_UNIQUE_VIOLATION = "23505";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -261,7 +264,6 @@ serve(async (req: Request) => {
 
     // -------------------------------------------------------------------------
     // 6. Shared department validation helper
-    //    (used by both invite and update after action-specific rules)
     // -------------------------------------------------------------------------
     async function validateDepartments(
       depts: DepartmentAssignment[],
@@ -453,7 +455,7 @@ serve(async (req: Request) => {
         filter: Record<string, string>;
       }[] = [];
 
-      // Paginated existing-user lookup
+      // Paginated existing-user lookup by email
       const existingAuthUser = await findAuthUserByEmail(
         supabaseAdmin,
         email,
@@ -487,14 +489,53 @@ serve(async (req: Request) => {
         wasNewAuthUser = true;
       }
 
+      // -----------------------------------------------------------------------
+      // CRITICAL: Check for existing workspace membership BEFORE any writes.
+      // This prevents the invite path from altering an existing member's role,
+      // and in particular prevents the owner from being demoted via invite.
+      // -----------------------------------------------------------------------
+      const { data: existingMembership, error: memberLookupErr } =
+        await supabaseAdmin
+          .from("workspace_members")
+          .select("id, role, status")
+          .eq("workspace_id", workspace_id)
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+      if (memberLookupErr) {
+        return new Response(
+          JSON.stringify({
+            error: "Failed to verify workspace membership. Please retry.",
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (existingMembership) {
+        // User is already a member — do NOT modify them. Return 409.
+        return new Response(
+          JSON.stringify({
+            error:
+              "User is already a member of this workspace. Use Edit Member instead.",
+          }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       // Cleanup helper for partial failure — only deletes newly created auth user
       async function cleanupOnFailure(reason: string): Promise<void> {
         console.error(`[admin-manage-workspace-user] Invite rollback: ${reason}`);
         try {
-          // Delete org rows created during this request
-          for (const row of orgRowsCreatedDuringRequest) {
-            const query = supabaseAdmin.from(row.table).delete();
-            let q = query;
+          // Delete org rows created during this request (in reverse order)
+          for (const row of [...orgRowsCreatedDuringRequest].reverse()) {
+            const deleteQuery = supabaseAdmin.from(row.table).delete();
+            let q = deleteQuery;
             for (const [col, val] of Object.entries(row.filter)) {
               q = (q as ReturnType<typeof supabaseAdmin.from>).eq(col, val);
             }
@@ -511,7 +552,7 @@ serve(async (req: Request) => {
       }
 
       try {
-        // Profile upsert (fail-closed)
+        // Profile upsert (fail-closed) — profiles PK conflict on id
         const { error: profileErr } = await supabaseAdmin
           .from("profiles")
           .upsert(
@@ -524,23 +565,43 @@ serve(async (req: Request) => {
           );
         assertNoError(profileErr, "profiles upsert");
 
-        // Workspace member upsert (fail-closed)
+        // -----------------------------------------------------------------------
+        // Workspace member INSERT — explicit insert instead of upsert.
+        // The table has a PARTIAL unique index: uq_workspace_member_user
+        //   ON workspace_members(workspace_id, user_id) WHERE user_id IS NOT NULL
+        // PostgREST upsert onConflict requires a non-partial unique constraint,
+        // so we use explicit INSERT and handle the uniqueness error as a 409.
+        // -----------------------------------------------------------------------
         const { data: memberRecord, error: memberErr } = await supabaseAdmin
           .from("workspace_members")
-          .upsert(
-            {
-              workspace_id: workspace_id,
-              user_id: targetUserId,
-              invited_email: email,
-              role: workspaceRole,
-              status: existingAuthUser?.last_sign_in_at ? "active" : "pending",
-              invited_by: callerUser.id,
-            },
-            { onConflict: "workspace_id,user_id" },
-          )
+          .insert({
+            workspace_id: workspace_id,
+            user_id: targetUserId,
+            invited_email: email,
+            role: workspaceRole,
+            status: existingAuthUser?.last_sign_in_at ? "active" : "pending",
+            invited_by: callerUser.id,
+          })
           .select()
           .single();
-        assertNoError(memberErr, "workspace_members upsert");
+
+        if (memberErr) {
+          // Detect concurrent unique violation (race condition)
+          if (memberErr.code === PG_UNIQUE_VIOLATION) {
+            return new Response(
+              JSON.stringify({
+                error:
+                  "User is already a member or has a pending membership in this workspace.",
+              }),
+              {
+                status: 409,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
+          }
+          throw new Error(`Database write failed [workspace_members insert]: ${memberErr.code ?? "unknown"}`);
+        }
+
         if (wasNewAuthUser) {
           orgRowsCreatedDuringRequest.push({
             table: "workspace_members",
@@ -552,6 +613,7 @@ serve(async (req: Request) => {
         }
 
         // Department memberships (fail-closed)
+        // department_memberships has UNIQUE uq_department_member on (department_id, user_id)
         for (const dept of body.departments) {
           const { error: deptErr } = await supabaseAdmin
             .from("department_memberships")
@@ -580,6 +642,7 @@ serve(async (req: Request) => {
         }
 
         // System roles (fail-closed)
+        // user_system_roles has UNIQUE uq_user_system_role on (workspace_id, user_id, role)
         if (
           body.system_roles &&
           body.system_roles.length > 0 &&
@@ -814,6 +877,7 @@ serve(async (req: Request) => {
           assertNoError(delDeptErr, "department_memberships delete");
 
           // Upsert new memberships (fail-closed)
+          // department_memberships has UNIQUE uq_department_member on (department_id, user_id)
           for (const dept of body.departments) {
             const { error: deptErr } = await supabaseAdmin
               .from("department_memberships")
@@ -858,6 +922,7 @@ serve(async (req: Request) => {
             assertNoError(delAllSrErr, "user_system_roles delete (clear all)");
           }
 
+          // user_system_roles has UNIQUE uq_user_system_role on (workspace_id, user_id, role)
           for (const sRole of newSysRoles) {
             const { error: srErr } = await supabaseAdmin
               .from("user_system_roles")

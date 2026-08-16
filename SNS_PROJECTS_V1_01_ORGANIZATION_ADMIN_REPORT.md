@@ -1,6 +1,6 @@
 # SNS Projects — V1-01 Real Users & Organization Administration Report
 
-**Release**: V1-01 Closure — API Hardening Pass
+**Release**: V1-01 Closure — Invitation 500 Fix & API Hardening Pass
 **Date**: August 16, 2026
 **Status**: **READY FOR CONTROLLED REAL USER INVITATIONS**
 **Target Workspace ID**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea` (SNS Projects Dataset)
@@ -11,14 +11,17 @@
 
 ## 1. Executive Summary
 
-Feature vertical slice **V1-01: Real Users + Organization Administration** is fully implemented, hardened, and deployed. The 12-user organization mapping is frozen; the existing owner has been applied; **11 approved users remain in the onboarding queue pending invitation**.
+Feature vertical slice **V1-01: Real Users + Organization Administration** is fully implemented, hardened, and verified. The 12-user organization mapping is frozen; the existing owner has been applied; **11 approved users remain in the onboarding queue pending invitation**.
 
 - **7 Active Departments**: 2 approved new departments (**Finance `FIN`** and **Supply Chain `SCM`**) alongside the 5 canonical departments (**`COMM`**, **`ENG`**, **`OPS`**, **`PROC`**, **`SWIT`**).
 - **Owner Organization Mapping Applied**: Production owner (`00ae89c1-353b-4367-827e-9817343140d1` / `abhinand@stacknstock.in`) mapped as Software & IT Head (`SWIT`, `head`, `is_primary = true`) with `project_admin` and `system_admin` authorities.
 - **Frozen Onboarding Queue**: All 11 remaining approved team members are in the UI onboarding queue, pre-configured. **Auth users = 1. Real invites sent = 0.**
 - **Invitation Safety**: 0 real invitation emails were automatically sent during any implementation session.
-- **Edge Function Deployed**: `admin-manage-workspace-user` is ACTIVE on production (confirmed 401 on unauthenticated request). Version 1 deployed by project owner independently. The API hardening pass (this session) produces updated source that must be deployed as version 2 — see Section 12.
-- **No Privileged Browser Fallback**: All privileged mutations in `UsersAdminPage.jsx` route exclusively through `supabase.functions.invoke('admin-manage-workspace-user', ...)`. No direct client insert/update fallback exists.
+- **Root Cause & Fix for Invitation 500**:
+  - `workspace_members` has a partial unique index `uq_workspace_member_user` with a `WHERE user_id IS NOT NULL` clause. PostgREST `onConflict: "workspace_id,user_id"` failed with PostgreSQL error *"there is no unique or exclusion constraint matching the ON CONFLICT specification"*.
+  - The Edge Function was updated to replace `workspace_members.upsert` with an explicit pre-check (`maybeSingle()`) returning HTTP 409 if the user is already a member, followed by an explicit `insert()`. Concurrency conflicts are caught via Postgres error code `23505` and returned as HTTP 409.
+- **Structured Error Handling in Frontend**:
+  - `UsersAdminPage.jsx` now uses `@supabase/supabase-js`'s `FunctionsHttpError`, `FunctionsRelayError`, and `FunctionsFetchError` to parse and display structured error messages (`payload.error`) rather than generic *"non-2xx status code"* errors.
 
 ---
 
@@ -97,6 +100,7 @@ Feature vertical slice **V1-01: Real Users + Organization Administration** is fu
    - Onboarding Queue: Lists all 11 approved employees with 1-click pre-filled invite modal.
    - Active Personnel Table: Personnel name (with "Complete your profile" prompt if null), email, workspace role, primary department badge with role, additional department badges, system role pills, status badge, edit/remove actions.
    - Comprehensive Invite Modal & Edit Modal with strict role gating based on caller permissions.
+   - Structured error display utilizing `FunctionsHttpError` to parse exact error messages from the Edge Function.
 2. **Departments Page (`src/pages/DepartmentsPage.jsx`)**:
    - Displays all 7 departments with color bars, codes, names, descriptions.
    - Enriched cards display Department Head, Department Lead(s) count, and total active member count.
@@ -109,6 +113,7 @@ Feature vertical slice **V1-01: Real Users + Organization Administration** is fu
 
 ```
 ===============================================================
+Invitation 500 Fix — Regression Tests:      20 PASSED, 0 FAILED
 V1-01 API Hardening — Static/Unit Tests:    23 PASSED, 0 FAILED
 Defined Process Frontend MVP — Static:      37 PASSED, 0 FAILED
 V1-01 Organization Admin (DB-connected):    REQUIRES DB PASSWORD IN .env.admin
@@ -131,7 +136,7 @@ before the rotation event. Static tests cover all new hardening requirements.
   - Defined Processes: 1 published (`INTERNAL-MVP-DEMO`)
 - **Code Quality (this session)**:
   - ESLint: ✅ 0 errors, 140 pre-existing script warnings
-  - Vite Production Build: ✅ Succeeded in 944ms (1913 modules)
+  - Vite Production Build: ✅ Succeeded in 4.96s (1913 modules)
   - Secret Scan: ✅ No hardcoded credentials. The previous database password appeared in transient CLI output, was treated as exposed, and was rotated. No current database credential is committed to the repository.
 
 ---
@@ -141,13 +146,13 @@ before the rotation event. Static tests cover all new hardening requirements.
 | Item | Status |
 | :--- | :--- |
 | Production function exists | ✅ ACTIVE (user-verified) |
-| Version before this hardening pass | 1 |
+| Live version before this fix | 2 |
 | Unauthenticated request → 401 | ✅ Confirmed |
 | `verify_jwt = true` (platform) | ✅ `supabase/config.toml` |
 | Function-level `getUser()` auth | ✅ Source verified |
-| CLI deploy of hardened source (v2) | ⚠️ **Requires owner login** |
+| CLI deploy of updated source | ⚠️ **Requires owner login via terminal** |
 
-**To deploy the hardened source (v2)**: Run `npx supabase login` interactively as the project owner in your terminal, then:
+**To deploy the updated source**: Run `npx supabase login` interactively as the project owner in your terminal, then:
 ```
 npx supabase functions deploy admin-manage-workspace-user --project-ref gqerfixdmgbqahgslzsq
 ```
