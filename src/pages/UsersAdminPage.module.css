@@ -494,6 +494,27 @@
   color: var(--yellow);
 }
 
+.reissueBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(253, 226, 21, 0.08);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  border-radius: var(--radius-xs);
+  color: var(--yellow);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.reissueBtn:hover {
+  background: rgba(253, 226, 21, 0.18);
+  border-color: var(--yellow);
+  color: #fff;
+}
+
 .removeBtn {
   display: inline-flex;
   align-items: center;

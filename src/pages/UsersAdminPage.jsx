@@ -1,8 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  Plus,
-  Check,
   Search,
   Crown,
   Users,
@@ -11,9 +9,6 @@ import {
   UserCheck,
   Edit2,
   Trash2,
-  Mail,
-  Send,
-  AlertCircle,
   Sparkles,
   Info,
   Copy,
@@ -558,6 +553,47 @@ export default function UsersAdminPage() {
     }
   };
 
+  // Reissue Temporary Password for pending member
+  const handleReissueTempPassword = async (member) => {
+    const rawName = member.profile?.full_name || '';
+    const email = getMemberEmail(member, user);
+    if (!confirm(`Reissue a new temporary password for ${rawName || email}?`)) {
+      return;
+    }
+
+    try {
+      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+        'admin-manage-workspace-user',
+        {
+          body: {
+            action: 'reissue_temp_password',
+            workspace_id: workspaceId,
+            user_id: member.user_id,
+          },
+        }
+      );
+
+      if (edgeErr) throw edgeErr;
+      if (!edgeData?.success) {
+        throw new Error(edgeData?.error || 'Failed to reissue temporary password');
+      }
+
+      if (edgeData?.temporary_password) {
+        setCreatedUserCredentials({
+          fullName: rawName || email,
+          email: email,
+          temporaryPassword: edgeData.temporary_password,
+        });
+      }
+
+      showToast(`Temporary password reissued for ${rawName || email}`, 'success');
+    } catch (err) {
+      console.error('Error reissuing temporary password:', err);
+      const errorMsg = await parseEdgeFunctionError(err);
+      showToast(errorMsg, 'error');
+    }
+  };
+
   // Save own profile name
   const handleSaveOwnProfile = async (e) => {
     e.preventDefault();
@@ -939,6 +975,17 @@ export default function UsersAdminPage() {
                             title="Edit member"
                           >
                             <Edit2 size={14} /> Edit
+                          </button>
+                        )}
+
+                        {canAdminUsers && member.status === 'pending' && (
+                          <button
+                            type="button"
+                            className={styles.reissueBtn}
+                            onClick={() => handleReissueTempPassword(member)}
+                            title="Reissue temporary password"
+                          >
+                            <Key size={14} /> Reissue Password
                           </button>
                         )}
 

@@ -1,6 +1,7 @@
 // ============================================================================
 // Supabase Edge Function: admin-manage-workspace-user
-// Actions: provision (primary), complete_first_login, update, invite (deprecated)
+// Actions: provision (primary), complete_first_login, get_onboarding_status,
+//          reissue_temp_password, update, invite (deprecated)
 // Security: Server-side only, JWT validated (platform + function-level),
 //           DB-backed caller authorization, no user_metadata trust
 // ============================================================================
@@ -56,9 +57,16 @@ interface DepartmentAssignment {
 }
 
 interface RequestPayload {
-  action: "provision" | "complete_first_login" | "invite" | "update";
+  action:
+    | "provision"
+    | "complete_first_login"
+    | "get_onboarding_status"
+    | "reissue_temp_password"
+    | "invite"
+    | "update";
   workspace_id: string;
   user_id?: string;
+  new_password?: string;
   email?: string;
   full_name?: string;
   workspace_role?: "admin" | "member" | "viewer" | "owner";
@@ -78,6 +86,29 @@ function assertNoError(
   if (error) {
     throw new Error(`Database write failed [${context}]: ${error.code ?? "unknown"}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Password complexity validator (server-side enforcement)
+// Minimum 12 characters, >=1 uppercase, >=1 lowercase, >=1 digit, >=1 special
+// ---------------------------------------------------------------------------
+function validatePasswordComplexity(password: string): string | null {
+  if (!password || password.length < 12) {
+    return "Password must be at least 12 characters long";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain at least one uppercase letter";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain at least one lowercase letter";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password must contain at least one number";
+  }
+  if (!/[!@#$%^&*()_+~|}{[\]:;?><,.\-=]/.test(password)) {
+    return "Password must contain at least one special character";
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,11 +284,94 @@ serve(async (req: Request) => {
     }
 
     // =========================================================================
-    // ACTION: COMPLETE_FIRST_LOGIN
+    // ACTION: GET_ONBOARDING_STATUS (CALLER-ONLY)
+    // Returns fresh authoritative membership and password setup status for caller.
+    // Executes BEFORE administrative checks so any authenticated user can check their state.
+    // =========================================================================
+    if (action === "get_onboarding_status") {
+      const { data: callerMembership, error: memErr } = await supabaseAdmin
+        .from("workspace_members")
+        .select("id, role, status")
+        .eq("workspace_id", workspace_id)
+        .eq("user_id", callerUser.id)
+        .maybeSingle();
+
+      if (memErr) {
+        return new Response(
+          JSON.stringify({ error: "Failed to verify membership status" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const { data: freshUser, error: freshErr } =
+        await supabaseAdmin.auth.admin.getUserById(callerUser.id);
+
+      if (freshErr || !freshUser?.user) {
+        return new Response(
+          JSON.stringify({ error: "Failed to retrieve user account state" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const mustChange =
+        freshUser.user.app_metadata?.must_change_password === true;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          membership_status: callerMembership ? callerMembership.status : "none",
+          workspace_role: callerMembership ? callerMembership.role : null,
+          must_change_password: mustChange,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // =========================================================================
+    // ACTION: COMPLETE_FIRST_LOGIN (CALLER-ONLY, SERVER-ENFORCED PASSWORD CHANGE)
     // Operates ONLY on the authenticated caller (callerUser.id).
-    // Does NOT accept arbitrary user_id from body.
+    // NEVER accepts user_id from body.
+    // Requires new_password and validates complexity server-side.
+    // Updates password server-side BEFORE activating workspace membership.
     // =========================================================================
     if (action === "complete_first_login") {
+      const newPassword = body.new_password;
+
+      if (!newPassword) {
+        return new Response(
+          JSON.stringify({
+            error: "Validation error: 'new_password' is required to complete first-login setup",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Server-side password complexity validation
+      const complexityError = validatePasswordComplexity(newPassword);
+      if (complexityError) {
+        return new Response(
+          JSON.stringify({
+            error: `Validation error: ${complexityError}`,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       // Find caller's workspace membership
       const { data: callerMembership, error: memErr } = await supabaseAdmin
         .from("workspace_members")
@@ -286,8 +400,23 @@ serve(async (req: Request) => {
         );
       }
 
+      // Read fresh user record from Auth
+      const { data: freshUser, error: freshErr } =
+        await supabaseAdmin.auth.admin.getUserById(callerUser.id);
+
+      if (freshErr || !freshUser?.user) {
+        return new Response(
+          JSON.stringify({ error: "Failed to retrieve user account state" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       // Idempotency: If already active and must_change_password is false, return success
-      const currentMustChange = callerUser.app_metadata?.must_change_password;
+      const currentMustChange =
+        freshUser.user.app_metadata?.must_change_password;
       if (callerMembership.status === "active" && currentMustChange === false) {
         return new Response(
           JSON.stringify({
@@ -303,29 +432,49 @@ serve(async (req: Request) => {
       }
 
       try {
-        // 1. Update Auth app_metadata to mark must_change_password = false
-        const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(
-          callerUser.id,
-          {
+        // Step 1: Server-side password update + app_metadata change (MUST SUCCEED FIRST)
+        const { error: updateAuthErr } =
+          await supabaseAdmin.auth.admin.updateUserById(callerUser.id, {
+            password: newPassword,
             app_metadata: {
-              ...callerUser.app_metadata,
+              ...(freshUser.user.app_metadata || {}),
               must_change_password: false,
             },
-          },
-        );
-        assertNoError(updateAuthErr, "auth.admin.updateUserById must_change_password=false");
+          });
 
-        // 2. Update workspace_members status to 'active'
+        if (updateAuthErr) {
+          throw new Error(
+            `Failed to update password: ${updateAuthErr.message}`,
+          );
+        }
+
+        // Step 2: ONLY after password update succeeds -> activate workspace membership
         const { error: updateMemberErr } = await supabaseAdmin
           .from("workspace_members")
           .update({ status: "active" })
           .eq("id", callerMembership.id);
-        assertNoError(updateMemberErr, "workspace_members update status=active");
+
+        if (updateMemberErr) {
+          console.error(
+            `[admin-manage-workspace-user] Password updated but membership activation failed for user ${callerUser.id}: ${updateMemberErr.message}`,
+          );
+          return new Response(
+            JSON.stringify({
+              error:
+                "Password updated, but account activation could not be completed. Please retry.",
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: "First login completed successfully. Welcome to SNS Projects!",
+            message:
+              "First login completed successfully. Welcome to SNS Projects!",
             status: "active",
           }),
           {
@@ -338,7 +487,9 @@ serve(async (req: Request) => {
           activationErr instanceof Error
             ? activationErr.message
             : "Activation failed";
-        console.error(`[admin-manage-workspace-user] complete_first_login failed: ${msg}`);
+        console.error(
+          `[admin-manage-workspace-user] complete_first_login failed: ${msg}`,
+        );
         return new Response(
           JSON.stringify({ error: msg }),
           {
@@ -351,7 +502,7 @@ serve(async (req: Request) => {
 
     // -------------------------------------------------------------------------
     // 5. DB-backed caller authorization for administrative actions
-    //    (provision, invite, update) — never trusts user_metadata
+    //    (provision, reissue_temp_password, invite, update)
     // -------------------------------------------------------------------------
     const { data: callerMember, error: callerMemberErr } = await supabaseAdmin
       .from("workspace_members")
@@ -514,6 +665,7 @@ serve(async (req: Request) => {
     // ACTION: PROVISION (STANDARD EMPLOYEE ONBOARDING FLOW)
     // Directly creates Supabase Auth account with temporary password & email_confirm: true.
     // Membership status starts as 'pending'. User must complete first-login password reset.
+    // If Auth user already exists: returns 409 (does NOT silently reset existing users).
     // =========================================================================
     if (action === "provision") {
       const email = body.email?.trim().toLowerCase();
@@ -586,98 +738,57 @@ serve(async (req: Request) => {
         if (srErr) return srErr;
       }
 
-      // Generate secure temporary password (server-side only, 18 chars)
-      const temporaryPassword = generateTemporaryPassword();
-
-      let targetUserId: string;
-      let wasNewAuthUser = false;
-      const orgRowsCreatedDuringRequest: {
-        table: string;
-        filter: Record<string, string>;
-      }[] = [];
-
-      // Check if user already exists in Auth (e.g. Samson Jose: projects@stacknstock.in)
+      // Check if user already exists in Auth — DO NOT silently reset or overwrite
       const existingAuthUser = await findAuthUserByEmail(
         supabaseAdmin,
         email,
       );
 
       if (existingAuthUser) {
-        targetUserId = existingAuthUser.id;
-        wasNewAuthUser = false;
-
-        // Check if existing membership is active
-        const { data: existingMembership } = await supabaseAdmin
-          .from("workspace_members")
-          .select("id, role, status")
-          .eq("workspace_id", workspace_id)
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-
-        if (existingMembership && existingMembership.status === "active") {
-          return new Response(
-            JSON.stringify({
-              error:
-                "User is already an active member of this workspace. Use Edit Member instead.",
-            }),
-            {
-              status: 409,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        // Existing user conversion (e.g. Samson): update temporary password + app_metadata
-        const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(
-          targetUserId,
+        return new Response(
+          JSON.stringify({
+            error: "An authentication account already exists for this email.",
+          }),
           {
-            password: temporaryPassword,
-            email_confirm: true,
-            app_metadata: {
-              ...existingAuthUser.app_metadata,
-              must_change_password: true,
-            },
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
         );
-
-        if (updateAuthErr) {
-          return new Response(
-            JSON.stringify({
-              error: `Failed to update user credentials: ${updateAuthErr.message}`,
-            }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
-        }
-      } else {
-        // Create brand-new Auth user with temporary password and email_confirm: true
-        const { data: createData, error: createErr } =
-          await supabaseAdmin.auth.admin.createUser({
-            email,
-            password: temporaryPassword,
-            email_confirm: true,
-            user_metadata: { full_name: fullName },
-            app_metadata: { must_change_password: true },
-          });
-
-        if (createErr || !createData?.user) {
-          return new Response(
-            JSON.stringify({
-              error:
-                createErr?.message || "Failed to create authentication user",
-            }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        targetUserId = createData.user.id;
-        wasNewAuthUser = true;
       }
+
+      // Generate secure temporary password (server-side only, 18 chars)
+      const temporaryPassword = generateTemporaryPassword();
+
+      let targetUserId: string;
+      const orgRowsCreatedDuringRequest: {
+        table: string;
+        filter: Record<string, string>;
+      }[] = [];
+
+      // Create brand-new Auth user with temporary password and email_confirm: true
+      const { data: createData, error: createErr } =
+        await supabaseAdmin.auth.admin.createUser({
+          email,
+          password: temporaryPassword,
+          email_confirm: true,
+          user_metadata: { full_name: fullName },
+          app_metadata: { must_change_password: true },
+        });
+
+      if (createErr || !createData?.user) {
+        return new Response(
+          JSON.stringify({
+            error:
+              createErr?.message || "Failed to create authentication user",
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      targetUserId = createData.user.id;
 
       // Cleanup helper for partial failure
       async function cleanupOnFailure(reason: string): Promise<void> {
@@ -691,9 +802,7 @@ serve(async (req: Request) => {
             }
             await q;
           }
-          if (wasNewAuthUser) {
-            await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-          }
+          await supabaseAdmin.auth.admin.deleteUser(targetUserId);
         } catch (cleanupErr: unknown) {
           const msg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
           console.error(`[admin-manage-workspace-user] Cleanup partial failure: ${msg}`);
@@ -715,67 +824,40 @@ serve(async (req: Request) => {
         assertNoError(profileErr, "profiles upsert");
 
         // 2. Workspace membership: status MUST be 'pending' until first login completed
-        // Handle existing row vs new row
-        const { data: existingWm } = await supabaseAdmin
+        const { data: insertedWm, error: wmInsErr } = await supabaseAdmin
           .from("workspace_members")
-          .select("id")
-          .eq("workspace_id", workspace_id)
-          .eq("user_id", targetUserId)
-          .maybeSingle();
+          .insert({
+            workspace_id: workspace_id,
+            user_id: targetUserId,
+            invited_email: email,
+            role: workspaceRole,
+            status: "pending", // CRITICAL: starts pending
+            invited_by: callerUser.id,
+          })
+          .select()
+          .single();
 
-        let memberRecord;
-        if (existingWm) {
-          const { data: updatedWm, error: wmUpdErr } = await supabaseAdmin
-            .from("workspace_members")
-            .update({
-              role: workspaceRole,
-              status: "pending",
-              invited_email: email,
-              invited_by: callerUser.id,
-            })
-            .eq("id", existingWm.id)
-            .select()
-            .single();
-          assertNoError(wmUpdErr, "workspace_members update");
-          memberRecord = updatedWm;
-        } else {
-          const { data: insertedWm, error: wmInsErr } = await supabaseAdmin
-            .from("workspace_members")
-            .insert({
-              workspace_id: workspace_id,
-              user_id: targetUserId,
-              invited_email: email,
-              role: workspaceRole,
-              status: "pending", // CRITICAL: starts pending
-              invited_by: callerUser.id,
-            })
-            .select()
-            .single();
-
-          if (wmInsErr) {
-            if (wmInsErr.code === PG_UNIQUE_VIOLATION) {
-              return new Response(
-                JSON.stringify({
-                  error:
-                    "User is already a member or has a pending membership in this workspace.",
-                }),
-                {
-                  status: 409,
-                  headers: { ...corsHeaders, "Content-Type": "application/json" },
-                },
-              );
-            }
-            throw new Error(`Database write failed [workspace_members insert]: ${wmInsErr.code ?? "unknown"}`);
+        if (wmInsErr) {
+          if (wmInsErr.code === PG_UNIQUE_VIOLATION) {
+            return new Response(
+              JSON.stringify({
+                error:
+                  "User is already a member or has a pending membership in this workspace.",
+              }),
+              {
+                status: 409,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
           }
-
-          memberRecord = insertedWm;
-          if (wasNewAuthUser) {
-            orgRowsCreatedDuringRequest.push({
-              table: "workspace_members",
-              filter: { workspace_id: workspace_id, user_id: targetUserId },
-            });
-          }
+          throw new Error(`Database write failed [workspace_members insert]: ${wmInsErr.code ?? "unknown"}`);
         }
+
+        const memberRecord = insertedWm;
+        orgRowsCreatedDuringRequest.push({
+          table: "workspace_members",
+          filter: { workspace_id: workspace_id, user_id: targetUserId },
+        });
 
         // 3. Department memberships (fail-closed)
         for (const dept of body.departments) {
@@ -794,12 +876,10 @@ serve(async (req: Request) => {
               { onConflict: "department_id,user_id" },
             );
           assertNoError(deptErr, "department_memberships upsert");
-          if (wasNewAuthUser) {
-            orgRowsCreatedDuringRequest.push({
-              table: "department_memberships",
-              filter: { department_id: dept.department_id, user_id: targetUserId },
-            });
-          }
+          orgRowsCreatedDuringRequest.push({
+            table: "department_memberships",
+            filter: { department_id: dept.department_id, user_id: targetUserId },
+          });
         }
 
         // 4. System roles (fail-closed)
@@ -821,12 +901,10 @@ serve(async (req: Request) => {
                 { onConflict: "workspace_id,user_id,role" },
               );
             assertNoError(srErr, "user_system_roles upsert");
-            if (wasNewAuthUser) {
-              orgRowsCreatedDuringRequest.push({
-                table: "user_system_roles",
-                filter: { workspace_id: workspace_id, user_id: targetUserId, role: sRole },
-              });
-            }
+            orgRowsCreatedDuringRequest.push({
+              table: "user_system_roles",
+              filter: { workspace_id: workspace_id, user_id: targetUserId, role: sRole },
+            });
           }
         }
 
@@ -856,6 +934,135 @@ serve(async (req: Request) => {
           },
         );
       }
+    }
+
+    // =========================================================================
+    // ACTION: REISSUE_TEMP_PASSWORD (ADMINISTRATIVE ACTION FOR PENDING USERS)
+    // Generates a new temporary password for a pending employee and sets
+    // app_metadata.must_change_password = true.
+    // Does NOT alter workspace role, departments, or system roles.
+    // V1 restriction: Allowed ONLY for workspace_members.status = 'pending'.
+    // =========================================================================
+    if (action === "reissue_temp_password") {
+      const targetUserId = body.user_id;
+
+      if (!targetUserId) {
+        return new Response(
+          JSON.stringify({
+            error: "Validation error: 'user_id' is required to reissue temporary password",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Check target workspace membership
+      const { data: targetMember, error: targetMemberErr } =
+        await supabaseAdmin
+          .from("workspace_members")
+          .select("id, role, status")
+          .eq("workspace_id", workspace_id)
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+      if (targetMemberErr || !targetMember) {
+        return new Response(
+          JSON.stringify({
+            error: "Target user is not a member of this workspace",
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // V1 Restriction: Reissue is ONLY permitted for pending members
+      if (targetMember.status !== "pending") {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Reissue temporary password is only permitted for pending members. Active members must use normal password reset.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Owner and Admin protection: Workspace Admin cannot reset Owner or other Admins
+      if (!isCallerOwner && !isCallerSystemAdmin) {
+        if (targetMember.role === "owner" || targetMember.role === "admin") {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Forbidden: Workspace administrators cannot reissue passwords for owners or other administrators",
+            }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
+
+      // Read fresh target user
+      const { data: freshTargetUser, error: freshTargetErr } =
+        await supabaseAdmin.auth.admin.getUserById(targetUserId);
+
+      if (freshTargetErr || !freshTargetUser?.user) {
+        return new Response(
+          JSON.stringify({
+            error: "Target authentication user not found",
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Generate new secure temporary password
+      const newTemporaryPassword = generateTemporaryPassword();
+
+      // Update Auth credentials
+      const { error: updateAuthErr } =
+        await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+          password: newTemporaryPassword,
+          email_confirm: true,
+          app_metadata: {
+            ...(freshTargetUser.user.app_metadata || {}),
+            must_change_password: true,
+          },
+        });
+
+      if (updateAuthErr) {
+        return new Response(
+          JSON.stringify({
+            error: `Failed to update user credentials: ${updateAuthErr.message}`,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Temporary password reissued successfully",
+          user_id: targetUserId,
+          temporary_password: newTemporaryPassword,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // =========================================================================
@@ -1407,7 +1614,7 @@ serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({
-        error: `Invalid action '${action}'. Expected 'provision', 'complete_first_login', or 'update'`,
+        error: `Invalid action '${action}'. Expected 'provision', 'complete_first_login', 'get_onboarding_status', 'reissue_temp_password', or 'update'`,
       }),
       {
         status: 400,
