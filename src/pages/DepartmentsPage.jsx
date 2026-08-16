@@ -52,44 +52,66 @@ export default function DepartmentsPage() {
         />
       ) : (
         <div className={styles.grid}>
-          {departments.map((dept) => (
-            <button
-              key={dept.id}
-              type="button"
-              className={styles.card}
-              onClick={() => navigate(`/workspace/${workspaceId}/department/${dept.id}`)}
-            >
-              <div
-                className={styles.colorBar}
-                style={{ background: dept.color || 'var(--yellow)' }}
-              />
+          {departments.map((dept) => {
+            const headName = dept.head?.profiles?.full_name || (dept.head ? 'Assigned' : 'Unassigned');
+            const leadsCount = dept.leads?.length || 0;
 
-              <div className={styles.cardContent}>
-                <div className={styles.cardTop}>
-                  <span className={styles.codePill} style={{ borderColor: dept.color || 'var(--yellow)' }}>
-                    {dept.code}
-                  </span>
-                  <ChevronRight size={16} className={styles.arrowIcon} />
+            return (
+              <button
+                key={dept.id}
+                type="button"
+                className={styles.card}
+                onClick={() => navigate(`/workspace/${workspaceId}/department/${dept.id}`)}
+              >
+                <div
+                  className={styles.colorBar}
+                  style={{ background: dept.color || 'var(--yellow)' }}
+                />
+
+                <div className={styles.cardContent}>
+                  <div className={styles.cardTop}>
+                    <span className={styles.codePill} style={{ borderColor: dept.color || 'var(--yellow)' }}>
+                      {dept.code}
+                    </span>
+                    <ChevronRight size={16} className={styles.arrowIcon} />
+                  </div>
+
+                  <h3 className={styles.deptName}>{dept.name}</h3>
+
+                  {dept.description && (
+                    <p className={styles.deptDesc}>{dept.description}</p>
+                  )}
+
+                  {/* Leadership & Personnel Summary */}
+                  <div className={styles.leadershipRow}>
+                    <div className={styles.leaderItem}>
+                      <span className={styles.leaderLabel}>Head:</span>
+                      <span className={styles.leaderVal}>{headName}</span>
+                    </div>
+                    {leadsCount > 0 && (
+                      <div className={styles.leaderItem}>
+                        <span className={styles.leaderLabel}>Leads:</span>
+                        <span className={styles.leaderVal}>{leadsCount}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={styles.cardFooter}>
+                    <span className={styles.statusIndicator}>
+                      <span
+                        className={styles.statusDot}
+                        style={{ background: dept.is_active ? 'var(--green)' : 'var(--muted-2)' }}
+                      />
+                      {dept.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    <span className={styles.memberCountBadge}>
+                      {dept.member_count || 0} {(dept.member_count === 1) ? 'Member' : 'Members'}
+                    </span>
+                  </div>
                 </div>
-
-                <h3 className={styles.deptName}>{dept.name}</h3>
-
-                {dept.description && (
-                  <p className={styles.deptDesc}>{dept.description}</p>
-                )}
-
-                <div className={styles.cardFooter}>
-                  <span className={styles.statusIndicator}>
-                    <span
-                      className={styles.statusDot}
-                      style={{ background: dept.is_active ? 'var(--green)' : 'var(--muted-2)' }}
-                    />
-                    {dept.is_active ? 'Active Workspace' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

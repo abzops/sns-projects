@@ -129,6 +129,33 @@
   margin-top: auto;
 }
 
+.leadershipRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+  font-size: 0.78rem;
+}
+
+.leaderItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.leaderLabel {
+  color: var(--muted-2);
+  font-weight: 600;
+}
+
+.leaderVal {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .statusIndicator {
   display: inline-flex;
   align-items: center;
@@ -142,3 +169,14 @@
   height: 8px;
   border-radius: 999px;
 }
+
+.memberCountBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--yellow);
+  background: rgba(253, 226, 21, 0.08);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(253, 226, 21, 0.2);
+}
+

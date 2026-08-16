@@ -26,11 +26,13 @@ import { getMemberDisplayName } from '../lib/identity';
 import styles from './DepartmentsAdminPage.module.css';
 
 const SUGGESTED_DEPTS = [
-  { code: 'COM', name: 'Commercials & Partnerships', color: '#ffb020', description: 'Business development, client relationships, and commercial agreements' },
-  { code: 'SW', name: 'Software & IT', color: '#8cc9ff', description: 'Software engineering, internal tooling, and cloud infrastructure' },
+  { code: 'COMM', name: 'Commercials & Partnerships', color: '#ffb020', description: 'Business development, client relationships, and commercial agreements' },
   { code: 'ENG', name: 'Engineering', color: '#60d394', description: 'Hardware, robotics, mechanical, and technical design' },
-  { code: 'OPS', name: 'Operations', color: '#fde215', description: 'Field operations, supply chain, and process execution' },
+  { code: 'FIN', name: 'Finance', color: '#ff8c42', description: 'Financial planning, accounting, budgets, and fiscal compliance' },
+  { code: 'OPS', name: 'Operations', color: '#fde215', description: 'Field operations, facilities, and process execution' },
   { code: 'PROC', name: 'Procurement', color: '#c084fc', description: 'Vendor management, sourcing, and purchasing' },
+  { code: 'SCM', name: 'Supply Chain', color: '#2dd4bf', description: 'Supply chain management, logistics, warehousing, and inventory distribution' },
+  { code: 'SWIT', name: 'Software & IT', color: '#8cc9ff', description: 'Software engineering, internal tooling, and cloud infrastructure' },
 ];
 
 const PRESET_COLORS = [

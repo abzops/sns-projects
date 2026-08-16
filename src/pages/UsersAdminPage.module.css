@@ -1,26 +1,16 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   max-width: 1400px;
   margin: 0 auto;
-}
-
-.loadingContainer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-  gap: 16px;
-  color: var(--muted);
 }
 
 .inviteBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 8px 18px;
   background: var(--yellow);
   color: #000;
   border: none;
@@ -36,11 +26,247 @@
   transform: translateY(-1px);
 }
 
-.searchBar {
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* STATS GRID                                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.statIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+}
+
+.statMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statVal {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ONBOARDING QUEUE CARD                                                       */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.onboardingCard {
+  background: var(--panel);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.onboardingHeader {
+  padding: 16px 20px;
+  background: rgba(253, 226, 21, 0.04);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.onboardingTitleWrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sparkleIcon {
+  color: var(--yellow);
+  margin-top: 2px;
+}
+
+.onboardingTitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.onboardingSubtitle {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 4px 0 0 0;
+}
+
+.onboardingTableWrap {
+  overflow-x: auto;
+}
+
+.onboardingTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.onboardingTable th {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--panel-strong);
+}
+
+.onboardingRow {
+  border-bottom: 1px solid var(--line-soft);
+  transition: background var(--transition);
+}
+
+.onboardingRow:hover {
+  background: var(--panel-2);
+}
+
+.onboardingTable td {
+  padding: 12px 18px;
+  vertical-align: middle;
+}
+
+.empInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empInfo strong {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.empEmail {
+  font-size: 0.75rem;
+  color: var(--muted-2);
+}
+
+.deptCodePill {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line-light);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--yellow);
+  margin-right: 6px;
+}
+
+.deptNameText {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.deptRolePill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.role_head {
+  background: rgba(96, 211, 148, 0.15);
+  color: #60d394;
+  border: 1px solid rgba(96, 211, 148, 0.3);
+}
+
+.role_lead {
+  background: rgba(140, 201, 255, 0.15);
+  color: #8cc9ff;
+  border: 1px solid rgba(140, 201, 255, 0.3);
+}
+
+.role_member {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  border: 1px solid var(--line-soft);
+}
+
+.sysRolePillGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sysRolePill {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(253, 226, 21, 0.1);
+  color: var(--yellow);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.noneMuted {
+  color: var(--muted-2);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.prepareInviteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-xs);
+  color: var(--yellow);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.prepareInviteBtn:hover {
+  background: var(--yellow);
+  color: #000;
+  border-color: var(--yellow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* FILTER & SEARCH BAR                                                         */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.filterBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .searchBox {
@@ -52,7 +278,8 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
   flex: 1;
-  max-width: 400px;
+  min-width: 280px;
+  max-width: 440px;
 }
 
 .searchIcon {
@@ -68,12 +295,26 @@
   outline: none;
 }
 
-.memberCountBadge {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
+.filterSelect {
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ACTIVE PERSONNEL TABLE                                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 .tableCard {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -113,7 +354,7 @@
 }
 
 .userCell {
-  min-width: 220px;
+  min-width: 240px;
 }
 
 .userWrap {
@@ -149,61 +390,62 @@
   font-size: 0.75rem;
 }
 
-.roleSelect {
-  padding: 6px 10px;
-  background: var(--panel-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
-  color: var(--text);
-  font-size: 0.8rem;
-  font-weight: 600;
+.unnamedUser {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.85rem;
 }
 
-.systemRolesGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.systemRoleToggle {
+.completeProfileBtn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  background: var(--panel-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
-  color: var(--muted-2);
-  font-size: 0.72rem;
+  padding: 3px 8px;
+  background: rgba(253, 226, 21, 0.12);
+  color: var(--yellow);
+  border: 1px dashed rgba(253, 226, 21, 0.4);
+  border-radius: 4px;
+  font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
   transition: all var(--transition);
 }
 
-.systemRoleToggle:hover {
-  background: var(--panel-strong);
-  color: var(--text);
-  border-color: var(--line-light);
+.completeProfileBtn:hover {
+  background: var(--yellow);
+  color: #000;
+  border-style: solid;
 }
 
-.hasRoleActive {
-  background: rgba(253, 226, 21, 0.12) !important;
-  color: var(--yellow) !important;
-  border-color: rgba(253, 226, 21, 0.35) !important;
-}
-
-.toggleIndicator {
-  display: inline-flex;
+.deptBadgeWrap {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 13px;
-  height: 13px;
+  gap: 6px;
 }
 
-.pendingHint {
-  font-size: 0.75rem;
-  color: var(--muted-2);
-  font-style: italic;
+.deptCodeBadge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border: 1px solid;
+  color: var(--text);
+}
+
+.additionalDeptWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.additionalDeptPill {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--muted);
 }
 
 .statusBadge {
@@ -225,36 +467,79 @@
   color: #ffb752;
 }
 
-.removeBtn {
-  background: transparent;
-  border: none;
-  color: var(--muted-2);
+.actionBtnGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
+  transition: all var(--transition);
+}
+
+.editBtn:hover {
+  background: var(--panel-strong);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.removeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted-2);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
   transition: all var(--transition);
 }
 
 .removeBtn:hover {
   color: var(--red);
   background: rgba(232, 97, 74, 0.1);
+  border-color: rgba(232, 97, 74, 0.25);
 }
 
-/* Modal form */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* MODAL STYLES                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .modalField {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
+}
+
+.modalRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
 .modalLabel {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .modalInput,
@@ -264,7 +549,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .modalInput:focus,
@@ -273,12 +558,59 @@
   outline: none;
 }
 
+.fieldHint {
+  font-size: 0.72rem;
+  color: var(--muted-2);
+}
+
+.systemRolesPicker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+}
+
+.sysRoleCheckLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.sysRoleCheckLabel strong {
+  display: block;
+  color: var(--text);
+}
+
+.sysRoleDesc {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted-2);
+}
+
+.ownerLockedBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(253, 226, 21, 0.05);
+  border: 1px solid rgba(253, 226, 21, 0.2);
+  border-radius: var(--radius-xs);
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .modalActions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 10px;
 }
 
 .cancelBtn {
@@ -289,6 +621,7 @@
   color: var(--muted);
   font-weight: 700;
   font-size: 0.85rem;
+  cursor: pointer;
 }
 
 .cancelBtn:hover {
@@ -304,6 +637,8 @@
   border-radius: var(--radius-xs);
   font-size: 0.85rem;
   font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition);
 }
 
 .confirmBtn:hover {

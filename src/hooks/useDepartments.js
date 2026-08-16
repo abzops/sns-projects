@@ -26,27 +26,67 @@ export function useDepartments(workspaceId) {
       }
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('departments')
-        .select(`
-          id,
-          workspace_id,
-          code,
-          name,
-          description,
-          color,
-          is_active,
-          created_by,
-          created_at,
-          updated_at
-        `)
-        .eq('workspace_id', workspaceId)
-        .order('name', { ascending: true });
+      const [{ data: deptData, error: fetchError }, { data: memData, error: memError }] = await Promise.all([
+        supabase
+          .from('departments')
+          .select(`
+            id,
+            workspace_id,
+            code,
+            name,
+            description,
+            color,
+            is_active,
+            created_by,
+            created_at,
+            updated_at
+          `)
+          .eq('workspace_id', workspaceId)
+          .order('name', { ascending: true }),
+        supabase
+          .from('department_memberships')
+          .select(`
+            id,
+            department_id,
+            user_id,
+            role,
+            is_primary,
+            is_active,
+            profiles:user_id (
+              id,
+              full_name,
+              avatar_url
+            )
+          `)
+          .eq('workspace_id', workspaceId)
+          .eq('is_active', true)
+      ]);
 
       if (fetchError) throw fetchError;
-      const list = data || [];
-      departmentsCache.set(workspaceId, list);
-      setDepartments(list);
+      if (memError) console.warn('Department memberships fetch error:', memError);
+
+      const memsByDept = new Map();
+      for (const m of memData || []) {
+        if (!memsByDept.has(m.department_id)) memsByDept.set(m.department_id, []);
+        memsByDept.get(m.department_id).push(m);
+      }
+
+      const enriched = (deptData || []).map((dept) => {
+        const deptMems = memsByDept.get(dept.id) || [];
+        const heads = deptMems.filter((m) => m.role === 'head');
+        const leads = deptMems.filter((m) => m.role === 'lead');
+        return {
+          ...dept,
+          members: deptMems,
+          member_count: deptMems.length,
+          heads,
+          leads,
+          head: heads[0] || null,
+        };
+      });
+
+      departmentsCache.set(workspaceId, enriched);
+      setDepartments(enriched);
     } catch (err) {
       console.error('Error fetching departments:', err);
       setError(err.message || 'Failed to load departments');
