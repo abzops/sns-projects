@@ -18,6 +18,7 @@ import DepartmentsAdminPage from './pages/DepartmentsAdminPage';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage';
 import ProcessesPage from './pages/ProcessesPage';
 import ProcessInstancePage from './pages/ProcessInstancePage';
+import ProcessBuilderPage from './pages/ProcessBuilderPage';
 import Spinner from './components/Spinner';
 import { useWorkspaces } from './hooks/useWorkspaces';
 
@@ -83,6 +84,8 @@ function App() {
                 <Route path="/workspace/:workspaceId/my-work" element={<MyWorkPage />} />
                 <Route path="/workspace/:workspaceId/projects" element={<ProjectsPage />} />
                 <Route path="/workspace/:workspaceId/processes" element={<ProcessesPage />} />
+                <Route path="/workspace/:workspaceId/processes/new" element={<ProcessBuilderPage />} />
+                <Route path="/workspace/:workspaceId/processes/:processId/builder" element={<ProcessBuilderPage />} />
                 <Route path="/workspace/:workspaceId/project/:projectId" element={<TasksPage />} />
                 <Route path="/workspace/:workspaceId/project/:projectId/process/:taskListId" element={<ProcessInstancePage />} />
                 <Route path="/workspace/:workspaceId/departments" element={<DepartmentsPage />} />

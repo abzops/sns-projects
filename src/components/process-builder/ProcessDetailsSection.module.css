@@ -1,0 +1,80 @@
+.card {
+  background: var(--panel, #121418);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.descriptionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #a0aec0);
+}
+
+.icon {
+  color: var(--accent, #fde215);
+}
+
+.required {
+  color: var(--accent, #fde215);
+}
+
+.input,
+.select,
+.textarea {
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text, #ffffff);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent, #fde215);
+  background: var(--panel-3, #22262e);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-muted, #555d6b);
+}
+
+.select option {
+  background: #181b20;
+  color: #ffffff;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 56px;
+}

@@ -4,6 +4,28 @@
   gap: 24px;
 }
 
+.newProcessBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.newProcessBtn:hover {
+  background: var(--panel-3, #22262e);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
 .startBtn {
   display: inline-flex;
   align-items: center;
@@ -233,6 +255,37 @@
   cursor: not-allowed;
 }
 
+.draftActionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.editDraftBtn {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.editDraftBtn:hover {
+  background: var(--panel-3, #22262e);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
 .unavailLabel {
   display: block;
   text-align: center;
@@ -241,3 +294,4 @@
   font-style: italic;
   padding: 8px 0;
 }
+

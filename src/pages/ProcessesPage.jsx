@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import {
   Workflow,
   Plus,
@@ -12,6 +12,7 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
+  Edit3,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import StartProcessModal from '../components/StartProcessModal';
@@ -66,15 +67,24 @@ export default function ProcessesPage() {
         subtitle="Standardized, repeatable business workflows with multi-step RACI governance"
         badge={processes.length > 0 ? `${processes.length} Defined` : null}
         actions={
-          <button
-            type="button"
-            className={styles.startBtn}
-            onClick={() => handleStartProcess(null)}
-            disabled={processes.length === 0}
-          >
-            <Play size={16} />
-            <span>Start Process</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Link
+              to={`/workspace/${workspaceId}/processes/new`}
+              className={styles.newProcessBtn}
+            >
+              <Plus size={16} />
+              <span>New Process</span>
+            </Link>
+            <button
+              type="button"
+              className={styles.startBtn}
+              onClick={() => handleStartProcess(null)}
+              disabled={processes.length === 0}
+            >
+              <Play size={16} />
+              <span>Start Process</span>
+            </button>
+          </div>
         }
       />
 
@@ -157,16 +167,27 @@ export default function ProcessesPage() {
                     >
                       <Play size={14} /> Start Process
                     </button>
-                  ) : draftVer && canPublish ? (
-                    <button
-                      type="button"
-                      className={styles.publishBtn}
-                      onClick={() => handlePublish(draftVer.id, proc.name)}
-                      disabled={publishingId === draftVer.id}
-                    >
-                      <ShieldCheck size={14} />
-                      {publishingId === draftVer.id ? 'Publishing...' : 'Publish Version'}
-                    </button>
+                  ) : draftVer ? (
+                    <div className={styles.draftActionsGroup}>
+                      <Link
+                        to={`/workspace/${workspaceId}/processes/${proc.id}/builder`}
+                        className={styles.editDraftBtn}
+                      >
+                        <Edit3 size={14} /> Edit Draft
+                      </Link>
+                      {canPublish && (
+                        <button
+                          type="button"
+                          className={styles.publishBtn}
+                          onClick={() => handlePublish(draftVer.id, proc.name)}
+                          disabled={publishingId === draftVer.id}
+                          style={{ flex: 1 }}
+                        >
+                          <ShieldCheck size={14} />
+                          {publishingId === draftVer.id ? 'Publishing...' : 'Publish'}
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <span className={styles.unavailLabel}>Draft under review</span>
                   )}

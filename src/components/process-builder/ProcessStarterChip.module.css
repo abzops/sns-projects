@@ -1,0 +1,59 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(253, 226, 21, 0.12);
+  border: 1px solid rgba(253, 226, 21, 0.4);
+  color: var(--accent-light, #fff066);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px 2px 4px;
+  border-radius: 6px;
+  max-width: 140px;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.chip:hover {
+  background: rgba(253, 226, 21, 0.2);
+  border-color: rgba(253, 226, 21, 0.6);
+}
+
+.iconWrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: rgba(253, 226, 21, 0.25);
+}
+
+.icon {
+  color: var(--accent, #fde215);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(253, 226, 21, 0.7);
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.removeBtn:hover {
+  color: var(--bad, #ff5555);
+  background: rgba(255, 85, 85, 0.15);
+}

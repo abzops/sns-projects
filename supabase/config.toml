@@ -3,3 +3,7 @@ project_id = "gqerfixdmgbqahgslzsq"
 
 [functions.admin-manage-workspace-user]
 verify_jwt = true
+
+[functions.manage-defined-process-draft]
+verify_jwt = true
+

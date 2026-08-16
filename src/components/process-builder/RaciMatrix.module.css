@@ -1,0 +1,152 @@
+.container {
+  background: var(--panel, #121418);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.headerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line, #282c34);
+  background: var(--panel-2, #181b20);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionIcon {
+  color: var(--accent, #fde215);
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #ffffff);
+  margin: 0;
+}
+
+.stepBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #8b949e);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.customFlowBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffb020;
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.3);
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 900px;
+}
+
+.table thead {
+  background: var(--panel-2, #181b20);
+  border-bottom: 1px solid var(--line, #282c34);
+}
+
+.table th {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.thSub {
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: lowercase;
+  color: var(--text-muted, #555d6b);
+  display: block;
+}
+
+.thDrag {
+  width: 28px;
+}
+
+.thSeq {
+  width: 32px;
+  text-align: center;
+}
+
+.thCode {
+  width: 100px;
+}
+
+.thTitle {
+  min-width: 220px;
+}
+
+.thR,
+.thA,
+.thC,
+.thI {
+  min-width: 130px;
+}
+
+.thDays {
+  width: 60px;
+  text-align: center;
+}
+
+.thActions {
+  width: 64px;
+  text-align: center;
+}
+
+.addStepFooter {
+  padding: 12px 18px;
+  background: var(--panel-2, #181b20);
+  border-top: 1px solid var(--line, #282c34);
+  display: flex;
+  align-items: center;
+}
+
+.addStepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px dashed var(--accent, #fde215);
+  color: var(--accent, #fde215);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.addStepBtn:hover {
+  background: rgba(253, 226, 21, 0.1);
+}

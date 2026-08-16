@@ -1,0 +1,190 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.statusBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+}
+
+.bannerValid {
+  background: rgba(96, 211, 148, 0.12);
+  border: 1px solid rgba(96, 211, 148, 0.35);
+}
+
+.bannerInvalid {
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.35);
+}
+
+.validIcon {
+  color: var(--good, #60d394);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.invalidIcon {
+  color: #ffb020;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.bannerTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #ffffff);
+  margin: 0 0 4px 0;
+}
+
+.bannerSubtext {
+  font-size: 12px;
+  color: var(--text-muted, #a0aec0);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.statCard {
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.statLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #8b949e);
+}
+
+.statValue {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text, #ffffff);
+}
+
+.statGood {
+  color: var(--good, #60d394);
+}
+
+.statWarn {
+  color: #ffb020;
+}
+
+.issuesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issuesTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.issuesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.issueCard {
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-left: 3px solid #ffb020;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.issueCard:hover {
+  background: var(--panel-3, #22262e);
+  border-color: #ffb020;
+}
+
+.issueHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issueBadgeStep {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-light, #fff066);
+  background: rgba(253, 226, 21, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.issueBadgeProcess {
+  font-size: 10px;
+  font-weight: 700;
+  color: #8cc9ff;
+  background: rgba(140, 201, 255, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.issueStepTitle {
+  font-size: 11px;
+  color: var(--text-muted, #8b949e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issueMessage {
+  font-size: 12px;
+  color: var(--text, #ffffff);
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line, #282c34);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.closeBtn {
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  color: var(--text, #ffffff);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+  background: var(--panel-3, #22262e);
+}

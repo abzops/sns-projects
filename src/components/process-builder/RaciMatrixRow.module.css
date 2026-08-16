@@ -1,0 +1,223 @@
+.row {
+  border-bottom: 1px solid var(--line, #282c34);
+  transition: background 0.15s ease;
+  background: var(--panel, #121418);
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rowDragging {
+  background: var(--panel-2, #181b20);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.dragCell,
+.seqCell,
+.codeCell,
+.titleCell,
+.rCell,
+.aCell,
+.cCell,
+.iCell,
+.daysCell,
+.actionsCell {
+  padding: 6px 8px;
+  vertical-align: middle;
+}
+
+.dragCell {
+  width: 28px;
+  text-align: center;
+}
+
+.dragHandle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #555d6b);
+  cursor: grab;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.dragHandle:hover {
+  color: var(--accent, #fde215);
+}
+
+.dragHandleDisabled {
+  color: var(--text-muted, #333842);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: not-allowed;
+}
+
+.seqCell {
+  width: 32px;
+  text-align: center;
+}
+
+.seqBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #8b949e);
+}
+
+.codeCell {
+  width: 100px;
+}
+
+.codeInput {
+  width: 100%;
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text, #ffffff);
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.codeInput:focus {
+  border-color: var(--accent, #fde215);
+}
+
+.titleCell {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.titleInput {
+  width: 100%;
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text, #ffffff);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.titleInput:focus {
+  border-color: var(--accent, #fde215);
+}
+
+.rCell,
+.aCell,
+.cCell,
+.iCell {
+  min-width: 130px;
+  max-width: 220px;
+}
+
+.raciCell {
+  min-height: 32px;
+  padding: 3px 6px;
+  background: var(--panel-2, #181b20);
+  border: 1px dashed var(--line, #282c34);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.raciCell:hover {
+  border-color: var(--accent, #fde215);
+  background: var(--panel-3, #22262e);
+}
+
+.raciCellEmpty {
+  justify-content: center;
+}
+
+.chipContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+}
+
+.addPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #667085);
+  user-select: none;
+}
+
+.daysCell {
+  width: 60px;
+  text-align: center;
+}
+
+.daysInput {
+  width: 100%;
+  background: var(--panel-2, #181b20);
+  border: 1px solid var(--line, #282c34);
+  border-radius: 6px;
+  padding: 5px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #ffffff);
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.daysInput:focus {
+  border-color: var(--accent, #fde215);
+}
+
+.actionsCell {
+  width: 64px;
+  text-align: center;
+}
+
+.actionBtnGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.actionBtn {
+  background: transparent;
+  border: 1px solid var(--line, #282c34);
+  color: var(--text-muted, #8b949e);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: var(--panel-2, #181b20);
+  color: var(--text, #ffffff);
+}
+
+.deleteActionBtn:hover:not(:disabled) {
+  color: var(--bad, #ff5555);
+  border-color: rgba(255, 85, 85, 0.4);
+  background: rgba(255, 85, 85, 0.1);
+}
+
+.actionBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
