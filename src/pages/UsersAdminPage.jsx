@@ -16,6 +16,13 @@ import {
   AlertCircle,
   Sparkles,
   Info,
+  Copy,
+  Key,
+  CheckCheck,
+  Eye,
+  EyeOff,
+  UserPlus,
+  ShieldAlert,
 } from 'lucide-react';
 import { FunctionsHttpError, FunctionsRelayError, FunctionsFetchError } from '@supabase/supabase-js';
 import { useMembers } from '../hooks/useMembers';
@@ -213,7 +220,14 @@ export default function UsersAdminPage() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  // Invite Form State
+  // Credentials Display Modal State (Temporary Password shown once upon provision)
+  const [createdUserCredentials, setCreatedUserCredentials] = useState(null);
+  const [showTempPassword, setShowTempPassword] = useState(true);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  // User Provisioning Form State
   const [inviteFullName, setInviteFullName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteWorkspaceRole, setInviteWorkspaceRole] = useState('member');
@@ -372,7 +386,7 @@ export default function UsersAdminPage() {
     setShowInviteModal(true);
   };
 
-  // Submit Invite
+  // Submit User Provisioning
   const handleSendInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail.trim() || !inviteFullName.trim() || !invitePrimaryDeptId) {
@@ -403,7 +417,7 @@ export default function UsersAdminPage() {
       ];
 
       const payload = {
-        action: 'invite',
+        action: 'provision',
         workspace_id: workspaceId,
         full_name: inviteFullName.trim(),
         email: inviteEmail.trim().toLowerCase(),
@@ -429,7 +443,16 @@ export default function UsersAdminPage() {
         throw new Error(edgeData?.error || 'Organization administration service unavailable.');
       }
 
-      showToast(`Invitation sent to ${inviteFullName.trim()} successfully!`, 'success');
+      // Display credentials modal containing the temporary password
+      if (edgeData?.temporary_password) {
+        setCreatedUserCredentials({
+          fullName: inviteFullName.trim(),
+          email: inviteEmail.trim().toLowerCase(),
+          temporaryPassword: edgeData.temporary_password,
+        });
+      }
+
+      showToast(`User ${inviteFullName.trim()} provisioned successfully!`, 'success');
 
       // Reset form & reload
       setShowInviteModal(false);
@@ -440,7 +463,7 @@ export default function UsersAdminPage() {
       setInviteSystemRoles([]);
       await Promise.all([refetchMembers(), fetchDeptMemberships(), refetchRoles()]);
     } catch (err) {
-      console.error('Error inviting member:', err);
+      console.error('Error provisioning user:', err);
       const errorMsg = await parseEdgeFunctionError(err);
       showToast(errorMsg, 'error');
     } finally {
@@ -574,7 +597,7 @@ export default function UsersAdminPage() {
                 setShowInviteModal(true);
               }}
             >
-              <Plus size={16} /> Invite Member
+              <UserPlus size={16} /> Create User
             </button>
           )
         }
@@ -636,7 +659,7 @@ export default function UsersAdminPage() {
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* FROZEN ONBOARDING QUEUE (11 Approved Team Members)                    */}
+      {/* FROZEN ONBOARDING QUEUE (Approved Team Members)                       */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
       {canAdminUsers && pendingOnboardingList.length > 0 && (
         <div className={styles.onboardingCard}>
@@ -648,7 +671,7 @@ export default function UsersAdminPage() {
                   Organization Setup — Approved Personnel Onboarding ({pendingOnboardingList.length})
                 </h3>
                 <p className={styles.onboardingSubtitle}>
-                  0 real invitations sent automatically. Ready for authorized administrative dispatch with approved department & role mappings.
+                  Direct user provisioning with temporary password credentials. The user will be required to set their own password upon first login.
                 </p>
               </div>
             </div>
@@ -706,7 +729,7 @@ export default function UsersAdminPage() {
                         className={styles.prepareInviteBtn}
                         onClick={() => handlePrepareInvite(emp)}
                       >
-                        <Send size={13} /> Prepare Invite
+                        <UserPlus size={13} /> Provision User
                       </button>
                     </td>
                   </tr>
@@ -891,13 +914,18 @@ export default function UsersAdminPage() {
 
                     {/* Account Status */}
                     <td>
-                      <span
-                        className={`${styles.statusBadge} ${
-                          member.status === 'active' ? styles.statusActive : styles.statusPending
-                        }`}
-                      >
-                        {member.status === 'active' ? 'Active' : 'Invited'}
-                      </span>
+                      {member.status === 'active' ? (
+                        <span className={`${styles.statusBadge} ${styles.statusActive}`}>
+                          Active
+                        </span>
+                      ) : (
+                        <span
+                          className={`${styles.statusBadge} ${styles.statusSetupRequired}`}
+                          title="First login password setup required"
+                        >
+                          PASSWORD SETUP REQUIRED
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}
@@ -941,12 +969,12 @@ export default function UsersAdminPage() {
       )}
 
       {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* INVITE MEMBER MODAL                                                   */}
+      {/* CREATE USER / PROVISION MODAL                                         */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
       <Modal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
-        title="Invite Team Member"
+        title="Create Organization User"
       >
         <form onSubmit={handleSendInvite} className={styles.modalForm}>
           <div className={styles.modalField}>
@@ -1070,11 +1098,114 @@ export default function UsersAdminPage() {
               className={styles.confirmBtn}
               disabled={submitting || !inviteEmail.trim() || !inviteFullName.trim()}
             >
-              {submitting ? 'Dispatching…' : 'Send Invitation'}
+              {submitting ? 'Creating…' : 'Create User'}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* ═════════════════════════════════════════════════════════════════════ */}
+      {/* CREATED USER CREDENTIALS MODAL                                         */}
+      {/* ═════════════════════════════════════════════════════════════════════ */}
+      {createdUserCredentials && (
+        <Modal
+          isOpen={!!createdUserCredentials}
+          onClose={() => setCreatedUserCredentials(null)}
+          title="User Created Successfully"
+        >
+          <div className={styles.credentialsWrap}>
+            <div className={styles.credentialsWarning}>
+              <ShieldAlert size={20} style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Temporary Password Generated</strong>
+                <span>
+                  This temporary password is shown only once. Store or share it securely with the employee. The employee will be required to set their own password upon first login.
+                </span>
+              </div>
+            </div>
+
+            <div className={styles.credentialsCard}>
+              <div className={styles.credentialRow}>
+                <span className={styles.credentialLabel}>Employee Name</span>
+                <span className={styles.credentialValue}>{createdUserCredentials.fullName}</span>
+              </div>
+
+              <div className={styles.credentialRow}>
+                <span className={styles.credentialLabel}>Corporate Email</span>
+                <div className={styles.credentialValueRow}>
+                  <span className={styles.credentialValue}>{createdUserCredentials.email}</span>
+                  <button
+                    type="button"
+                    className={styles.copySmallBtn}
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdUserCredentials.email);
+                      setCopiedEmail(true);
+                      setTimeout(() => setCopiedEmail(false), 2000);
+                    }}
+                  >
+                    {copiedEmail ? <CheckCheck size={13} color="#60d394" /> : <Copy size={13} />}
+                    {copiedEmail ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.credentialRow}>
+                <span className={styles.credentialLabel}>Temporary Password</span>
+                <div className={styles.credentialValueRow}>
+                  <span className={`${styles.credentialValue} ${styles.passwordBox}`}>
+                    {showTempPassword ? createdUserCredentials.temporaryPassword : '••••••••••••••••'}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      className={styles.copySmallBtn}
+                      onClick={() => setShowTempPassword(!showTempPassword)}
+                      title={showTempPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showTempPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.copySmallBtn}
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdUserCredentials.temporaryPassword);
+                        setCopiedPassword(true);
+                        setTimeout(() => setCopiedPassword(false), 2000);
+                      }}
+                    >
+                      {copiedPassword ? <CheckCheck size={13} color="#60d394" /> : <Copy size={13} />}
+                      {copiedPassword ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.credentialActions}>
+              <button
+                type="button"
+                className={styles.copyAllBtn}
+                onClick={() => {
+                  const details = `SNS Projects Login Details\nEmail: ${createdUserCredentials.email}\nTemporary Password: ${createdUserCredentials.temporaryPassword}\nLogin URL: https://abzops.github.io/sns-projects/`;
+                  navigator.clipboard.writeText(details);
+                  setCopiedAll(true);
+                  setTimeout(() => setCopiedAll(false), 2000);
+                }}
+              >
+                {copiedAll ? <CheckCheck size={16} color="#60d394" /> : <Copy size={16} />}
+                <span>{copiedAll ? 'Login Details Copied!' : 'Copy All Login Details'}</span>
+              </button>
+              <button
+                type="button"
+                className={styles.doneBtn}
+                onClick={() => setCreatedUserCredentials(null)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ═════════════════════════════════════════════════════════════════════ */}
       {/* EDIT MEMBER MODAL                                                     */}

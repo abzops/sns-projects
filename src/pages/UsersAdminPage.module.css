@@ -644,3 +644,153 @@
 .confirmBtn:hover {
   background: var(--accent-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* CREDENTIALS MODAL                                                           */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.credentialsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.credentialsWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(245, 196, 0, 0.1);
+  border: 1px solid rgba(245, 196, 0, 0.3);
+  border-radius: var(--radius-xs);
+  color: var(--yellow);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.credentialsWarning strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.credentialsCard {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.credentialRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.credentialLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.credentialValueRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+}
+
+.credentialValue {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.passwordBox {
+  color: var(--yellow);
+  letter-spacing: 0.05em;
+}
+
+.copySmallBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.copySmallBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--yellow);
+}
+
+.credentialActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.copyAllBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(245, 196, 0, 0.15);
+  border: 1px solid rgba(245, 196, 0, 0.4);
+  border-radius: var(--radius-xs);
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.copyAllBtn:hover {
+  background: rgba(245, 196, 0, 0.25);
+  border-color: var(--yellow);
+}
+
+.doneBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: var(--yellow);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.doneBtn:hover {
+  background: var(--accent-hover);
+}
+
+.statusSetupRequired {
+  background: rgba(245, 196, 0, 0.12) !important;
+  color: var(--yellow) !important;
+  border: 1px solid rgba(245, 196, 0, 0.3) !important;
+}
+

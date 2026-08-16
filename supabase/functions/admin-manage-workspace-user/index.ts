@@ -1,6 +1,6 @@
 // ============================================================================
 // Supabase Edge Function: admin-manage-workspace-user
-// Actions: invite, update
+// Actions: provision (primary), complete_first_login, update, invite (deprecated)
 // Security: Server-side only, JWT validated (platform + function-level),
 //           DB-backed caller authorization, no user_metadata trust
 // ============================================================================
@@ -56,7 +56,7 @@ interface DepartmentAssignment {
 }
 
 interface RequestPayload {
-  action: "invite" | "update";
+  action: "provision" | "complete_first_login" | "invite" | "update";
   workspace_id: string;
   user_id?: string;
   email?: string;
@@ -81,12 +81,52 @@ function assertNoError(
 }
 
 // ---------------------------------------------------------------------------
+// Cryptographically secure temporary password generator (server-side only)
+// Generates 18 characters containing uppercase, lowercase, digit, and symbol.
+// Never stored in DB, never logged, never persisted.
+// ---------------------------------------------------------------------------
+function generateTemporaryPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // omit ambiguous I, O
+  const lower = "abcdefghijkmnopqrstuvwxyz"; // omit ambiguous l
+  const digits = "23456789"; // omit ambiguous 0, 1
+  const symbols = "!@#$%^&*()_+~|}{[]:;?><,.-=";
+  const all = upper + lower + digits + symbols;
+
+  const buf = new Uint8Array(18);
+  crypto.getRandomValues(buf);
+
+  // Guarantee at least one of each class in first 4 positions
+  const chars: string[] = [
+    upper[buf[0] % upper.length],
+    lower[buf[1] % lower.length],
+    digits[buf[2] % digits.length],
+    symbols[buf[3] % symbols.length],
+  ];
+
+  for (let i = 4; i < 18; i++) {
+    chars.push(all[buf[i] % all.length]);
+  }
+
+  // Shuffle using Fisher-Yates with crypto randomness
+  const shuffleBuf = new Uint8Array(chars.length);
+  crypto.getRandomValues(shuffleBuf);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = shuffleBuf[i] % (i + 1);
+    const temp = chars[i];
+    chars[i] = chars[j];
+    chars[j] = temp;
+  }
+
+  return chars.join("");
+}
+
+// ---------------------------------------------------------------------------
 // Paginated user lookup by email — safe for growing user bases
 // ---------------------------------------------------------------------------
 async function findAuthUserByEmail(
   supabaseAdmin: ReturnType<typeof createClient>,
   email: string,
-): Promise<{ id: string; last_sign_in_at?: string | null } | null> {
+): Promise<{ id: string; last_sign_in_at?: string | null; app_metadata?: Record<string, unknown> } | null> {
   const pageSize = 1000;
   let page = 1;
 
@@ -102,12 +142,14 @@ async function findAuthUserByEmail(
       (u) => u.email?.toLowerCase() === email,
     );
     if (found) {
-      return { id: found.id, last_sign_in_at: found.last_sign_in_at };
+      return {
+        id: found.id,
+        last_sign_in_at: found.last_sign_in_at,
+        app_metadata: found.app_metadata,
+      };
     }
 
-    // If this page returned fewer results than the page size, we have exhausted all pages
     if (data.users.length < pageSize) break;
-
     page++;
   }
 
@@ -210,8 +252,106 @@ serve(async (req: Request) => {
       );
     }
 
+    // =========================================================================
+    // ACTION: COMPLETE_FIRST_LOGIN
+    // Operates ONLY on the authenticated caller (callerUser.id).
+    // Does NOT accept arbitrary user_id from body.
+    // =========================================================================
+    if (action === "complete_first_login") {
+      // Find caller's workspace membership
+      const { data: callerMembership, error: memErr } = await supabaseAdmin
+        .from("workspace_members")
+        .select("id, role, status")
+        .eq("workspace_id", workspace_id)
+        .eq("user_id", callerUser.id)
+        .maybeSingle();
+
+      if (memErr) {
+        return new Response(
+          JSON.stringify({ error: "Failed to verify membership status" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (!callerMembership) {
+        return new Response(
+          JSON.stringify({ error: "You are not a member of this workspace" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Idempotency: If already active and must_change_password is false, return success
+      const currentMustChange = callerUser.app_metadata?.must_change_password;
+      if (callerMembership.status === "active" && currentMustChange === false) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Account already active",
+            status: "active",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      try {
+        // 1. Update Auth app_metadata to mark must_change_password = false
+        const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(
+          callerUser.id,
+          {
+            app_metadata: {
+              ...callerUser.app_metadata,
+              must_change_password: false,
+            },
+          },
+        );
+        assertNoError(updateAuthErr, "auth.admin.updateUserById must_change_password=false");
+
+        // 2. Update workspace_members status to 'active'
+        const { error: updateMemberErr } = await supabaseAdmin
+          .from("workspace_members")
+          .update({ status: "active" })
+          .eq("id", callerMembership.id);
+        assertNoError(updateMemberErr, "workspace_members update status=active");
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "First login completed successfully. Welcome to SNS Projects!",
+            status: "active",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } catch (activationErr: unknown) {
+        const msg =
+          activationErr instanceof Error
+            ? activationErr.message
+            : "Activation failed";
+        console.error(`[admin-manage-workspace-user] complete_first_login failed: ${msg}`);
+        return new Response(
+          JSON.stringify({ error: msg }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
     // -------------------------------------------------------------------------
-    // 5. DB-backed caller authorization — never trusts user_metadata
+    // 5. DB-backed caller authorization for administrative actions
+    //    (provision, invite, update) — never trusts user_metadata
     // -------------------------------------------------------------------------
     const { data: callerMember, error: callerMemberErr } = await supabaseAdmin
       .from("workspace_members")
@@ -332,7 +472,7 @@ serve(async (req: Request) => {
         );
       }
 
-      return null; // no error
+      return null;
     }
 
     // -------------------------------------------------------------------------
@@ -371,7 +511,356 @@ serve(async (req: Request) => {
     }
 
     // =========================================================================
-    // ACTION: INVITE
+    // ACTION: PROVISION (STANDARD EMPLOYEE ONBOARDING FLOW)
+    // Directly creates Supabase Auth account with temporary password & email_confirm: true.
+    // Membership status starts as 'pending'. User must complete first-login password reset.
+    // =========================================================================
+    if (action === "provision") {
+      const email = body.email?.trim().toLowerCase();
+      const fullName = body.full_name?.trim();
+      const workspaceRole = body.workspace_role || "member";
+
+      if (!email || !fullName) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Validation error: 'email' and 'full_name' are required for user provisioning",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (!VALID_WORKSPACE_ROLES.includes(workspaceRole as typeof VALID_WORKSPACE_ROLES[number])) {
+        return new Response(
+          JSON.stringify({
+            error: `Validation error: Invalid workspace role '${workspaceRole}'`,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Workspace Admin cannot provision an admin
+      if (
+        workspaceRole === "admin" &&
+        !isCallerOwner &&
+        !isCallerSystemAdmin
+      ) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Forbidden: Workspace administrators cannot provision other administrators",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // --- PRIMARY DEPARTMENT INVARIANT ---
+      if (!body.departments || !Array.isArray(body.departments)) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Validation error: 'departments' is required for provisioning and must be an array",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const deptValidErr = await validateDepartments(body.departments);
+      if (deptValidErr) return deptValidErr;
+
+      // System roles validation
+      if (body.system_roles && body.system_roles.length > 0) {
+        const srErr = validateSystemRoles(body.system_roles);
+        if (srErr) return srErr;
+      }
+
+      // Generate secure temporary password (server-side only, 18 chars)
+      const temporaryPassword = generateTemporaryPassword();
+
+      let targetUserId: string;
+      let wasNewAuthUser = false;
+      const orgRowsCreatedDuringRequest: {
+        table: string;
+        filter: Record<string, string>;
+      }[] = [];
+
+      // Check if user already exists in Auth (e.g. Samson Jose: projects@stacknstock.in)
+      const existingAuthUser = await findAuthUserByEmail(
+        supabaseAdmin,
+        email,
+      );
+
+      if (existingAuthUser) {
+        targetUserId = existingAuthUser.id;
+        wasNewAuthUser = false;
+
+        // Check if existing membership is active
+        const { data: existingMembership } = await supabaseAdmin
+          .from("workspace_members")
+          .select("id, role, status")
+          .eq("workspace_id", workspace_id)
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+        if (existingMembership && existingMembership.status === "active") {
+          return new Response(
+            JSON.stringify({
+              error:
+                "User is already an active member of this workspace. Use Edit Member instead.",
+            }),
+            {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        // Existing user conversion (e.g. Samson): update temporary password + app_metadata
+        const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(
+          targetUserId,
+          {
+            password: temporaryPassword,
+            email_confirm: true,
+            app_metadata: {
+              ...existingAuthUser.app_metadata,
+              must_change_password: true,
+            },
+          },
+        );
+
+        if (updateAuthErr) {
+          return new Response(
+            JSON.stringify({
+              error: `Failed to update user credentials: ${updateAuthErr.message}`,
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      } else {
+        // Create brand-new Auth user with temporary password and email_confirm: true
+        const { data: createData, error: createErr } =
+          await supabaseAdmin.auth.admin.createUser({
+            email,
+            password: temporaryPassword,
+            email_confirm: true,
+            user_metadata: { full_name: fullName },
+            app_metadata: { must_change_password: true },
+          });
+
+        if (createErr || !createData?.user) {
+          return new Response(
+            JSON.stringify({
+              error:
+                createErr?.message || "Failed to create authentication user",
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        targetUserId = createData.user.id;
+        wasNewAuthUser = true;
+      }
+
+      // Cleanup helper for partial failure
+      async function cleanupOnFailure(reason: string): Promise<void> {
+        console.error(`[admin-manage-workspace-user] Provision rollback: ${reason}`);
+        try {
+          for (const row of [...orgRowsCreatedDuringRequest].reverse()) {
+            const deleteQuery = supabaseAdmin.from(row.table).delete();
+            let q = deleteQuery;
+            for (const [col, val] of Object.entries(row.filter)) {
+              q = (q as ReturnType<typeof supabaseAdmin.from>).eq(col, val);
+            }
+            await q;
+          }
+          if (wasNewAuthUser) {
+            await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+          }
+        } catch (cleanupErr: unknown) {
+          const msg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+          console.error(`[admin-manage-workspace-user] Cleanup partial failure: ${msg}`);
+        }
+      }
+
+      try {
+        // 1. Profile upsert (fail-closed)
+        const { error: profileErr } = await supabaseAdmin
+          .from("profiles")
+          .upsert(
+            {
+              id: targetUserId,
+              full_name: fullName,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          );
+        assertNoError(profileErr, "profiles upsert");
+
+        // 2. Workspace membership: status MUST be 'pending' until first login completed
+        // Handle existing row vs new row
+        const { data: existingWm } = await supabaseAdmin
+          .from("workspace_members")
+          .select("id")
+          .eq("workspace_id", workspace_id)
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+        let memberRecord;
+        if (existingWm) {
+          const { data: updatedWm, error: wmUpdErr } = await supabaseAdmin
+            .from("workspace_members")
+            .update({
+              role: workspaceRole,
+              status: "pending",
+              invited_email: email,
+              invited_by: callerUser.id,
+            })
+            .eq("id", existingWm.id)
+            .select()
+            .single();
+          assertNoError(wmUpdErr, "workspace_members update");
+          memberRecord = updatedWm;
+        } else {
+          const { data: insertedWm, error: wmInsErr } = await supabaseAdmin
+            .from("workspace_members")
+            .insert({
+              workspace_id: workspace_id,
+              user_id: targetUserId,
+              invited_email: email,
+              role: workspaceRole,
+              status: "pending", // CRITICAL: starts pending
+              invited_by: callerUser.id,
+            })
+            .select()
+            .single();
+
+          if (wmInsErr) {
+            if (wmInsErr.code === PG_UNIQUE_VIOLATION) {
+              return new Response(
+                JSON.stringify({
+                  error:
+                    "User is already a member or has a pending membership in this workspace.",
+                }),
+                {
+                  status: 409,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                },
+              );
+            }
+            throw new Error(`Database write failed [workspace_members insert]: ${wmInsErr.code ?? "unknown"}`);
+          }
+
+          memberRecord = insertedWm;
+          if (wasNewAuthUser) {
+            orgRowsCreatedDuringRequest.push({
+              table: "workspace_members",
+              filter: { workspace_id: workspace_id, user_id: targetUserId },
+            });
+          }
+        }
+
+        // 3. Department memberships (fail-closed)
+        for (const dept of body.departments) {
+          const { error: deptErr } = await supabaseAdmin
+            .from("department_memberships")
+            .upsert(
+              {
+                workspace_id: workspace_id,
+                department_id: dept.department_id,
+                user_id: targetUserId,
+                role: dept.role,
+                is_primary: dept.is_primary,
+                is_active: true,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "department_id,user_id" },
+            );
+          assertNoError(deptErr, "department_memberships upsert");
+          if (wasNewAuthUser) {
+            orgRowsCreatedDuringRequest.push({
+              table: "department_memberships",
+              filter: { department_id: dept.department_id, user_id: targetUserId },
+            });
+          }
+        }
+
+        // 4. System roles (fail-closed)
+        if (
+          body.system_roles &&
+          body.system_roles.length > 0 &&
+          (isCallerOwner || isCallerSystemAdmin)
+        ) {
+          for (const sRole of body.system_roles) {
+            const { error: srErr } = await supabaseAdmin
+              .from("user_system_roles")
+              .upsert(
+                {
+                  workspace_id: workspace_id,
+                  user_id: targetUserId,
+                  role: sRole,
+                  created_by: callerUser.id,
+                },
+                { onConflict: "workspace_id,user_id,role" },
+              );
+            assertNoError(srErr, "user_system_roles upsert");
+            if (wasNewAuthUser) {
+              orgRowsCreatedDuringRequest.push({
+                table: "user_system_roles",
+                filter: { workspace_id: workspace_id, user_id: targetUserId, role: sRole },
+              });
+            }
+          }
+        }
+
+        // Return temporary password ONCE in response payload only. Never stored or logged.
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "User provisioned successfully with temporary password",
+            user_id: targetUserId,
+            temporary_password: temporaryPassword,
+            membership: memberRecord,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } catch (writeErr: unknown) {
+        const msg =
+          writeErr instanceof Error ? writeErr.message : "Database write failure";
+        await cleanupOnFailure(msg);
+        return new Response(
+          JSON.stringify({ error: msg }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
+    // =========================================================================
+    // ACTION: INVITE (DEPRECATED — SNS onboarding uses provision/temp-password flow)
+    // Retained for backward compatibility. Do not use for new SNS employee onboarding.
     // =========================================================================
     if (action === "invite") {
       const email = body.email?.trim().toLowerCase();
@@ -403,7 +892,6 @@ serve(async (req: Request) => {
         );
       }
 
-      // Workspace Admin cannot invite an admin
       if (
         workspaceRole === "admin" &&
         !isCallerOwner &&
@@ -421,8 +909,6 @@ serve(async (req: Request) => {
         );
       }
 
-      // --- PRIMARY DEPARTMENT INVARIANT (invite) ---
-      // departments is REQUIRED for invite; must have >= 1 with exactly one primary
       if (!body.departments || !Array.isArray(body.departments)) {
         return new Response(
           JSON.stringify({
@@ -439,15 +925,11 @@ serve(async (req: Request) => {
       const deptValidErr = await validateDepartments(body.departments);
       if (deptValidErr) return deptValidErr;
 
-      // System roles validation (if supplied)
       if (body.system_roles && body.system_roles.length > 0) {
         const srErr = validateSystemRoles(body.system_roles);
         if (srErr) return srErr;
       }
 
-      // -----------------------------------------------------------------------
-      // Invite execution with partial-failure cleanup
-      // -----------------------------------------------------------------------
       let targetUserId: string;
       let wasNewAuthUser = false;
       const orgRowsCreatedDuringRequest: {
@@ -455,7 +937,6 @@ serve(async (req: Request) => {
         filter: Record<string, string>;
       }[] = [];
 
-      // Paginated existing-user lookup by email
       const existingAuthUser = await findAuthUserByEmail(
         supabaseAdmin,
         email,
@@ -465,7 +946,6 @@ serve(async (req: Request) => {
         targetUserId = existingAuthUser.id;
         wasNewAuthUser = false;
       } else {
-        // Create new Auth invitation
         const { data: inviteData, error: inviteErr } =
           await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
             data: { full_name: fullName },
@@ -489,11 +969,6 @@ serve(async (req: Request) => {
         wasNewAuthUser = true;
       }
 
-      // -----------------------------------------------------------------------
-      // CRITICAL: Check for existing workspace membership BEFORE any writes.
-      // This prevents the invite path from altering an existing member's role,
-      // and in particular prevents the owner from being demoted via invite.
-      // -----------------------------------------------------------------------
       const { data: existingMembership, error: memberLookupErr } =
         await supabaseAdmin
           .from("workspace_members")
@@ -515,7 +990,6 @@ serve(async (req: Request) => {
       }
 
       if (existingMembership) {
-        // User is already a member — do NOT modify them. Return 409.
         return new Response(
           JSON.stringify({
             error:
@@ -528,11 +1002,9 @@ serve(async (req: Request) => {
         );
       }
 
-      // Cleanup helper for partial failure — only deletes newly created auth user
       async function cleanupOnFailure(reason: string): Promise<void> {
         console.error(`[admin-manage-workspace-user] Invite rollback: ${reason}`);
         try {
-          // Delete org rows created during this request (in reverse order)
           for (const row of [...orgRowsCreatedDuringRequest].reverse()) {
             const deleteQuery = supabaseAdmin.from(row.table).delete();
             let q = deleteQuery;
@@ -541,7 +1013,6 @@ serve(async (req: Request) => {
             }
             await q;
           }
-          // Only delete the auth user if we created it in this request
           if (wasNewAuthUser) {
             await supabaseAdmin.auth.admin.deleteUser(targetUserId);
           }
@@ -552,7 +1023,6 @@ serve(async (req: Request) => {
       }
 
       try {
-        // Profile upsert (fail-closed) — profiles PK conflict on id
         const { error: profileErr } = await supabaseAdmin
           .from("profiles")
           .upsert(
@@ -565,13 +1035,6 @@ serve(async (req: Request) => {
           );
         assertNoError(profileErr, "profiles upsert");
 
-        // -----------------------------------------------------------------------
-        // Workspace member INSERT — explicit insert instead of upsert.
-        // The table has a PARTIAL unique index: uq_workspace_member_user
-        //   ON workspace_members(workspace_id, user_id) WHERE user_id IS NOT NULL
-        // PostgREST upsert onConflict requires a non-partial unique constraint,
-        // so we use explicit INSERT and handle the uniqueness error as a 409.
-        // -----------------------------------------------------------------------
         const { data: memberRecord, error: memberErr } = await supabaseAdmin
           .from("workspace_members")
           .insert({
@@ -586,7 +1049,6 @@ serve(async (req: Request) => {
           .single();
 
         if (memberErr) {
-          // Detect concurrent unique violation (race condition)
           if (memberErr.code === PG_UNIQUE_VIOLATION) {
             return new Response(
               JSON.stringify({
@@ -605,15 +1067,10 @@ serve(async (req: Request) => {
         if (wasNewAuthUser) {
           orgRowsCreatedDuringRequest.push({
             table: "workspace_members",
-            filter: {
-              workspace_id: workspace_id,
-              user_id: targetUserId,
-            },
+            filter: { workspace_id: workspace_id, user_id: targetUserId },
           });
         }
 
-        // Department memberships (fail-closed)
-        // department_memberships has UNIQUE uq_department_member on (department_id, user_id)
         for (const dept of body.departments) {
           const { error: deptErr } = await supabaseAdmin
             .from("department_memberships")
@@ -633,16 +1090,11 @@ serve(async (req: Request) => {
           if (wasNewAuthUser) {
             orgRowsCreatedDuringRequest.push({
               table: "department_memberships",
-              filter: {
-                department_id: dept.department_id,
-                user_id: targetUserId,
-              },
+              filter: { department_id: dept.department_id, user_id: targetUserId },
             });
           }
         }
 
-        // System roles (fail-closed)
-        // user_system_roles has UNIQUE uq_user_system_role on (workspace_id, user_id, role)
         if (
           body.system_roles &&
           body.system_roles.length > 0 &&
@@ -664,11 +1116,7 @@ serve(async (req: Request) => {
             if (wasNewAuthUser) {
               orgRowsCreatedDuringRequest.push({
                 table: "user_system_roles",
-                filter: {
-                  workspace_id: workspace_id,
-                  user_id: targetUserId,
-                  role: sRole,
-                },
+                filter: { workspace_id: workspace_id, user_id: targetUserId, role: sRole },
               });
             }
           }
@@ -794,8 +1242,6 @@ serve(async (req: Request) => {
       }
 
       // --- PRIMARY DEPARTMENT INVARIANT (update) ---
-      // If departments is supplied it must have >= 1 entry with exactly one primary.
-      // If departments is omitted entirely, leave existing assignments unchanged.
       if (body.departments !== undefined) {
         if (!Array.isArray(body.departments)) {
           return new Response(
@@ -809,7 +1255,6 @@ serve(async (req: Request) => {
             },
           );
         }
-        // departments: [] is explicitly rejected
         const deptValidErr = await validateDepartments(body.departments);
         if (deptValidErr) return deptValidErr;
       }
@@ -863,11 +1308,10 @@ serve(async (req: Request) => {
           assertNoError(wmErr, "workspace_members update");
         }
 
-        // Department sync (only if departments was supplied and passed validation)
+        // Department sync
         if (body.departments !== undefined) {
           const newDeptIds = body.departments.map((d) => d.department_id);
 
-          // Remove old memberships not in new set (fail-closed)
           const { error: delDeptErr } = await supabaseAdmin
             .from("department_memberships")
             .delete()
@@ -876,8 +1320,6 @@ serve(async (req: Request) => {
             .not("department_id", "in", `(${newDeptIds.join(",")})`);
           assertNoError(delDeptErr, "department_memberships delete");
 
-          // Upsert new memberships (fail-closed)
-          // department_memberships has UNIQUE uq_department_member on (department_id, user_id)
           for (const dept of body.departments) {
             const { error: deptErr } = await supabaseAdmin
               .from("department_memberships")
@@ -897,7 +1339,7 @@ serve(async (req: Request) => {
           }
         }
 
-        // System roles sync (only if supplied and caller is authorized)
+        // System roles sync
         if (body.system_roles !== undefined && (isCallerOwner || isCallerSystemAdmin)) {
           const newSysRoles = body.system_roles;
 
@@ -922,7 +1364,6 @@ serve(async (req: Request) => {
             assertNoError(delAllSrErr, "user_system_roles delete (clear all)");
           }
 
-          // user_system_roles has UNIQUE uq_user_system_role on (workspace_id, user_id, role)
           for (const sRole of newSysRoles) {
             const { error: srErr } = await supabaseAdmin
               .from("user_system_roles")
@@ -966,7 +1407,7 @@ serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({
-        error: `Invalid action '${action}'. Expected 'invite' or 'update'`,
+        error: `Invalid action '${action}'. Expected 'provision', 'complete_first_login', or 'update'`,
       }),
       {
         status: 400,

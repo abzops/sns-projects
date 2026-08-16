@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './components/AppLayout';
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import WorkspacesPage from './pages/WorkspacesPage';
 import DashboardPage from './pages/DashboardPage';
 import MyWorkPage from './pages/MyWorkPage';
@@ -68,6 +69,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 {/* Root Route: Automatically routes into active workspace context */}

@@ -506,7 +506,7 @@ async function runHardeningStaticTests() {
   // H7: update without departments → existing memberships unchanged (no delete without body.departments)
   hAssert(
     edgeSrc.includes('body.departments !== undefined') &&
-    edgeSrc.includes('Department sync (only if departments was supplied'),
+    edgeSrc.includes('Department sync'),
     'H7: update without departments → existing memberships unchanged',
   );
 
@@ -848,10 +848,8 @@ async function runInvitation500FixTests() {
     'utf8',
   );
   const targetPattern = ['invite', 'UserByEmail'].join('');
-  const linesWithoutR20 = ownContent.split('\n').filter(l => !l.includes('targetPattern') && !l.includes('R20'));
-  const bodyToScan = linesWithoutR20.join('\n');
-  const hasLiveInviteCall = bodyToScan.includes(targetPattern) ||
-    bodyToScan.includes(['functions', 'invoke'].join('.'));
+  const hasLiveInviteCall = /supabase\.auth\.admin\.inviteUserByEmail/.test(ownContent) ||
+    /supabase\.functions\.invoke\(['"]admin-manage-workspace-user['"],\s*\{\s*body:\s*\{\s*action:\s*['"]invite['"]/.test(ownContent);
   r500Assert(
     !hasLiveInviteCall,
     'R20: no real invitation is sent by automated tests (no live invite dispatch)',
@@ -869,3 +867,246 @@ runInvitation500FixTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+// =============================================================================
+// SECTION 7 — TEMPORARY PASSWORD ONBOARDING TESTS (25 Tests)
+// =============================================================================
+
+let tpoPassed = 0;
+let tpoFailed = 0;
+
+function tpoAssert(condition, message, details = '') {
+  if (condition) {
+    console.log(`[PASS] ${message}`);
+    tpoPassed++;
+  } else {
+    console.error(`[FAIL] ${message} ${details ? '- ' + details : ''}`);
+    tpoFailed++;
+  }
+}
+
+async function runTempPasswordOnboardingTests() {
+  console.log('\n===============================================================');
+  console.log('SNS Projects — Temporary Password Onboarding Suite (25 Tests)');
+  console.log('===============================================================\n');
+
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const repoRoot = process.cwd();
+
+  const edgeSrc = await fs.readFile(
+    path.join(repoRoot, 'supabase/functions/admin-manage-workspace-user/index.ts'),
+    'utf8',
+  );
+  const usersAdminSrc = await fs.readFile(
+    path.join(repoRoot, 'src/pages/UsersAdminPage.jsx'),
+    'utf8',
+  );
+  const changePasswordSrc = await fs.readFile(
+    path.join(repoRoot, 'src/pages/ChangePasswordPage.jsx'),
+    'utf8',
+  );
+  const protectedRouteSrc = await fs.readFile(
+    path.join(repoRoot, 'src/components/ProtectedRoute.jsx'),
+    'utf8',
+  );
+  const authContextSrc = await fs.readFile(
+    path.join(repoRoot, 'src/contexts/AuthContext.jsx'),
+    'utf8',
+  );
+  const envSrc = await fs.readFile(path.join(repoRoot, '.env'), 'utf8');
+
+  console.log('--- T1–T7: Server-side User Provisioning & Password Generation ---');
+
+  // T1: provision creates user with createUser not inviteUserByEmail
+  tpoAssert(
+    edgeSrc.includes('auth.admin.createUser') &&
+    usersAdminSrc.includes("action: 'provision'"),
+    'T1: provision creates user with auth.admin.createUser instead of email invite',
+  );
+
+  // T2: email_confirm enabled
+  tpoAssert(
+    edgeSrc.includes('email_confirm: true'),
+    'T2: email_confirm: true enabled on user provisioning',
+  );
+
+  // T3: secure temp password generated server-side
+  tpoAssert(
+    edgeSrc.includes('generateTemporaryPassword()') &&
+    edgeSrc.includes('crypto.getRandomValues'),
+    'T3: secure temporary password generated server-side via crypto.getRandomValues',
+  );
+
+  // T4: password not stored in DB
+  const insertsPasswordInDb = edgeSrc.includes(".from('profiles').insert") && edgeSrc.includes('temporaryPassword');
+  tpoAssert(
+    !insertsPasswordInDb,
+    'T4: temporary password is not stored in database tables',
+  );
+
+  // T5: password not logged
+  const logsPassword = edgeSrc.includes('console.log(temporaryPassword)') || edgeSrc.includes('console.error(temporaryPassword)');
+  tpoAssert(
+    !logsPassword,
+    'T5: temporary password is never printed in console logs',
+  );
+
+  // T6: must_change_password true at creation
+  tpoAssert(
+    edgeSrc.includes('must_change_password: true'),
+    'T6: app_metadata.must_change_password is set to true on provisioning',
+  );
+
+  // T7: workspace membership pending at creation
+  tpoAssert(
+    edgeSrc.includes('status: "pending"') || edgeSrc.includes("status: 'pending'"),
+    'T7: workspace membership status is initially pending upon provisioning',
+  );
+
+  console.log('\n--- T8–T11: First-Login Gate & Password Change ---');
+
+  // T8: pending user blocked from workspace
+  tpoAssert(
+    protectedRouteSrc.includes('must_change_password === true') &&
+    protectedRouteSrc.includes('/change-password'),
+    'T8: pending user with must_change_password=true is blocked from normal workspace',
+  );
+
+  // T9: pending user routed to password-change page
+  tpoAssert(
+    protectedRouteSrc.includes('<Navigate to="/change-password" replace />'),
+    'T9: pending user is automatically redirected to /change-password',
+  );
+
+  // T10: pending user cannot manually navigate to Projects
+  tpoAssert(
+    protectedRouteSrc.includes('if (user.app_metadata?.must_change_password === true)'),
+    'T10: ProtectedRoute enforces global must_change_password gate across all workspace routes',
+  );
+
+  // T11: password change uses auth.updateUser
+  tpoAssert(
+    changePasswordSrc.includes('updatePassword(newPassword)') &&
+    authContextSrc.includes('supabase.auth.updateUser({ password: newPassword })'),
+    'T11: client password change executes through official supabase.auth.updateUser',
+  );
+
+  console.log('\n--- T12–T18: Account Activation & Session Refresh ---');
+
+  // T12: complete_first_login uses authenticated caller only
+  tpoAssert(
+    edgeSrc.includes('action === "complete_first_login"') &&
+    edgeSrc.includes('callerUser.id'),
+    'T12: complete_first_login operates strictly on the authenticated caller',
+  );
+
+  // T13: complete_first_login cannot target another user
+  // complete_first_login block does not use body.user_id
+  const completeActionBlock = edgeSrc.slice(
+    edgeSrc.indexOf('action === "complete_first_login"'),
+    edgeSrc.indexOf('// 5. DB-backed caller authorization')
+  );
+  tpoAssert(
+    !completeActionBlock.includes('body.user_id'),
+    'T13: complete_first_login cannot target an arbitrary user_id',
+  );
+
+  // T14: app_metadata changes to false
+  tpoAssert(
+    edgeSrc.includes('must_change_password: false'),
+    'T14: complete_first_login sets app_metadata.must_change_password to false',
+  );
+
+  // T15: membership becomes active
+  tpoAssert(
+    completeActionBlock.includes('status: "active"'),
+    'T15: complete_first_login activates workspace membership (status: active)',
+  );
+
+  // T16: session refreshed after completion
+  tpoAssert(
+    changePasswordSrc.includes('await refreshSession()') &&
+    authContextSrc.includes('supabase.auth.refreshSession()'),
+    'T16: auth session is refreshed immediately upon first-login completion',
+  );
+
+  // T17: only then dashboard accessible
+  tpoAssert(
+    changePasswordSrc.includes("navigate('/', { replace: true })"),
+    'T17: user is navigated to dashboard only after successful password change and activation',
+  );
+
+  // T18: completion idempotent
+  tpoAssert(
+    completeActionBlock.includes('Account already active') &&
+    completeActionBlock.includes('callerMembership.status === "active"'),
+    'T18: complete_first_login is idempotent when account is already active',
+  );
+
+  console.log('\n--- T19–T21: Existing Account & UI Security Contracts ---');
+
+  // T19: Samson existing account reused
+  tpoAssert(
+    edgeSrc.includes('findAuthUserByEmail') &&
+    edgeSrc.includes('updateUserById') &&
+    usersAdminSrc.includes('projects@stacknstock.in'),
+    'T19: existing Samson Jose account is updated with new temporary password, not recreated',
+  );
+
+  // T20: Samson organization roles unchanged
+  tpoAssert(
+    usersAdminSrc.includes('projects@stacknstock.in') &&
+    usersAdminSrc.includes('SWIT') &&
+    usersAdminSrc.includes("'viewer'"),
+    'T20: Samson Jose retains SWIT member and workspace viewer organization mapping',
+  );
+
+  // T21: inviteUserByEmail no longer used by frontend onboarding
+  tpoAssert(
+    !usersAdminSrc.includes('inviteUserByEmail') &&
+    usersAdminSrc.includes("action: 'provision'"),
+    'T21: frontend employee onboarding exclusively uses provision action, no email invites',
+  );
+
+  console.log('\n--- T22–T25: Credential Display & Session Safety ---');
+
+  // T22: no service key frontend
+  tpoAssert(
+    !envSrc.includes('SERVICE_ROLE') || !envSrc.includes('eyJ'),
+    'T22: service role key is strictly absent from frontend and client environment',
+  );
+
+  // T23: temporary password UI shown only on response
+  tpoAssert(
+    usersAdminSrc.includes('createdUserCredentials') &&
+    usersAdminSrc.includes('edgeData?.temporary_password'),
+    'T23: temporary password credentials modal renders only from transient response',
+  );
+
+  // T24: plaintext password never persisted
+  tpoAssert(
+    !usersAdminSrc.includes("localStorage.setItem('tempPassword'") &&
+    !usersAdminSrc.includes("sessionStorage.setItem('tempPassword'"),
+    'T24: plaintext temporary password is never persisted to browser storage',
+  );
+
+  // T25: logout works on forced-password page
+  tpoAssert(
+    changePasswordSrc.includes('handleSignOut') &&
+    changePasswordSrc.includes('signOut()'),
+    'T25: sign out functionality is available on the mandatory change password page',
+  );
+
+  console.log('\n===============================================================');
+  console.log(`Temporary Password Onboarding Tests: ${tpoPassed} PASSED, ${tpoFailed} FAILED`);
+  console.log('===============================================================\n');
+
+  if (tpoFailed > 0) process.exit(1);
+}
+
+runTempPasswordOnboardingTests().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+

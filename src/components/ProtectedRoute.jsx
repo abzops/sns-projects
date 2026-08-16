@@ -24,5 +24,10 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
+  // First login gate: Mandatory password change required
+  if (user.app_metadata?.must_change_password === true) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   return <Outlet />;
 }

@@ -74,8 +74,39 @@ export function AuthProvider({ children }) {
     return supabase.auth.signOut()
   }
 
+  const refreshSession = async () => {
+    if (supabaseConfigError) {
+      return { data: null, error: null }
+    }
+    const supabase = getSupabase()
+    const { data, error } = await supabase.auth.refreshSession()
+    if (data?.session) {
+      setSession(data.session)
+      setUser(data.session.user ?? null)
+    }
+    return { data, error }
+  }
+
+  const updatePassword = async (newPassword) => {
+    if (supabaseConfigError) {
+      return { error: new Error(supabaseConfigError) }
+    }
+    const supabase = getSupabase()
+    return supabase.auth.updateUser({ password: newPassword })
+  }
+
   const value = useMemo(
-    () => ({ user, session, loading, signUp, signIn, signOut, configError: supabaseConfigError }),
+    () => ({
+      user,
+      session,
+      loading,
+      signUp,
+      signIn,
+      signOut,
+      refreshSession,
+      updatePassword,
+      configError: supabaseConfigError,
+    }),
     [user, session, loading]
   )
 

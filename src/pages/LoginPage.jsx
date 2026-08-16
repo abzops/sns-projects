@@ -12,7 +12,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    if (user.app_metadata?.must_change_password === true) {
+      return <Navigate to="/change-password" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
