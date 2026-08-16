@@ -383,41 +383,18 @@ export default function UsersAdminPage() {
         system_roles: canManageSystemRoles ? inviteSystemRoles : [],
       };
 
-      // Try Edge function invocation first
-      let success = false;
-      try {
-        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
-          'admin-manage-workspace-user',
-          { body: payload }
-        );
-        if (!edgeErr && edgeData?.success) {
-          success = true;
-        }
-      } catch (fErr) {
-        console.warn('Edge function invoke fallback to direct client setup:', fErr);
+      // Invoke Edge function exclusively (no privileged client fallback)
+      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+        'admin-manage-workspace-user',
+        { body: payload }
+      );
+
+      if (edgeErr || !edgeData?.success) {
+        const errorMsg = edgeErr?.message || edgeData?.error || 'Organization administration service unavailable.';
+        throw new Error(`Edge Function error: ${errorMsg}`);
       }
 
-      // Direct client fallback
-      if (!success) {
-        // 1. Create workspace_members entry
-        const { data: memberData, error: mErr } = await supabase
-          .from('workspace_members')
-          .insert({
-            workspace_id: workspaceId,
-            invited_email: inviteEmail.trim().toLowerCase(),
-            role: inviteWorkspaceRole,
-            status: 'pending',
-            invited_by: user.id,
-          })
-          .select()
-          .single();
-
-        if (mErr) throw mErr;
-
-        showToast(`Invitation created for ${inviteFullName.trim()} (${inviteEmail.trim()})`, 'success');
-      } else {
-        showToast(`Invitation sent to ${inviteFullName.trim()} successfully!`, 'success');
-      }
+      showToast(`Invitation sent to ${inviteFullName.trim()} successfully!`, 'success');
 
       // Reset form & reload
       setShowInviteModal(false);
@@ -464,39 +441,44 @@ export default function UsersAdminPage() {
 
     setSubmitting(true);
     try {
-      const userId = editingMember.user_id;
-
-      // 1. Update full name if profile exists
-      if (userId && inviteFullName.trim()) {
-        await supabase
-          .from('profiles')
-          .update({ full_name: inviteFullName.trim() })
-          .eq('id', userId);
-      }
-
-      // 2. Update workspace role (if not owner)
-      if (editingMember.role !== 'owner') {
-        await supabase
-          .from('workspace_members')
-          .update({ role: inviteWorkspaceRole })
-          .eq('id', editingMember.id);
-      }
-
-      // 3. Update department memberships if user is active
-      if (userId && invitePrimaryDeptId) {
-        // Upsert primary department
-        await supabase.from('department_memberships').upsert(
-          {
-            workspace_id: workspaceId,
+      const primaryDept = invitePrimaryDeptId
+        ? {
             department_id: invitePrimaryDeptId,
-            user_id: userId,
             role: invitePrimaryDeptRole,
             is_primary: true,
-            is_active: true,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'department_id,user_id' }
-        );
+          }
+        : null;
+
+      const departmentsPayload = primaryDept
+        ? [
+            primaryDept,
+            ...inviteAdditionalDepts.map((d) => ({
+              department_id: d.department_id,
+              role: d.role,
+              is_primary: false,
+            })),
+          ]
+        : [];
+
+      const payload = {
+        action: 'update',
+        workspace_id: workspaceId,
+        user_id: editingMember.user_id,
+        full_name: inviteFullName.trim(),
+        workspace_role: editingMember.role === 'owner' ? 'owner' : inviteWorkspaceRole,
+        departments: departmentsPayload,
+        system_roles: canManageSystemRoles ? inviteSystemRoles : undefined,
+      };
+
+      // Invoke Edge function exclusively (no privileged client fallback)
+      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+        'admin-manage-workspace-user',
+        { body: payload }
+      );
+
+      if (edgeErr || !edgeData?.success) {
+        const errorMsg = edgeErr?.message || edgeData?.error || 'Organization administration service unavailable.';
+        throw new Error(`Edge Function error: ${errorMsg}`);
       }
 
       showToast(`Updated member details for ${editingMember.profile?.full_name || 'user'}.`, 'success');
