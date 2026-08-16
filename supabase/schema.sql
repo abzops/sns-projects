@@ -568,32 +568,24 @@ CREATE POLICY "workspaces_delete_owner" ON public.workspaces FOR DELETE TO authe
 -- ── workspace_members ──
 DROP POLICY IF EXISTS "workspace_members_select_active" ON public.workspace_members;
 DROP POLICY IF EXISTS "workspace_members_insert_admin_owner" ON public.workspace_members;
+DROP POLICY IF EXISTS "workspace_members_insert_bootstrap" ON public.workspace_members;
 DROP POLICY IF EXISTS "workspace_members_update_admin_owner" ON public.workspace_members;
 DROP POLICY IF EXISTS "workspace_members_delete_admin_owner" ON public.workspace_members;
 
 CREATE POLICY "workspace_members_select_active" ON public.workspace_members FOR SELECT TO authenticated
   USING (private.is_workspace_active_member(workspace_id));
 
-CREATE POLICY "workspace_members_insert_admin_owner" ON public.workspace_members FOR INSERT TO authenticated
+-- First-owner bootstrap only (when workspace has 0 members)
+CREATE POLICY "workspace_members_insert_bootstrap" ON public.workspace_members FOR INSERT TO authenticated
   WITH CHECK (
-    private.can_administer_workspace(workspace_id)
-    OR (user_id = auth.uid() AND role = 'owner' AND NOT EXISTS (SELECT 1 FROM public.workspace_members wm WHERE wm.workspace_id = workspace_members.workspace_id))
+    user_id = auth.uid()
+    AND role = 'owner'
+    AND status = 'active'
+    AND NOT EXISTS (SELECT 1 FROM public.workspace_members wm WHERE wm.workspace_id = workspace_members.workspace_id)
   );
 
-CREATE POLICY "workspace_members_update_admin_owner" ON public.workspace_members FOR UPDATE TO authenticated
-  USING (
-    private.can_administer_workspace(workspace_id)
-    OR (user_id = auth.uid() AND status = 'pending')
-    OR (invited_email = (SELECT email FROM auth.users WHERE id = auth.uid()) AND status = 'pending')
-  )
-  WITH CHECK (
-    private.can_administer_workspace(workspace_id)
-    OR (user_id = auth.uid())
-    OR (invited_email = (SELECT email FROM auth.users WHERE id = auth.uid()))
-  );
-
-CREATE POLICY "workspace_members_delete_admin_owner" ON public.workspace_members FOR DELETE TO authenticated
-  USING (private.can_administer_workspace(workspace_id));
+-- Direct UPDATE and DELETE are intentionally not permitted to authenticated users;
+-- all organization user administration flows through admin-manage-workspace-user.
 
 -- ── user_system_roles ──
 DROP POLICY IF EXISTS "user_system_roles_select" ON public.user_system_roles;
@@ -602,9 +594,8 @@ DROP POLICY IF EXISTS "user_system_roles_manage" ON public.user_system_roles;
 CREATE POLICY "user_system_roles_select" ON public.user_system_roles FOR SELECT TO authenticated
   USING (private.is_workspace_active_member(workspace_id));
 
-CREATE POLICY "user_system_roles_manage" ON public.user_system_roles FOR ALL TO authenticated
-  USING (private.get_user_workspace_role(workspace_id) = 'owner' OR private.has_system_role(workspace_id, 'system_admin'))
-  WITH CHECK (private.get_user_workspace_role(workspace_id) = 'owner' OR private.has_system_role(workspace_id, 'system_admin'));
+-- Direct INSERT, UPDATE, DELETE are intentionally not permitted to authenticated users;
+-- all system role management flows through admin-manage-workspace-user.
 
 -- ── departments ──
 DROP POLICY IF EXISTS "departments_select_member" ON public.departments;
@@ -632,9 +623,8 @@ DROP POLICY IF EXISTS "dept_memberships_manage" ON public.department_memberships
 CREATE POLICY "dept_memberships_select_member" ON public.department_memberships FOR SELECT TO authenticated
   USING (private.is_workspace_active_member(workspace_id));
 
-CREATE POLICY "dept_memberships_manage" ON public.department_memberships FOR ALL TO authenticated
-  USING (private.can_administer_workspace(workspace_id))
-  WITH CHECK (private.can_administer_workspace(workspace_id));
+-- Direct INSERT, UPDATE, DELETE are intentionally not permitted to authenticated users;
+-- all department membership management flows through admin-manage-workspace-user.
 
 -- ── projects ──
 DROP POLICY IF EXISTS "projects_select_member" ON public.projects;

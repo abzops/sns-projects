@@ -194,7 +194,7 @@ export default function UsersAdminPage() {
   const { showToast } = useToast();
 
   const { members = [], loading: membersLoading, refetch: refetchMembers, removeMember } = useMembers(workspaceId);
-  const { roles: systemRoles = [], assignRole, removeRole, refetch: refetchRoles } = useUserSystemRoles(workspaceId);
+  const { roles: systemRoles = [], refetch: refetchRoles } = useUserSystemRoles(workspaceId);
   const { departments = [] } = useDepartments(workspaceId);
   const { isOwner, isSystemAdmin, isWorkspaceAdmin } = useUserContext(workspaceId);
 

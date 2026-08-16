@@ -58,74 +58,10 @@ export function useDepartmentMembers(departmentId) {
     fetchMembers();
   }, [fetchMembers]);
 
-  const addMember = async ({ workspaceId, userId, role = 'member', isPrimary = false }) => {
-    if (!departmentId || !userId || !workspaceId) return null;
-    try {
-      const { data, error: insertError } = await supabase
-        .from('department_memberships')
-        .insert({
-          workspace_id: workspaceId,
-          department_id: departmentId,
-          user_id: userId,
-          role,
-          is_primary: isPrimary,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      await fetchMembers();
-      return data;
-    } catch (err) {
-      console.error('Error adding department member:', err);
-      throw err;
-    }
-  };
-
-  const updateMember = async (id, updates) => {
-    try {
-      const { data, error: updateError } = await supabase
-        .from('department_memberships')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-      setMembers((prev) => prev.map((m) => (m.id === id ? data : m)));
-      return data;
-    } catch (err) {
-      console.error('Error updating department member:', err);
-      throw err;
-    }
-  };
-
-  const removeMember = async (id) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('department_memberships')
-        .delete()
-        .eq('id', id);
-
-      if (deleteError) throw deleteError;
-      setMembers((prev) => prev.filter((m) => m.id !== id));
-    } catch (err) {
-      console.error('Error removing department member:', err);
-      throw err;
-    }
-  };
-
   return {
     members,
     loading,
     error,
-    addMember,
-    updateMember,
-    removeMember,
     refetch: fetchMembers,
   };
 }

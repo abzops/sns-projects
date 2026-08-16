@@ -62,10 +62,12 @@ interface RequestPayload {
     | "complete_first_login"
     | "get_onboarding_status"
     | "reissue_temp_password"
+    | "remove"
     | "invite"
     | "update";
   workspace_id: string;
   user_id?: string;
+  member_id?: string;
   new_password?: string;
   email?: string;
   full_name?: string;
@@ -1063,6 +1065,133 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
+    }
+
+    // =========================================================================
+    // ACTION: REMOVE
+    // Securely removes a member from the workspace and cleans up associated
+    // department memberships and user system roles.
+    // Protects owner and admins according to authority rules.
+    // =========================================================================
+    if (action === "remove") {
+      const targetUserId = body.user_id;
+      const targetMemberId = body.member_id;
+
+      if (!targetUserId && !targetMemberId) {
+        return new Response(
+          JSON.stringify({
+            error: "Validation error: 'user_id' or 'member_id' is required to remove member",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      let q = supabaseAdmin
+        .from("workspace_members")
+        .select("id, user_id, role, status")
+        .eq("workspace_id", workspace_id);
+
+      if (targetMemberId) {
+        q = q.eq("id", targetMemberId);
+      } else if (targetUserId) {
+        q = q.eq("user_id", targetUserId);
+      }
+
+      const { data: targetMember, error: targetMemberErr } = await q.maybeSingle();
+
+      if (targetMemberErr || !targetMember) {
+        return new Response(
+          JSON.stringify({
+            error: "Target member not found in this workspace",
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Owner protection: Owner cannot be removed
+      if (targetMember.role === "owner") {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden: Workspace owner cannot be removed from workspace",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Workspace Admin protection: Workspace Admin cannot remove other Admins
+      if (!isCallerOwner && !isCallerSystemAdmin) {
+        if (targetMember.role === "admin") {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Forbidden: Workspace administrators cannot remove other administrators",
+            }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
+
+      const resolvedUserId = targetMember.user_id;
+
+      try {
+        // Delete workspace member
+        const { error: delMemberErr } = await supabaseAdmin
+          .from("workspace_members")
+          .delete()
+          .eq("id", targetMember.id);
+        assertNoError(delMemberErr, "workspace_members delete");
+
+        if (resolvedUserId) {
+          // Clean up department memberships for this workspace
+          const { error: delDeptErr } = await supabaseAdmin
+            .from("department_memberships")
+            .delete()
+            .eq("workspace_id", workspace_id)
+            .eq("user_id", resolvedUserId);
+          assertNoError(delDeptErr, "department_memberships delete");
+
+          // Clean up system roles for this workspace
+          const { error: delSysErr } = await supabaseAdmin
+            .from("user_system_roles")
+            .delete()
+            .eq("workspace_id", workspace_id)
+            .eq("user_id", resolvedUserId);
+          assertNoError(delSysErr, "user_system_roles delete");
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Member removed from workspace successfully",
+            member_id: targetMember.id,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to remove member";
+        return new Response(
+          JSON.stringify({ error: msg }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
     }
 
     // =========================================================================

@@ -6,14 +6,11 @@ import {
   Edit2,
   Trash2,
   Users,
-  X,
   Palette,
-  UserPlus,
   Sparkles,
 } from 'lucide-react';
 import { useDepartments } from '../hooks/useDepartments';
 import { useDepartmentMembers } from '../hooks/useDepartmentMembers';
-import { useMembers } from '../hooks/useMembers';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 import PageHeader from '../components/PageHeader';
@@ -42,119 +39,26 @@ const PRESET_COLORS = [
 // Department Members Manager Sub-Component
 function DepartmentMembersManager({ department, onClose }) {
   const { user } = useAuth();
-  const { members = [], loading, addMember, updateMember, removeMember } = useDepartmentMembers(department.id);
-  const { members: workspaceMembers = [] } = useMembers(department.workspace_id);
-  const { showToast } = useToast();
-
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedRole, setSelectedRole] = useState('member');
-  const [isPrimary, setIsPrimary] = useState(false);
-  const [adding, setAdding] = useState(false);
-
-  // Available users not yet in department
-  const existingUserIds = new Set(members.map((m) => m.user_id));
-  const availableUsers = workspaceMembers.filter((m) => m.user_id && !existingUserIds.has(m.user_id));
-
-  const handleAddMember = async (e) => {
-    e.preventDefault();
-    if (!selectedUserId) return;
-
-    setAdding(true);
-    try {
-      await addMember({
-        workspaceId: department.workspace_id,
-        userId: selectedUserId,
-        role: selectedRole,
-        isPrimary,
-      });
-      showToast('Department member added', 'success');
-      setSelectedUserId('');
-      setSelectedRole('member');
-      setIsPrimary(false);
-    } catch (err) {
-      showToast(err.message || 'Failed to add department member', 'error');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleRoleChange = async (membershipId, newRole) => {
-    try {
-      await updateMember(membershipId, { role: newRole });
-      showToast(`Role updated to ${newRole}`, 'success');
-    } catch (err) {
-      showToast(err.message || 'Failed to update role', 'error');
-    }
-  };
-
-  const handleTogglePrimary = async (membershipId, currentPrimary) => {
-    try {
-      await updateMember(membershipId, { is_primary: !currentPrimary });
-      showToast(currentPrimary ? 'Primary designation removed' : 'Set as primary department', 'success');
-    } catch (err) {
-      showToast(err.message || 'Failed to update primary status', 'error');
-    }
-  };
-
-  const handleRemove = async (membershipId, memberName) => {
-    if (confirm(`Remove ${memberName || 'this user'} from ${department.name}?`)) {
-      try {
-        await removeMember(membershipId);
-        showToast('Member removed from department', 'success');
-      } catch (err) {
-        showToast(err.message || 'Failed to remove member', 'error');
-      }
-    }
-  };
+  const { members = [], loading } = useDepartmentMembers(department.id);
 
   return (
     <div className={styles.deptMembersContainer}>
-      {/* Add Member Form */}
-      <form onSubmit={handleAddMember} className={styles.addMemberBox}>
-        <h4 className={styles.addMemberTitle}>Add Person to {department.name}</h4>
-        <div className={styles.addMemberRow}>
-          <select
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-            required
-            className={styles.memberSelect}
-          >
-            <option value="">Select Team Member…</option>
-            {availableUsers.map((m) => (
-              <option key={m.id} value={m.user_id}>
-                {getMemberDisplayName(m, user)}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className={styles.roleSelect}
-          >
-            <option value="member">Member</option>
-            <option value="lead">Dept Lead</option>
-            <option value="head">Dept Head</option>
-          </select>
-
-          <label className={styles.primaryCheck}>
-            <input
-              type="checkbox"
-              checked={isPrimary}
-              onChange={(e) => setIsPrimary(e.target.checked)}
-            />
-            <span>Primary</span>
-          </label>
-
-          <button
-            type="submit"
-            className={styles.addBtn}
-            disabled={adding || !selectedUserId}
-          >
-            <UserPlus size={14} /> Add
-          </button>
+      {/* Department Personnel Notice & Link */}
+      <div className={styles.addMemberBox} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h4 className={styles.addMemberTitle} style={{ marginBottom: '4px' }}>Department Personnel</h4>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+            Assignments, roles, and primary departments are managed in the Personnel console.
+          </p>
         </div>
-      </form>
+        <a
+          href={`#/workspace/${department.workspace_id}/admin/users`}
+          className={styles.addBtn}
+          style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <Users size={14} /> Manage in Personnel
+        </a>
+      </div>
 
       {/* Existing Members List */}
       <div className={styles.membersListWrap}>
@@ -173,40 +77,15 @@ function DepartmentMembersManager({ department, onClose }) {
                     <Avatar name={name} src={m.profiles?.avatar_url} size="sm" />
                     <div>
                       <strong>{name}</strong>
-                      {m.is_primary && (
-                        <span className={styles.primaryTag}>Primary</span>
-                      )}
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '2px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', textTransform: 'capitalize', color: 'var(--text-muted)' }}>
+                          {m.role === 'head' ? 'Department Head' : m.role === 'lead' ? 'Department Lead' : 'Member'}
+                        </span>
+                        {m.is_primary && (
+                          <span className={styles.primaryTag}>Primary</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className={styles.memberActions}>
-                    <select
-                      value={m.role}
-                      onChange={(e) => handleRoleChange(m.id, e.target.value)}
-                      className={styles.inlineRoleSelect}
-                    >
-                      <option value="head">Dept Head</option>
-                      <option value="lead">Dept Lead</option>
-                      <option value="member">Member</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      className={styles.primaryToggleBtn}
-                      onClick={() => handleTogglePrimary(m.id, m.is_primary)}
-                      title={m.is_primary ? 'Unset as primary' : 'Set as primary department'}
-                    >
-                      {m.is_primary ? 'Unset 1°' : 'Set 1°'}
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.removeMemberBtn}
-                      onClick={() => handleRemove(m.id, name)}
-                      title="Remove from department"
-                    >
-                      <X size={14} />
-                    </button>
                   </div>
                 </div>
               );

@@ -121,51 +121,26 @@ export function useMembers(workspaceId) {
     fetchMembers();
   }, [fetchMembers, workspaceId]);
 
-  const inviteMember = async (email, role) => {
-    const supabase = getSupabase();
-    const { error: insertError } = await supabase
-      .from('workspace_members')
-      .insert({
-        workspace_id: workspaceId,
-        invited_email: email.toLowerCase(),
-        role,
-        status: 'pending',
-        invited_by: user.id,
-      });
-
-    if (!insertError) {
-      await fetchMembers({ silent: true });
-    }
-
-    return { error: insertError };
-  };
-
-  const updateRole = async (memberId, newRole) => {
-    const supabase = getSupabase();
-    const { error: updateError } = await supabase
-      .from('workspace_members')
-      .update({ role: newRole })
-      .eq('id', memberId);
-
-    if (!updateError) {
-      await fetchMembers({ silent: true });
-    }
-
-    return { error: updateError };
-  };
-
   const removeMember = async (memberId) => {
     const supabase = getSupabase();
-    const { error: deleteError } = await supabase
-      .from('workspace_members')
-      .delete()
-      .eq('id', memberId);
+    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+      'admin-manage-workspace-user',
+      {
+        body: {
+          action: 'remove',
+          workspace_id: workspaceId,
+          member_id: memberId,
+        },
+      }
+    );
 
-    if (!deleteError) {
-      await fetchMembers({ silent: true });
+    if (edgeErr || !edgeData?.success) {
+      const errMsg = edgeData?.error || edgeErr?.message || 'Failed to remove member';
+      return { error: new Error(errMsg) };
     }
 
-    return { error: deleteError };
+    await fetchMembers({ silent: true });
+    return { error: null };
   };
 
   return {
@@ -173,8 +148,6 @@ export function useMembers(workspaceId) {
     loading,
     refreshing,
     error,
-    inviteMember,
-    updateRole,
     removeMember,
     refetch: fetchMembers,
   };

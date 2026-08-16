@@ -49,51 +49,10 @@ export function useUserSystemRoles(workspaceId) {
     fetchRoles();
   }, [fetchRoles]);
 
-  const assignRole = async (userId, role) => {
-    if (!workspaceId || !userId || !role) return null;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error: insertError } = await supabase
-        .from('user_system_roles')
-        .insert({
-          workspace_id: workspaceId,
-          user_id: userId,
-          role,
-          created_by: user?.id || null,
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      await fetchRoles();
-      return data;
-    } catch (err) {
-      console.error('Error assigning system role:', err);
-      throw err;
-    }
-  };
-
-  const removeRole = async (roleId) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('user_system_roles')
-        .delete()
-        .eq('id', roleId);
-
-      if (deleteError) throw deleteError;
-      setRoles((prev) => prev.filter((r) => r.id !== roleId));
-    } catch (err) {
-      console.error('Error removing system role:', err);
-      throw err;
-    }
-  };
-
   return {
     roles,
     loading,
     error,
-    assignRole,
-    removeRole,
     refetch: fetchRoles,
   };
 }

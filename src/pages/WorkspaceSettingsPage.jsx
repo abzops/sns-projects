@@ -14,12 +14,10 @@ import { getMemberDisplayName, getMemberEmail } from '../lib/identity';
 import {
   Settings,
   Users,
-  Plus,
+  UserPlus,
   Trash2,
-  Mail,
   AlertTriangle,
   RefreshCw,
-  ShieldCheck,
 } from 'lucide-react';
 import styles from './WorkspaceSettingsPage.module.css';
 
@@ -32,8 +30,6 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
   const { workspaces, updateWorkspace, deleteWorkspace, loading: workspacesLoading } = useWorkspaces();
   const {
     members = [],
-    inviteMember,
-    updateRole,
     removeMember,
     loading: membersLoading,
     error: membersError,
@@ -43,12 +39,9 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   // Modals state
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Forms state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('member');
   const [workspaceName, setWorkspaceName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -109,38 +102,6 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
     }
   };
 
-  const handleInvite = async (e) => {
-    e.preventDefault();
-    if (!inviteEmail.trim()) return;
-
-    setIsSubmitting(true);
-    const { error } = await inviteMember(inviteEmail.trim(), inviteRole);
-    setIsSubmitting(false);
-
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      showToast('Invitation sent', 'success');
-      setIsInviteModalOpen(false);
-      setInviteEmail('');
-      setInviteRole('member');
-    }
-  };
-
-  const handleRoleChange = async (memberId, newRole, currentRole) => {
-    if (currentRole === 'owner') {
-      showToast('Cannot change owner role', 'error');
-      return;
-    }
-
-    const { error } = await updateRole(memberId, newRole);
-    if (error) {
-      showToast(error.message, 'error');
-    } else {
-      showToast('Role updated', 'success');
-    }
-  };
-
   const handleRemoveMember = async (memberId, memberName) => {
     if (confirm(`Are you sure you want to remove ${memberName || 'this user'}?`)) {
       const { error } = await removeMember(memberId);
@@ -151,8 +112,6 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
       }
     }
   };
-
-  const roleWeights = { owner: 4, admin: 3, member: 2, viewer: 1 };
 
   return (
     <div className={styles.container}>
@@ -237,21 +196,11 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                 {isAdmin && (
                   <Link
                     to={`/workspace/${workspaceId}/admin/users`}
-                    className={styles.manageRolesLink}
-                  >
-                    <ShieldCheck size={15} />
-                    <span>Manage Users & System Roles</span>
-                  </Link>
-                )}
-                {isAdmin && (
-                  <button
                     className={styles.primaryBtn}
-                    onClick={() => setIsInviteModalOpen(true)}
-                    type="button"
                   >
-                    <Plus size={16} />
-                    Invite Member
-                  </button>
+                    <UserPlus size={16} />
+                    <span>Manage Users & Roles</span>
+                  </Link>
                 )}
               </div>
             </div>
@@ -308,19 +257,6 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                         <RoleBadge role={member.role} size="sm" />
 
                         {isAdmin && member.role !== 'owner' && (
-                          <select
-                            className={styles.roleSelect}
-                            value={member.role}
-                            onChange={(e) => handleRoleChange(member.id, e.target.value, member.role)}
-                            disabled={roleWeights[currentUserRole] <= roleWeights[member.role] && !isOwner}
-                          >
-                            {isOwner && <option value="admin">Admin</option>}
-                            <option value="member">Member</option>
-                            <option value="viewer">Viewer</option>
-                          </select>
-                        )}
-
-                        {isAdmin && member.role !== 'owner' && (
                           <button
                             className={styles.iconBtn}
                             onClick={() => handleRemoveMember(member.id, displayName)}
@@ -339,62 +275,6 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
           </div>
         )}
       </div>
-
-      {/* Invite Modal */}
-      <Modal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-        title="Invite Team Member"
-      >
-        <form onSubmit={handleInvite}>
-          <div className={styles.formGroup}>
-            <label>Email Address</label>
-            <div className={styles.inputWithIcon}>
-              <Mail className={styles.inputIcon} size={18} />
-              <input
-                type="email"
-                className={styles.input}
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@stacknstock.in"
-                required
-                style={{ paddingLeft: '40px' }}
-              />
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Role</label>
-            <select
-              className={styles.input}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
-            >
-              <option value="viewer">Viewer - Can only view projects and tasks</option>
-              <option value="member">Member - Can create and edit tasks/projects</option>
-              {isOwner && <option value="admin">Admin - Can also manage members</option>}
-            </select>
-          </div>
-
-          <div className={styles.modalActions}>
-            <button
-              type="button"
-              className={styles.cancelBtn}
-              onClick={() => setIsInviteModalOpen(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={styles.primaryBtn}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Sending…' : 'Send Invite'}
-            </button>
-          </div>
-        </form>
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

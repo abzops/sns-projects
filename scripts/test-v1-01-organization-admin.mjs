@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
@@ -1130,11 +1130,224 @@ async function runTempPasswordOnboardingTests() {
   console.log('===============================================================\n');
 
   if (tpoFailed > 0) process.exit(1);
+
+  await runOrgRlsLockdownTests();
+}
+
+async function runOrgRlsLockdownTests() {
+  console.log('\n===============================================================');
+  console.log('SNS Projects — Organization RLS Final Lockdown Suite');
+  console.log('===============================================================');
+
+  let rlsPassed = 0;
+  let rlsFailed = 0;
+
+  function rlsAssert(cond, msg) {
+    if (cond) {
+      rlsPassed++;
+      console.log(`[PASS] ${msg}`);
+    } else {
+      rlsFailed++;
+      console.error(`[FAIL] ${msg}`);
+    }
+  }
+
+  const migrationFiles = await readdir(path.join(process.cwd(), 'supabase/migrations'));
+  const lockdownMigrationFile = migrationFiles.find((f) => f.includes('organization_authorization_rls_lockdown'));
+  rlsAssert(!!lockdownMigrationFile, 'L1: organization_authorization_rls_lockdown migration file exists');
+
+  const migrationContent = await readFile(
+    path.join(process.cwd(), 'supabase/migrations', lockdownMigrationFile),
+    'utf8'
+  );
+  const schemaContent = await readFile(
+    path.join(process.cwd(), 'supabase/schema.sql'),
+    'utf8'
+  );
+  const edgeSrc = await readFile(
+    path.join(process.cwd(), 'supabase/functions/admin-manage-workspace-user/index.ts'),
+    'utf8'
+  );
+  const useMembersSrc = await readFile(
+    path.join(process.cwd(), 'src/hooks/useMembers.js'),
+    'utf8'
+  );
+  const useWorkspacesSrc = await readFile(
+    path.join(process.cwd(), 'src/hooks/useWorkspaces.js'),
+    'utf8'
+  );
+  const useDeptMembersSrc = await readFile(
+    path.join(process.cwd(), 'src/hooks/useDepartmentMembers.js'),
+    'utf8'
+  );
+  const useSysRolesSrc = await readFile(
+    path.join(process.cwd(), 'src/hooks/useUserSystemRoles.js'),
+    'utf8'
+  );
+
+  console.log('\n--- L2–L7: Obsolete Pending / Invited Self-Update Removed ---');
+
+  // L2: No pending user self-update policy on workspace_members
+  rlsAssert(
+    migrationContent.includes('DROP POLICY IF EXISTS "workspace_members_update_admin_owner"') &&
+    !migrationContent.includes('CREATE POLICY "workspace_members_update_admin_owner"') &&
+    !migrationContent.includes("user_id = auth.uid() AND status = 'pending'"),
+    'L2: workspace_members_update_admin_owner dropped; pending self-update removed'
+  );
+
+  // L3: No invited_email self-update on workspace_members
+  rlsAssert(
+    !migrationContent.includes("invited_email = (SELECT email FROM auth.users") &&
+    !migrationContent.includes("invited_email = caller email"),
+    'L3: invited_email self-update acceptance path completely removed from RLS'
+  );
+
+  // L4: Direct workspace_members UPDATE policy absent
+  rlsAssert(
+    !migrationContent.includes('CREATE POLICY') ||
+    !migrationContent.includes('ON public.workspace_members FOR UPDATE'),
+    'L4: No direct UPDATE policy granted on workspace_members for authenticated users'
+  );
+
+  // L5: Direct workspace_members DELETE policy absent
+  rlsAssert(
+    migrationContent.includes('DROP POLICY IF EXISTS "workspace_members_delete_admin_owner"') &&
+    (!migrationContent.includes('ON public.workspace_members FOR DELETE')),
+    'L5: Direct DELETE policy on workspace_members dropped (deletions route via Edge Function)'
+  );
+
+  // L6: Bootstrap-only INSERT policy on workspace_members
+  rlsAssert(
+    migrationContent.includes('CREATE POLICY "workspace_members_insert_bootstrap"') &&
+    migrationContent.includes("user_id = auth.uid()") &&
+    migrationContent.includes("role = 'owner'") &&
+    migrationContent.includes("status = 'active'") &&
+    migrationContent.includes("NOT EXISTS ("),
+    'L6: workspace_members INSERT strictly constrained to zero-member first-owner bootstrap'
+  );
+
+  // L7: Active member SELECT preserved
+  rlsAssert(
+    migrationContent.includes('CREATE POLICY "workspace_members_select_active"') &&
+    migrationContent.includes('private.is_workspace_active_member(workspace_id)'),
+    'L7: workspace_members SELECT policy preserved for active workspace members'
+  );
+
+  console.log('\n--- L8–L13: Department & System Role Mutation Lockdown ---');
+
+  // L8: dept_memberships_manage dropped
+  rlsAssert(
+    migrationContent.includes('DROP POLICY IF EXISTS "dept_memberships_manage"') &&
+    !migrationContent.includes('CREATE POLICY "dept_memberships_manage"'),
+    'L8: direct dept_memberships_manage policy dropped'
+  );
+
+  // L9: dept_memberships SELECT preserved
+  rlsAssert(
+    migrationContent.includes('CREATE POLICY "dept_memberships_select_member"') &&
+    migrationContent.includes('private.is_workspace_active_member(workspace_id)'),
+    'L9: department_memberships SELECT preserved for active workspace members'
+  );
+
+  // L10: user_system_roles_manage dropped
+  rlsAssert(
+    migrationContent.includes('DROP POLICY IF EXISTS "user_system_roles_manage"') &&
+    !migrationContent.includes('CREATE POLICY "user_system_roles_manage"'),
+    'L10: direct user_system_roles_manage policy dropped'
+  );
+
+  // L11: user_system_roles SELECT preserved
+  rlsAssert(
+    migrationContent.includes('CREATE POLICY "user_system_roles_select"') &&
+    migrationContent.includes('private.is_workspace_active_member(workspace_id)'),
+    'L11: user_system_roles SELECT preserved for active workspace members'
+  );
+
+  // L12: Grants revoked on department_memberships
+  rlsAssert(
+    migrationContent.includes('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.department_memberships FROM authenticated') &&
+    migrationContent.includes('REVOKE ALL ON TABLE public.department_memberships FROM anon'),
+    'L12: department_memberships DML revoked from authenticated and anon'
+  );
+
+  // L13: Grants revoked on user_system_roles
+  rlsAssert(
+    migrationContent.includes('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE public.user_system_roles FROM authenticated') &&
+    migrationContent.includes('REVOKE ALL ON TABLE public.user_system_roles FROM anon'),
+    'L13: user_system_roles DML revoked from authenticated and anon'
+  );
+
+  console.log('\n--- L14–L18: Table Grants & Frontend Cleanliness ---');
+
+  // L14: Grants revoked on workspace_members
+  rlsAssert(
+    migrationContent.includes('REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.workspace_members FROM authenticated') &&
+    migrationContent.includes('REVOKE ALL ON TABLE public.workspace_members FROM anon') &&
+    migrationContent.includes('GRANT SELECT, INSERT ON TABLE public.workspace_members TO authenticated'),
+    'L14: workspace_members UPDATE/DELETE revoked; least-privilege SELECT, INSERT granted'
+  );
+
+  // L15: useMembers hook uses Edge Function for removal
+  rlsAssert(
+    !useMembersSrc.includes(".from('workspace_members')\n      .delete") &&
+    useMembersSrc.includes("action: 'remove'"),
+    'L15: useMembers hook routes member removal exclusively through admin-manage-workspace-user'
+  );
+
+  // L16: useDepartmentMembers is read-only
+  rlsAssert(
+    !useDeptMembersSrc.includes(".insert(") &&
+    !useDeptMembersSrc.includes(".update(") &&
+    !useDeptMembersSrc.includes(".delete("),
+    'L16: useDepartmentMembers hook contains zero direct database mutations'
+  );
+
+  // L17: useUserSystemRoles is read-only
+  rlsAssert(
+    !useSysRolesSrc.includes(".insert(") &&
+    !useSysRolesSrc.includes(".delete("),
+    'L17: useUserSystemRoles hook contains zero direct database mutations'
+  );
+
+  // L18: Edge function has remove action with owner & admin protections
+  const removeBlock = edgeSrc.slice(
+    edgeSrc.indexOf('action === "remove"'),
+    edgeSrc.indexOf('action === "invite"')
+  );
+  rlsAssert(
+    removeBlock.includes('targetMember.role === "owner"') &&
+    removeBlock.includes('Workspace owner cannot be removed') &&
+    removeBlock.includes('Workspace administrators cannot remove other administrators'),
+    'L18: Edge Function remove action implements owner & admin authority protections'
+  );
+
+  console.log('\n--- L19–L20: Schema & Active Member Helpers Integrity ---');
+
+  // L19: schema.sql synchronized
+  rlsAssert(
+    schemaContent.includes('CREATE POLICY "workspace_members_insert_bootstrap"') &&
+    !schemaContent.includes('CREATE POLICY "workspace_members_update_admin_owner"'),
+    'L19: schema.sql is fully synchronized with lockdown policies'
+  );
+
+  // L20: RLS active member helpers intact
+  rlsAssert(
+    schemaContent.includes("CREATE OR REPLACE FUNCTION private.is_workspace_active_member") &&
+    schemaContent.includes("status = 'active'"),
+    'L20: private.is_workspace_active_member and get_user_workspace_role enforce status = active'
+  );
+
+  console.log('\n===============================================================');
+  console.log(`Organization RLS Final Lockdown Suite: ${rlsPassed} PASSED, ${rlsFailed} FAILED`);
+  console.log('===============================================================\n');
+
+  if (rlsFailed > 0) process.exit(1);
 }
 
 runTempPasswordOnboardingTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
 
 
