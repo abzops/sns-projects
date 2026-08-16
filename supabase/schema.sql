@@ -4352,11 +4352,23 @@ BEGIN
     RAISE EXCEPTION 'ERR_VALIDATION: Process owner must be an active member of this workspace.';
   END IF;
 
-  -- 4. Authorization check
+  -- 4. Authorization check: Check caller role and direct user_system_roles using p_actor_id
   v_is_admin := (
     v_caller_role IN ('owner', 'admin')
-    OR (SELECT private.has_system_role(p_workspace_id, 'project_admin'))
-    OR (SELECT private.has_system_role(p_workspace_id, 'system_admin'))
+    OR EXISTS (
+      SELECT 1
+      FROM public.user_system_roles
+      WHERE workspace_id = p_workspace_id
+        AND user_id = p_actor_id
+        AND role = 'project_admin'
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.user_system_roles
+      WHERE workspace_id = p_workspace_id
+        AND user_id = p_actor_id
+        AND role = 'system_admin'
+    )
   );
 
   SELECT EXISTS (
@@ -4402,6 +4414,7 @@ BEGIN
       code,
       description,
       process_owner_id,
+      created_by,
       is_active
     ) VALUES (
       p_workspace_id,
@@ -4410,6 +4423,7 @@ BEGIN
       v_proc_code,
       v_proc_desc,
       v_owner_id,
+      p_actor_id,
       true
     ) RETURNING id INTO v_process_id;
 
@@ -4417,12 +4431,14 @@ BEGIN
       defined_process_id,
       version_number,
       status,
-      change_summary
+      change_summary,
+      created_by
     ) VALUES (
       v_process_id,
       1,
       'draft',
-      'Initial draft'
+      'Initial draft',
+      p_actor_id
     ) RETURNING id INTO v_version_id;
 
   ELSE
@@ -4486,12 +4502,14 @@ BEGIN
           defined_process_id,
           version_number,
           status,
-          change_summary
+          change_summary,
+          created_by
         ) VALUES (
           v_process_id,
           1,
           'draft',
-          'Initial draft'
+          'Initial draft',
+          p_actor_id
         ) RETURNING id INTO v_version_id;
       ELSE
         v_version_id := v_version_record.id;
