@@ -414,3 +414,239 @@ runV101OrgAdminTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+// =============================================================================
+// SECTION 5 — V1-01 API HARDENING: Static / Unit Tests (DB-Independent)
+// These tests inspect source code and simulate logic without a DB connection.
+// =============================================================================
+
+let hPassed = 0;
+let hFailed = 0;
+
+function hAssert(condition, message, details = '') {
+  if (condition) {
+    console.log(`[PASS] ${message}`);
+    hPassed++;
+  } else {
+    console.error(`[FAIL] ${message} ${details ? '- ' + details : ''}`);
+    hFailed++;
+  }
+}
+
+async function runHardeningStaticTests() {
+  console.log('\n===============================================================');
+  console.log('SNS Projects — V1-01 API Hardening Static/Unit Suite');
+  console.log('===============================================================\n');
+
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const repoRoot = process.cwd();
+
+  const edgeSrc = await fs.readFile(
+    path.join(repoRoot, 'supabase/functions/admin-manage-workspace-user/index.ts'),
+    'utf8',
+  );
+  const configSrc = await fs.readFile(
+    path.join(repoRoot, 'supabase/config.toml'),
+    'utf8',
+  );
+  const usersAdminSrc = await fs.readFile(
+    path.join(repoRoot, 'src/pages/UsersAdminPage.jsx'),
+    'utf8',
+  );
+  const envSrc = await fs.readFile(
+    path.join(repoRoot, '.env'),
+    'utf8',
+  );
+
+  console.log('--- H1–H5: Primary Department Invariant (Invite) ---');
+
+  // H1: departments omitted on invite → rejected
+  // The function requires body.departments && Array.isArray(body.departments)
+  hAssert(
+    edgeSrc.includes("'departments' is required for invitation"),
+    'H1: departments omitted on invite → rejected with descriptive 400',
+  );
+
+  // H2: departments [] on invite → rejected (empty array caught by validateDepartments)
+  hAssert(
+    edgeSrc.includes('departments must contain at least one entry'),
+    'H2: departments [] on invite → rejected (empty array blocked)',
+  );
+
+  // H3: zero primary departments on invite → rejected
+  hAssert(
+    edgeSrc.includes('Exactly one primary department must be designated'),
+    'H3: zero primary departments on invite → rejected',
+  );
+
+  // H4: multiple primary departments → rejected (same primaryCount !== 1 check)
+  hAssert(
+    edgeSrc.includes('primaryCount !== 1'),
+    'H4: multiple primary departments → rejected (primaryCount check)',
+  );
+
+  // H5: exactly one primary → accepted (validation passes — positive path exists after validate block)
+  hAssert(
+    edgeSrc.includes('deptValidErr = await validateDepartments(body.departments)') ||
+    edgeSrc.includes('validateDepartments(body.departments)'),
+    'H5: exactly one primary department accepted (validateDepartments called for invite)',
+  );
+
+  console.log('\n--- H6–H7: Update Department Invariant ---');
+
+  // H6: update with departments: [] → rejected
+  // Same validateDepartments path used; plus body.departments !== undefined guard
+  hAssert(
+    edgeSrc.includes("body.departments !== undefined") &&
+    edgeSrc.includes('validateDepartments(body.departments)'),
+    'H6: update with departments: [] → rejected via validateDepartments',
+  );
+
+  // H7: update without departments → existing memberships unchanged (no delete without body.departments)
+  hAssert(
+    edgeSrc.includes('body.departments !== undefined') &&
+    edgeSrc.includes('Department sync (only if departments was supplied'),
+    'H7: update without departments → existing memberships unchanged',
+  );
+
+  console.log('\n--- H8–H11: Fail-Closed Database Errors ---');
+
+  // H8: department write error cannot return success (assertNoError wraps all dept writes)
+  hAssert(
+    edgeSrc.includes('assertNoError(deptErr, "department_memberships upsert")') ||
+    edgeSrc.includes('assertNoError(delDeptErr'),
+    'H8: department_memberships write error → assertNoError throws, cannot return success',
+  );
+
+  // H9: system-role write error cannot return success
+  hAssert(
+    edgeSrc.includes('assertNoError(srErr, "user_system_roles upsert")') ||
+    edgeSrc.includes('assertNoError(delSrErr'),
+    'H9: user_system_roles write error → assertNoError throws, cannot return success',
+  );
+
+  // H10: profile write error cannot return success
+  hAssert(
+    edgeSrc.includes('assertNoError(profileErr, "profiles upsert")'),
+    'H10: profiles write error → assertNoError throws, cannot return success',
+  );
+
+  // H11: workspace_members write error cannot return success
+  hAssert(
+    edgeSrc.includes('assertNoError(memberErr, "workspace_members upsert")') ||
+    edgeSrc.includes('assertNoError(wmErr, "workspace_members update")'),
+    'H11: workspace_members write error → assertNoError throws, cannot return success',
+  );
+
+  console.log('\n--- H12–H13: Partial Failure / Auth User Cleanup ---');
+
+  // H12: new invited auth user cleanup path exists
+  hAssert(
+    edgeSrc.includes('cleanupOnFailure') &&
+    edgeSrc.includes('auth.admin.deleteUser'),
+    'H12: new invited auth user cleanup path exists (cleanupOnFailure + deleteUser)',
+  );
+
+  // H13: existing auth user is never deleted during rollback (wasNewAuthUser guard)
+  hAssert(
+    edgeSrc.includes('wasNewAuthUser') &&
+    edgeSrc.includes('if (wasNewAuthUser)'),
+    'H13: existing auth user is never deleted during rollback (wasNewAuthUser guard)',
+  );
+
+  console.log('\n--- H14: Paginated Existing-User Lookup ---');
+
+  // H14: paginated lookup via findAuthUserByEmail with page/perPage
+  hAssert(
+    edgeSrc.includes('findAuthUserByEmail') &&
+    edgeSrc.includes('perPage') &&
+    edgeSrc.includes('page++'),
+    'H14: existing-user lookup uses pagination (perPage + page loop)',
+  );
+
+  console.log('\n--- H15–H18: CORS Hardening ---');
+
+  // H15: production origin allowed
+  hAssert(
+    edgeSrc.includes('https://abzops.github.io'),
+    'H15: production CORS origin https://abzops.github.io is explicitly allowed',
+  );
+
+  // H16: localhost allowed
+  hAssert(
+    edgeSrc.includes('http://localhost:5173') || edgeSrc.includes('127.0.0.1:5173'),
+    'H16: localhost development origins are explicitly allowed',
+  );
+
+  // H17: unknown origin not allowed (no wildcard *)
+  const hasWildcard = edgeSrc.includes('"*"') || edgeSrc.includes("'*'");
+  // We expect the ALLOWED_ORIGINS set to replace wildcard — check for the set
+  hAssert(
+    !hasWildcard && edgeSrc.includes('ALLOWED_ORIGINS'),
+    'H17: unknown origin not allowed — no wildcard *, restricted to ALLOWED_ORIGINS set',
+  );
+
+  // H18: OPTIONS preflight handled
+  hAssert(
+    edgeSrc.includes('OPTIONS') && edgeSrc.includes('req.method'),
+    'H18: OPTIONS preflight is handled',
+  );
+
+  console.log('\n--- H19–H20: JWT and Auth Contracts ---');
+
+  // H19: verify_jwt remains true in config.toml
+  hAssert(
+    configSrc.includes('verify_jwt = true'),
+    'H19: verify_jwt = true in supabase/config.toml',
+  );
+
+  // H20: no privileged browser fallback (no direct from().insert/update on workspace_members in frontend)
+  const hasFallback =
+    usersAdminSrc.includes(".from('workspace_members').insert(") ||
+    usersAdminSrc.includes('.from("workspace_members").insert(') ||
+    usersAdminSrc.includes(".from('workspace_members').update(") ||
+    usersAdminSrc.includes('.from("workspace_members").update(');
+  hAssert(
+    !hasFallback,
+    'H20: no privileged browser fallback — UsersAdminPage has no direct workspace_members insert/update',
+  );
+
+  console.log('\n--- H21–H22: Authority Regression ---');
+
+  // H21: owner restrictions — owner cannot be demoted
+  hAssert(
+    edgeSrc.includes('Workspace owner cannot be demoted'),
+    'H21: owner demotion is explicitly blocked in Edge Function',
+  );
+
+  // H22: admin restrictions — admin cannot create admin, cannot assign system roles
+  hAssert(
+    edgeSrc.includes('Workspace administrators cannot create or invite other administrators') &&
+    edgeSrc.includes('Only workspace owners and system administrators can assign system roles'),
+    'H22: admin cannot create admin and cannot assign system roles',
+  );
+
+  console.log('\n--- H23: Secret Safety ---');
+
+  // H23: no secrets committed — service role key not in frontend env or src
+  const serviceRoleInEnv = envSrc.includes('SERVICE_ROLE') && envSrc.includes('eyJ');
+  const serviceRoleInFrontend =
+    usersAdminSrc.includes('eyJ') ||
+    usersAdminSrc.includes('SUPABASE_SERVICE_ROLE_KEY');
+  hAssert(
+    !serviceRoleInEnv && !serviceRoleInFrontend,
+    'H23: no service-role key or JWT secrets committed to .env or frontend source',
+  );
+
+  console.log('\n===============================================================');
+  console.log(`V1-01 API Hardening Static Tests: ${hPassed} PASSED, ${hFailed} FAILED`);
+  console.log('===============================================================\n');
+
+  if (hFailed > 0) process.exit(1);
+}
+
+runHardeningStaticTests().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

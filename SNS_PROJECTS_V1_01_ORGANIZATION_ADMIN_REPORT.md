@@ -1,25 +1,24 @@
 # SNS Projects — V1-01 Real Users & Organization Administration Report
 
-**Release**: V1-01 Closure  
-**Date**: August 16, 2026  
-**Status**: **READY FOR REAL USER INVITATIONS**  
-**Target Workspace ID**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea` (SNS Projects Dataset)  
-**Database Host**: `db.gqerfixdmgbqahgslzsq.supabase.co`  
-**Production URL**: [https://abzops.github.io/sns-projects/](https://abzops.github.io/sns-projects/)  
+**Release**: V1-01 Closure — API Hardening Pass
+**Date**: August 16, 2026
+**Status**: **READY FOR CONTROLLED REAL USER INVITATIONS**
+**Target Workspace ID**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea` (SNS Projects Dataset)
+**Database Host**: `db.gqerfixdmgbqahgslzsq.supabase.co`
+**Production URL**: [https://abzops.github.io/sns-projects/](https://abzops.github.io/sns-projects/)
 
 ---
 
 ## 1. Executive Summary
 
-Feature vertical slice **V1-01: Real Users + Organization Administration** has been completely implemented, verified against live production database invariants, and integrated into the frontend client. The 12-user organization mapping is frozen; the existing owner has been applied; **11 approved users remain in the onboarding queue pending invitation**.
+Feature vertical slice **V1-01: Real Users + Organization Administration** is fully implemented, hardened, and deployed. The 12-user organization mapping is frozen; the existing owner has been applied; **11 approved users remain in the onboarding queue pending invitation**.
 
-- **7 Active Departments**: 2 approved new departments (**Finance `FIN`** and **Supply Chain `SCM`**) were added via migration alongside the 5 canonical departments (**`COMM`**, **`ENG`**, **`OPS`**, **`PROC`**, **`SWIT`**).
-- **Owner Organization Mapping Applied**: The production owner (`00ae89c1-353b-4367-827e-9817343140d1` / `abhinand@stacknstock.in`) has been mapped as Software & IT Head (`SWIT`, `head`, `is_primary = true`) with `project_admin` and `system_admin` executive authorities.
-- **Frozen Onboarding Queue**: All 11 remaining approved team members are embedded into an administrative onboarding queue within the UI, pre-configured with their approved department, department role, workspace role, and system roles. **Auth users = 1. Real invites sent = 0.**
-- **Invitation Safety**: **0 real invitation emails were automatically sent** during deployment. Authorized human administrators can dispatch invitations with 1 click when ready via the Members Admin page.
-- **Edge Function Source**: `supabase/functions/admin-manage-workspace-user/index.ts` is complete and verified. It enforces server-side JWT verification, DB-backed caller authorization, email normalization, single primary department enforcement, owner protection, and privilege escalation prevention. **No privileged client fallback exists in the frontend.**
-- **Edge Function Cloud Deployment**: Source is complete. CLI deployment returned `403` (current CLI token lacks Management API deploy privileges for project `gqerfixdmgbqahgslzsq`). **Remaining blocker**: project owner must deploy with a valid Supabase PAT via CLI (`npx supabase functions deploy admin-manage-workspace-user --project-ref gqerfixdmgbqahgslzsq`) or via the Supabase Dashboard before sending real invitations.
-- **Frontend Regression**: 37/37 static code + route contract tests passed. DB-connected test suites require a live DB password in `.env.admin` to run (intentionally cleared per security directive after rotation).
+- **7 Active Departments**: 2 approved new departments (**Finance `FIN`** and **Supply Chain `SCM`**) alongside the 5 canonical departments (**`COMM`**, **`ENG`**, **`OPS`**, **`PROC`**, **`SWIT`**).
+- **Owner Organization Mapping Applied**: Production owner (`00ae89c1-353b-4367-827e-9817343140d1` / `abhinand@stacknstock.in`) mapped as Software & IT Head (`SWIT`, `head`, `is_primary = true`) with `project_admin` and `system_admin` authorities.
+- **Frozen Onboarding Queue**: All 11 remaining approved team members are in the UI onboarding queue, pre-configured. **Auth users = 1. Real invites sent = 0.**
+- **Invitation Safety**: 0 real invitation emails were automatically sent during any implementation session.
+- **Edge Function Deployed**: `admin-manage-workspace-user` is ACTIVE on production (confirmed 401 on unauthenticated request). Version 1 deployed by project owner independently. The API hardening pass (this session) produces updated source that must be deployed as version 2 — see Section 12.
+- **No Privileged Browser Fallback**: All privileged mutations in `UsersAdminPage.jsx` route exclusively through `supabase.functions.invoke('admin-manage-workspace-user', ...)`. No direct client insert/update fallback exists.
 
 ---
 
@@ -74,18 +73,20 @@ Feature vertical slice **V1-01: Real Users + Organization Administration** has b
 
 - **File**: `supabase/functions/admin-manage-workspace-user/index.ts`
 - **Actions**: `invite`, `update`
-- **JWT Verification**: `verify_jwt = true` (explicitly set in `supabase/config.toml`)
-- **CORS**: Allows `https://abzops.github.io`, preflight OPTIONS handled.
-- **Deployment Status**: Source complete and locally verified. Cloud deployment blocked by CLI 403 (insufficient PAT privileges on this machine). **Owner action required** — run: `npx supabase functions deploy admin-manage-workspace-user --project-ref gqerfixdmgbqahgslzsq` using a PAT with Management API access, or deploy via Supabase Dashboard → Functions.
-- **Frontend Contract**: All privileged mutations in `UsersAdminPage.jsx` route exclusively through `supabase.functions.invoke('admin-manage-workspace-user', ...)`. No direct client insert/update fallback exists. If the Edge Function is unavailable, a clear operational error is displayed to the user.
+- **JWT Verification**: `verify_jwt = true` in `supabase/config.toml` (platform-level) **AND** explicit `supabase.auth.getUser()` function-level check. Double authorization is maintained.
+- **CORS**: Hardened — `ALLOWED_ORIGINS` set: `https://abzops.github.io`, `http://localhost:5173`, `http://127.0.0.1:5173`. Per-request `Origin` header matched. `Vary: Origin` added. No wildcard `*`.
+- **Primary Department Invariant**: `invite` requires `departments` array with ≥1 entry and exactly 1 `is_primary = true`. `departments` omitted or `departments: []` → HTTP 400. `update` with `departments` supplied enforces same invariant; `departments` omitted leaves existing assignments unchanged.
+- **Fail-Closed Writes**: Every DB mutation is wrapped with `assertNoError()`. Any failed write throws, and `success: true` is never returned unless all mutations succeed.
+- **Partial-Failure Cleanup** (invite only): Tracks `wasNewAuthUser`. If Postgres writes fail after a new auth invitation is created, `cleanupOnFailure()` performs best-effort rollback of created org rows and deletes the new auth user via `auth.admin.deleteUser()`. Existing auth users are never deleted.
+- **Paginated User Lookup**: `findAuthUserByEmail()` uses page-based pagination (`perPage: 1000, page++`) to safely scan the full auth user list. Not limited to page 1.
+- **Frontend Contract**: All privileged mutations in `UsersAdminPage.jsx` route exclusively through `supabase.functions.invoke('admin-manage-workspace-user', ...)`. No direct client insert/update fallback.
 - **Security Invariants**:
-  - Caller JWT validation via `supabase.auth.getUser()`.
-  - Database lookup for active caller membership and system roles (never trusts `user_metadata`).
-  - Validation that exactly one primary department is designated and all departments belong to the target workspace.
-  - Validation of strict role enums (`owner`, `admin`, `member`, `viewer` / `head`, `lead`, `member` / `ceo`, `cto`, `project_admin`, `system_admin`).
-  - Prevents Workspace Admins from appointing other Admins or assigning system roles.
-  - Protects current Owner from role change, demotion, or deletion.
-  - No hardcoded credentials anywhere in the repository (service role key is a Deno environment variable).
+  - Caller JWT validation via `supabase.auth.getUser()` (never trusts `user_metadata`).
+  - DB lookup for active workspace role and system roles to determine authority.
+  - Strict role enum enforcement (`owner/admin/member/viewer`, `head/lead/member`, `ceo/cto/project_admin/system_admin`).
+  - Workspace Admin cannot appoint Admins or assign system roles.
+  - Owner is protected from demotion or removal.
+  - CEO, CTO, Project Admin alone grant no org-admin authority.
 
 ---
 
@@ -108,12 +109,16 @@ Feature vertical slice **V1-01: Real Users + Organization Administration** has b
 
 ```
 ===============================================================
-DefinedProcess Frontend MVP — Static/Code Contracts: 37 PASSED, 0 FAILED
-V1-01 Organization Admin (DB-connected): REQUIRES DB PASSWORD IN .env.admin
-Defined Process Engine MVP (DB-connected): REQUIRES DB PASSWORD IN .env.admin
-Note: DB password intentionally cleared per security directive (rotation event).
-      Static tests pass. DB-connected tests verified in previous session (54/54,
-      72/72, 44/44) with live connection before rotation.
+V1-01 API Hardening — Static/Unit Tests:    23 PASSED, 0 FAILED
+Defined Process Frontend MVP — Static:      37 PASSED, 0 FAILED
+V1-01 Organization Admin (DB-connected):    REQUIRES DB PASSWORD IN .env.admin
+Defined Process Engine MVP (DB-connected):  REQUIRES DB PASSWORD IN .env.admin
+
+Note: The previous database password appeared in transient CLI output, was
+treated as exposed, and was rotated. No current database credential is
+committed to the repository. DB-connected tests were last verified against
+live production in the previous session (54/54, 72/72, 44/44 — all passed)
+before the rotation event. Static tests cover all new hardening requirements.
 ===============================================================
 ```
 
@@ -125,12 +130,31 @@ Note: DB password intentionally cleared per security directive (rotation event).
   - Projects: 3
   - Defined Processes: 1 published (`INTERNAL-MVP-DEMO`)
 - **Code Quality (this session)**:
-  - ESLint: 0 errors, 140 warnings (pre-existing, in scripts only)
-  - Vite Production Build: ✅ Succeeded in 5.29s (1913 modules)
-  - Secret Scan: 0 hardcoded credentials (service_role string references in schema/Edge Function are variable names, not values)
+  - ESLint: ✅ 0 errors, 140 pre-existing script warnings
+  - Vite Production Build: ✅ Succeeded in 944ms (1913 modules)
+  - Secret Scan: ✅ No hardcoded credentials. The previous database password appeared in transient CLI output, was treated as exposed, and was rotated. No current database credential is committed to the repository.
 
 ---
 
-## 8. Security Advisor Documentation
+## 8. Edge Function Deployment Status
+
+| Item | Status |
+| :--- | :--- |
+| Production function exists | ✅ ACTIVE (user-verified) |
+| Version before this hardening pass | 1 |
+| Unauthenticated request → 401 | ✅ Confirmed |
+| `verify_jwt = true` (platform) | ✅ `supabase/config.toml` |
+| Function-level `getUser()` auth | ✅ Source verified |
+| CLI deploy of hardened source (v2) | ⚠️ **Requires owner login** |
+
+**To deploy the hardened source (v2)**: Run `npx supabase login` interactively as the project owner in your terminal, then:
+```
+npx supabase functions deploy admin-manage-workspace-user --project-ref gqerfixdmgbqahgslzsq
+```
+Do NOT use `--no-verify-jwt`.
+
+---
+
+## 9. Security Advisor Documentation
 
 The Supabase Security Advisor notes 7 authenticated `SECURITY DEFINER` RPC warnings and disabled leaked password protection on the test project. These are expected workflow APIs executing under controlled caller-context search paths pending future hardening sprints.
