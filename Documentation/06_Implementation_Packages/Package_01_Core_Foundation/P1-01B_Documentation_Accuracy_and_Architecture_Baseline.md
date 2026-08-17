@@ -3,7 +3,7 @@
 ## Document Control
 - **Status**: `VERIFIED`
 - **Package**: Package 1 — Core Foundation
-- **Implementation Commit**: Current working commit
+- **Implementation Commit**: [`477f47a`](https://github.com/abzops/sns-projects/commit/477f47a)
 - **Canonical Migration**: `20260817064609_p1_01_process_instance_access_hardening.sql`
 - **Target Project**: `gqerfixdmgbqahgslzsq` (SNS Projects Production)
 - **Date**: 2026-08-17

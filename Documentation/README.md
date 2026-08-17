@@ -21,7 +21,7 @@
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
 - **Current Canonical Migration**: `20260817064609_p1_01_process_instance_access_hardening.sql`
-- **Latest Implementation Commit**: `64fd803`
+- **Latest Implementation Commit**: [`477f47a`](https://github.com/abzops/sns-projects/commit/477f47a)
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
