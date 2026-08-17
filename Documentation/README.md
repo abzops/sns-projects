@@ -69,7 +69,8 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P1-01A` Process Instance Access Hardening | **`VERIFIED`** | Migration `20260817064609` |
 | | `P1-01B` Documentation Accuracy & Authoritative Baseline | **`VERIFIED`** | Commit `64fd803` + Current Baseline |
 | | `P1-02` Placement-Aware Process Runtime Engine | **`COMPLETE`** | Migration `20260817070924` · [P1-02 Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02_Placement_Aware_Process_Runtime_Engine.md) |
-| | `P1-02A` Process Runtime Execution, Security & Idempotency Closure | **`COMPLETE`** | Migration `20260817072340` · [P1-02A Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02A_Process_Runtime_Execution_and_Security_Closure.md) |
+| | `P1-02A` Process Runtime Execution, Security & Idempotency Closure | **`IMPLEMENTED`** | Migration `20260817072340` · [P1-02A Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02A_Process_Runtime_Execution_and_Security_Closure.md) |
+| | `P1-02B` Production Deployment & Real Database E2E Verification | **`PENDING CLI AUTH`** | [P1-02B Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02B_Production_Deployment_and_E2E_Verification.md) |
 | **Package 2: Process Runtime** | Multi-instance execution, step RACI, DAG lifecycle | **`PLANNED`** | Upcoming Package 2 |
 | **Package 3: Hierarchy UI** | Milestone $\to$ Phase cutover, nested task UI | **`PLANNED`** | Upcoming Package 3 |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
