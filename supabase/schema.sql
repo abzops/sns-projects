@@ -1288,9 +1288,6 @@ DECLARE
   v_due_date       date;
   v_pending_tasks  integer;
 BEGIN
-  -- Enable bypass marker for trusted workflow mutation
-  PERFORM set_config('sns.process_engine_write', 'on', true);
-
   SELECT * INTO v_task FROM public.tasks WHERE id = p_task_id;
   IF NOT FOUND OR v_task.process_step_id IS NULL THEN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
@@ -1304,6 +1301,19 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Process instance not found.';
     END IF;
+
+    -- Fail closed before task updates, downstream activation, notifications,
+    -- audit insertion, or Process Instance completion.
+    IF v_instance.status <> 'running' THEN
+      RAISE EXCEPTION 'Process instance is % (must be running to advance workflow).', v_instance.status;
+    END IF;
+
+    IF v_task.workflow_state = 'cancelled' THEN
+      RAISE EXCEPTION 'Cannot advance task: task belongs to a cancelled process instance.';
+    END IF;
+
+    -- Enable bypass only after the Process Instance immutability checks pass.
+    PERFORM set_config('sns.process_engine_write', 'on', true);
 
     v_workspace_id := v_instance.workspace_id;
     v_process_name := v_instance.instance_name;
@@ -1489,6 +1499,9 @@ BEGIN
     SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
     SELECT * INTO v_project FROM public.projects WHERE id = v_task.project_id;
     v_workspace_id := v_project.workspace_id;
+
+    -- Preserve the legacy runtime bypass behavior.
+    PERFORM set_config('sns.process_engine_write', 'on', true);
 
     -- Resolve project Done status
     SELECT id INTO v_done_status_id
@@ -4975,6 +4988,7 @@ CREATE FUNCTION public.submit_task_evidence(p_task_id uuid, p_evidence_def_id uu
 DECLARE
   v_caller_id      uuid;
   v_task           RECORD;
+  v_instance       RECORD;
   v_is_responsible boolean := false;
   v_submission_id  uuid;
 BEGIN
@@ -4990,6 +5004,25 @@ BEGIN
   SELECT * INTO v_task FROM public.tasks WHERE id = p_task_id;
   IF NOT FOUND OR v_task.process_step_id IS NULL THEN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
+  END IF;
+
+  -- Process Instance runtime only. Preserve legacy Task-List behavior.
+  IF v_task.process_instance_id IS NOT NULL THEN
+    SELECT * INTO v_instance
+    FROM public.process_instances
+    WHERE id = v_task.process_instance_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Process instance not found.';
+    END IF;
+
+    IF v_instance.status <> 'running' THEN
+      RAISE EXCEPTION 'Process instance is % (must be running to submit evidence).', v_instance.status;
+    END IF;
+
+    IF v_task.workflow_state = 'cancelled' THEN
+      RAISE EXCEPTION 'Cannot submit evidence: task belongs to a cancelled process instance.';
+    END IF;
   END IF;
 
   -- Verify caller is Responsible (R)

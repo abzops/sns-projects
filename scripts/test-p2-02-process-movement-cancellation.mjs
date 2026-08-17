@@ -212,8 +212,11 @@ async function runP202TestSuite() {
     `, [version.id]);
 
     const { rows: [step2] } = await client.query(`
-      INSERT INTO public.defined_process_steps (version_id, step_code, title, sequence_order, expected_duration_days)
-      VALUES ($1, 'S2', 'Step 2: Execution', 2, 3)
+      INSERT INTO public.defined_process_steps (
+        version_id, step_code, title, sequence_order, expected_duration_days,
+        consultation_required, approval_required
+      )
+      VALUES ($1, 'S2', 'Step 2: Execution', 2, 3, true, true)
       RETURNING *;
     `, [version.id]);
 
@@ -233,15 +236,16 @@ async function runP202TestSuite() {
 
     // RACI for steps
     await client.query(`
-      INSERT INTO public.defined_process_step_raci (step_id, raci_role, actor_type, user_id)
+      INSERT INTO public.defined_process_step_raci (step_id, raci_role, actor_type, user_id, response_required)
       VALUES
-        ($1, 'R', 'process_starter', NULL),
-        ($1, 'A', 'user', $4),
-        ($2, 'R', 'user', $5),
-        ($2, 'A', 'user', $4),
-        ($3, 'R', 'user', $5),
-        ($3, 'A', 'user', $4);
-    `, [step1.id, step2.id, step3.id, ownerId, starterId]);
+        ($1, 'R', 'process_starter', NULL, false),
+        ($1, 'A', 'user', $4, false),
+        ($2, 'R', 'user', $5, false),
+        ($2, 'A', 'user', $4, false),
+        ($2, 'C', 'user', $6, true),
+        ($3, 'R', 'user', $5, false),
+        ($3, 'A', 'user', $4, false);
+    `, [step1.id, step2.id, step3.id, ownerId, starterId, memberId]);
 
     // =======================================================================
     // SUITE 1: MOVEMENT POSITIVE FLOWS & STRUCTURAL INVARIANTS
@@ -606,7 +610,61 @@ async function runP202TestSuite() {
       'Test 29: complete_responsible_part on cancelled step task rejected'
     );
 
-    // Attempt reject_process_task on cancelled step task
+    // Attempt consultation as the assigned Consulted participant
+    await client.query(`SET LOCAL "request.jwt.claim.sub" = '${memberId}';`);
+    await client.query(`SET LOCAL "request.jwt.claims" = '${JSON.stringify({ sub: memberId, role: 'authenticated' })}';`);
+    await expectError(
+      () => client.query(`
+        SELECT public.submit_task_consultation(
+          p_task_id => $1,
+          p_response => 'Attempt consultation on cancelled task'
+        );
+      `, [stepTasks2[1].id]),
+      /cancelled|Cannot submit consultation response/i,
+      'Test 30: consultation on cancelled step task rejected'
+    );
+
+    // Attempt evidence as the assigned Responsible participant, and prove no row is inserted
+    await client.query(`SET LOCAL "request.jwt.claim.sub" = '${starterId}';`);
+    await client.query(`SET LOCAL "request.jwt.claims" = '${JSON.stringify({ sub: starterId, role: 'authenticated' })}';`);
+    const { rows: [evidenceBefore] } = await client.query(`
+      SELECT count(*)::int AS count
+      FROM public.task_evidence_submissions
+      WHERE task_id = $1;
+    `, [stepTasks2[1].id]);
+
+    await expectError(
+      () => client.query(`
+        SELECT public.submit_task_evidence(
+          p_task_id => $1,
+          p_evidence_def_id => NULL,
+          p_evidence_type => 'text',
+          p_payload => '{"note":"post-cancellation evidence must be rejected"}'::jsonb
+        );
+      `, [stepTasks2[1].id]),
+      /must be running|cancelled process instance|cancelled/i,
+      'Test 31: evidence submission on cancelled step task rejected'
+    );
+
+    const { rows: [evidenceAfter] } = await client.query(`
+      SELECT count(*)::int AS count
+      FROM public.task_evidence_submissions
+      WHERE task_id = $1;
+    `, [stepTasks2[1].id]);
+    assert(evidenceAfter.count === evidenceBefore.count,
+      'Test 32: task_evidence_submissions count does not increase after rejected evidence');
+
+    // Attempt approval and rejection/rework as the assigned Accountable participant
+    await client.query(`SET LOCAL "request.jwt.claim.sub" = '${ownerId}';`);
+    await client.query(`SET LOCAL "request.jwt.claims" = '${JSON.stringify({ sub: ownerId, role: 'authenticated' })}';`);
+    await expectError(
+      () => client.query(`
+        SELECT public.approve_process_task(p_task_id => $1);
+      `, [stepTasks2[1].id]),
+      /cancelled|not awaiting approval/i,
+      'Test 33: approval on cancelled approval-required step task rejected'
+    );
+
     await expectError(
       () => client.query(`
         SELECT public.reject_process_task(
@@ -616,7 +674,58 @@ async function runP202TestSuite() {
         );
       `, [stepTasks2[1].id]),
       /cancelled process instance|not awaiting approval/i,
-      'Test 30: reject_process_task on cancelled step task rejected'
+      'Test 34: rejection/rework on cancelled step task rejected'
+    );
+
+    // Attempt the internal DAG helper directly as postgres, then prove it made no mutations
+    const { rows: [mutationCountsBefore] } = await client.query(`
+      SELECT
+        (SELECT count(*)::int FROM public.process_audit_events WHERE process_instance_id = $1) AS audit_count,
+        (SELECT count(*)::int FROM public.notifications) AS notification_count;
+    `, [inst2Id]);
+
+    await expectError(
+      () => client.query(`
+        SELECT private.complete_task_and_advance($1, $2);
+      `, [stepTasks2[1].id, ownerId]),
+      /must be running|cancelled process instance|cancelled/i,
+      'Test 35: internal workflow advancement rejects cancelled Process Instance'
+    );
+
+    const { rows: [instanceAfterInternalAttempt] } = await client.query(`
+      SELECT status FROM public.process_instances WHERE id = $1;
+    `, [inst2Id]);
+    const { rows: tasksAfterInternalAttempt } = await client.query(`
+      SELECT workflow_state FROM public.tasks WHERE process_instance_id = $1 ORDER BY position;
+    `, [inst2Id]);
+    assert(
+      instanceAfterInternalAttempt.status === 'cancelled'
+        && tasksAfterInternalAttempt.map(t => t.workflow_state).join(',') === 'completed,cancelled,cancelled',
+      'Test 36: internal advancement cannot complete or reactivate cancelled workflow state'
+    );
+
+    const { rows: [mutationCountsAfter] } = await client.query(`
+      SELECT
+        (SELECT count(*)::int FROM public.process_audit_events WHERE process_instance_id = $1) AS audit_count,
+        (SELECT count(*)::int FROM public.notifications) AS notification_count;
+    `, [inst2Id]);
+    assert(
+      mutationCountsAfter.audit_count === mutationCountsBefore.audit_count
+        && mutationCountsAfter.notification_count === mutationCountsBefore.notification_count,
+      'Test 37: rejected internal advancement inserts no audit event or notification'
+    );
+
+    const { rows: [helperPrivileges] } = await client.query(`
+      SELECT
+        has_function_privilege('authenticated', 'private.complete_task_and_advance(uuid,uuid)', 'EXECUTE') AS authenticated_execute,
+        has_function_privilege('anon', 'private.complete_task_and_advance(uuid,uuid)', 'EXECUTE') AS anon_execute,
+        has_function_privilege('service_role', 'private.complete_task_and_advance(uuid,uuid)', 'EXECUTE') AS service_role_execute;
+    `);
+    assert(
+      helperPrivileges.authenticated_execute === false
+        && helperPrivileges.anon_execute === false
+        && helperPrivileges.service_role_execute === true,
+      'Test 38: internal advancement EXECUTE is revoked from authenticated/anon and retained for service_role'
     );
 
     // =======================================================================
@@ -645,7 +754,7 @@ async function runP202TestSuite() {
         p_reason => 'CEO executive cancellation'
       ) AS res;
     `, [instCEOId]);
-    assert(cancelCEORes.res && cancelCEORes.res.status === 'cancelled', 'Test 31: CEO override successfully cancelled instance');
+    assert(cancelCEORes.res && cancelCEORes.res.status === 'cancelled', 'Test 39: CEO override successfully cancelled instance');
 
     // Cancel by CTO override
     const startReqIdCTO = `55555555-5555-5555-5555-${Date.now().toString().slice(-12)}`;
@@ -668,7 +777,7 @@ async function runP202TestSuite() {
         p_reason => 'CTO technical cancellation'
       ) AS res;
     `, [instCTOId]);
-    assert(cancelCTORes.res && cancelCTORes.res.status === 'cancelled', 'Test 32: CTO override successfully cancelled instance');
+    assert(cancelCTORes.res && cancelCTORes.res.status === 'cancelled', 'Test 40: CTO override successfully cancelled instance');
 
     // Unauthorized member cancel attempt (rejected)
     const startReqIdMember = `66666666-6666-6666-6666-${Date.now().toString().slice(-12)}`;
@@ -693,7 +802,7 @@ async function runP202TestSuite() {
         );
       `, [instMemberId]),
       /Caller not authorized/i,
-      'Test 33: Unauthorized ordinary member cancel is rejected'
+      'Test 41: Unauthorized ordinary member cancel is rejected'
     );
 
     // =======================================================================
@@ -708,7 +817,7 @@ async function runP202TestSuite() {
       SELECT public.get_process_instance_permissions($1) AS perms;
     `, [inst1.process_instance_id]);
     assert(starterPerms.perms.can_view === true && starterPerms.perms.can_move === true && starterPerms.perms.can_cancel === true,
-      'Test 34: Starter has can_view=true, can_move=true, can_cancel=true');
+      'Test 42: Starter has can_view=true, can_move=true, can_cancel=true');
 
     // Ordinary member permissions on attached instance
     await client.query(`SET LOCAL "request.jwt.claim.sub" = '${memberId}';`);
@@ -717,7 +826,7 @@ async function runP202TestSuite() {
       SELECT public.get_process_instance_permissions($1) AS perms;
     `, [instMemberId]);
     assert(memberPerms.perms.can_view === true && memberPerms.perms.can_move === false && memberPerms.perms.can_cancel === false,
-      'Test 35: Ordinary member on attached instance has can_view=true, can_move=false, can_cancel=false');
+      'Test 43: Ordinary member on attached instance has can_view=true, can_move=false, can_cancel=false');
 
     // Direct DML Mutation Blocking: direct UPDATE on process_instances rejected for authenticated
     await expectError(
@@ -725,7 +834,7 @@ async function runP202TestSuite() {
         UPDATE public.process_instances SET status = 'cancelled' WHERE id = $1;
       `, [instMemberId]),
       null,
-      'Test 36: Direct UPDATE on public.process_instances rejected for authenticated role'
+      'Test 44: Direct UPDATE on public.process_instances rejected for authenticated role'
     );
 
   } finally {

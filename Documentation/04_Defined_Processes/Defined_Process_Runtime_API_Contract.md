@@ -229,6 +229,8 @@ const { data, error } = await supabase.rpc('submit_task_evidence', {
 
 #### Authorization
 - Caller must be an assigned Responsible (`R`) user on the task.
+- For Process Instance tasks, the parent `process_instances` row must exist with `status = 'running'`, and the task must not have `workflow_state = 'cancelled'`.
+- The Process Instance checks execute before any `task_evidence_submissions` insert. Legacy Task-List Defined Process behavior is unchanged.
 
 #### Success Response
 ```json
@@ -674,5 +676,15 @@ public.get_process_instance_permissions(
 }
 ```
 
+---
+
+### 16. Internal Workflow Advancement Immutability (P2-02A)
+
+`private.complete_task_and_advance(uuid, uuid)` is an internal `SECURITY DEFINER` helper, not a public client RPC. In its Process Instance branch it loads the parent instance and, before workflow mutations, requires:
+
+- `process_instances.status = 'running'`
+- `tasks.workflow_state <> 'cancelled'`
+
+Failure occurs before task completion, downstream activation, notifications, audit insertion, or Process Instance completion. Direct `EXECUTE` is revoked from `PUBLIC`, `anon`, and `authenticated`; trusted internal execution remains available to `service_role` and `postgres`. The legacy Task-List Defined Process branch is unchanged.
 
 
