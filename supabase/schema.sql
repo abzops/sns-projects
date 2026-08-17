@@ -4954,18 +4954,13 @@ CREATE TRIGGER trg_process_instances_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION private.trg_fn_set_updated_at();
 
--- Process Instance RLS
+-- Process Instance RLS (Hardened / Fail-Closed until P1-02 placement/RACI rules)
 ALTER TABLE public.process_instances ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "process_instances_select_member" ON public.process_instances;
-CREATE POLICY "process_instances_select_member" ON public.process_instances
-  FOR SELECT TO authenticated
-  USING (private.is_workspace_active_member(workspace_id));
-
--- Direct client DML (INSERT, UPDATE, DELETE) is intentionally not permitted to authenticated users;
+-- Direct client access (SELECT, INSERT, UPDATE, DELETE) is revoked from authenticated and anon.
 -- Process Instance lifecycle and placement will be managed by controlled Package 2 RPCs.
-GRANT SELECT ON TABLE public.process_instances TO authenticated;
+REVOKE ALL ON TABLE public.process_instances FROM PUBLIC, anon, authenticated;
 GRANT ALL ON TABLE public.process_instances TO service_role, postgres;
-REVOKE ALL ON TABLE public.process_instances FROM PUBLIC, anon;
+
 
 
