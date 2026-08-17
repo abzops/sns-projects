@@ -14,11 +14,14 @@ function parseEnv(content) {
 
 async function main() {
   const env = parseEnv(await readFile('.env.admin', 'utf8'));
+  const isRemote = Boolean(env.SUPABASE_DB_PASSWORD && env.SUPABASE_DB_PASSWORD.trim());
   const client = new Client({
-    host: env.SUPABASE_DB_HOST || 'db.gqerfixdmgbqahgslzsq.supabase.co',
-    port: 5432, database: 'postgres', user: 'postgres',
-    password: env.SUPABASE_DB_PASSWORD,
-    ssl: { rejectUnauthorized: false },
+    host: isRemote ? (env.SUPABASE_DB_HOST || 'db.gqerfixdmgbqahgslzsq.supabase.co') : '127.0.0.1',
+    port: isRemote ? 5432 : 54322,
+    database: 'postgres',
+    user: 'postgres',
+    password: isRemote ? env.SUPABASE_DB_PASSWORD : 'postgres',
+    ssl: isRemote ? { rejectUnauthorized: false } : false,
   });
   await client.connect();
 

@@ -17,8 +17,8 @@ P1-02C closes all remaining Security Advisor warnings in production and has comp
 - Refactored newly introduced Process-Instance-aware workflow RPCs into the canonical two-tier architecture:
   - **Public Wrapper**: `SECURITY INVOKER` with `SET search_path = ''`, granted exclusively to `authenticated`.
   - **Private Engine**: `SECURITY DEFINER` in the `private` schema with `SET search_path = ''`, granted to `authenticated, service_role, postgres`, and revoked from `PUBLIC, anon`.
-- Production deployment of migration `20260817091154` is **VERIFIED**.
-- Real local PostgreSQL database lifecycle suite `scripts/test-p1-02a-process-lifecycle.mjs` executed live: **22/22 PASSED, 0 FAILED**.
+- Production deployment of migration `20260817091154` was completed and subsequently unified under migration `20260817111751` in [P1-02D](./P1-02D_Process_Instance_Provenance_and_Schema_Parity.md).
+- Real local PostgreSQL database lifecycle suite `scripts/test-p1-02a-process-lifecycle.mjs` executed live: **22/22 PASSED, 0 FAILED** (subsequently expanded to 34 tests in P1-02D).
 
 ### 1.1 Local Real Database E2E Execution Evidence
 - **Test Command**: `node scripts/test-p1-02a-process-lifecycle.mjs`

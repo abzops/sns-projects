@@ -249,6 +249,8 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     (milestone_id IS NULL AND task_list_id IS NULL)
     OR
     (milestone_id IS NOT NULL AND task_list_id IS NOT NULL)
+    OR
+    (process_instance_id IS NOT NULL AND milestone_id IS NOT NULL AND task_list_id IS NULL)
   ),
   CONSTRAINT fk_tasks_task_list FOREIGN KEY (task_list_id, milestone_id, project_id)
     REFERENCES public.task_lists(id, milestone_id, project_id) ON DELETE RESTRICT,
@@ -2054,43 +2056,106 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tasks_defined_provenance_coherence') THEN
     ALTER TABLE public.tasks
       ADD CONSTRAINT chk_tasks_defined_provenance_coherence CHECK (
+        -- Class A: Normal / Custom Task (non-process)
         (
           process_step_id IS NULL
           AND defined_process_version_id IS NULL
-          AND (
-            (
-              workflow_state IS NULL
-              AND current_cycle_number IS NULL
-              AND ready_at IS NULL
-              AND activated_at IS NULL
-              AND workflow_completed_at IS NULL
-              AND overdue_cycle_notified IS NULL
-            )
-            OR
-            (
-              process_instance_id IS NOT NULL
-              AND project_id IS NULL
-              AND parent_task_id IS NULL
-            )
-          )
+          AND process_instance_id IS NULL
+          AND workflow_state IS NULL
+          AND current_cycle_number IS NULL
+          AND ready_at IS NULL
+          AND activated_at IS NULL
+          AND workflow_completed_at IS NULL
+          AND overdue_cycle_notified IS NULL
         )
         OR
+        -- Class B: Standalone Process Container Task
         (
-          process_step_id IS NOT NULL
+          process_instance_id IS NOT NULL
+          AND process_step_id IS NULL
+          AND defined_process_version_id IS NULL
+          AND parent_task_id IS NULL
+          AND project_id IS NULL
+          AND milestone_id IS NULL
+          AND phase_id IS NULL
+          AND task_list_id IS NULL
+        )
+        OR
+        -- Class C1: Legacy Defined Process Step Task
+        (
+          process_instance_id IS NULL
+          AND process_step_id IS NOT NULL
           AND defined_process_version_id IS NOT NULL
+          AND task_list_id IS NOT NULL
+          AND milestone_id IS NOT NULL
           AND workflow_state IS NOT NULL
           AND current_cycle_number IS NOT NULL
           AND current_cycle_number >= 1
           AND overdue_cycle_notified IS NOT NULL
           AND assignee_id IS NULL
         )
+        OR
+        -- Class C2: New Process Instance Step Task
+        (
+          process_instance_id IS NOT NULL
+          AND process_step_id IS NOT NULL
+          AND defined_process_version_id IS NOT NULL
+          AND workflow_state IS NOT NULL
+          AND current_cycle_number IS NOT NULL
+          AND current_cycle_number >= 1
+          AND assignee_id IS NULL
+        )
       );
   END IF;
 END $$;
 
+-- Conditional validation trigger for legacy task list version coherence
+CREATE OR REPLACE FUNCTION public.sync_validate_legacy_task_list_version()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_list_version_id uuid;
+BEGIN
+  IF NEW.process_instance_id IS NULL AND NEW.process_step_id IS NOT NULL THEN
+    IF NEW.task_list_id IS NULL THEN
+      RAISE EXCEPTION 'Legacy defined process step task must have a task_list_id.';
+    END IF;
+
+    SELECT defined_process_version_id INTO v_list_version_id
+    FROM public.task_lists
+    WHERE id = NEW.task_list_id;
+
+    IF v_list_version_id IS NULL OR v_list_version_id <> NEW.defined_process_version_id THEN
+      RAISE EXCEPTION 'Version coherence violation: task_list % (version: %) does not match task defined_process_version_id %.',
+        NEW.task_list_id, v_list_version_id, NEW.defined_process_version_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_validate_legacy_task_list_version() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sync_validate_legacy_task_list_version() TO authenticated, service_role, postgres;
+
+DROP TRIGGER IF EXISTS trg_validate_legacy_task_list_version ON public.tasks;
+CREATE TRIGGER trg_validate_legacy_task_list_version
+  BEFORE INSERT OR UPDATE OF task_list_id, process_step_id, defined_process_version_id, process_instance_id
+  ON public.tasks
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_validate_legacy_task_list_version();
+
+-- Partial unique indexes: Legacy vs Process Instance
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_legacy_task_list_step
+  ON public.tasks (task_list_id, process_step_id)
+  WHERE process_step_id IS NOT NULL AND process_instance_id IS NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_instance_process_step
   ON public.tasks (process_instance_id, process_step_id)
-  WHERE process_step_id IS NOT NULL;
+  WHERE process_step_id IS NOT NULL AND process_instance_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_task_list_workflow_state
   ON public.tasks (task_list_id, workflow_state)
@@ -4047,6 +4112,37 @@ GRANT EXECUTE ON FUNCTION public.approve_process_task(uuid) TO authenticated;
 -- 11. ACCOUNTABLE REJECTION / REWORK RPC
 -- ============================================================================
 
+-- Backward-compatible Legacy 2-argument complete_responsible_part wrapper
+CREATE OR REPLACE FUNCTION public.complete_responsible_part(
+  p_task_id uuid,
+  p_note    text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_cycle integer;
+BEGIN
+  SELECT current_cycle_number INTO v_cycle FROM public.tasks WHERE id = p_task_id;
+  IF v_cycle IS NULL THEN
+    v_cycle := 1;
+  END IF;
+
+  RETURN private.complete_responsible_part_internal(
+    p_task_id,
+    v_cycle,
+    p_note
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.complete_responsible_part(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.complete_responsible_part(uuid, text) TO authenticated;
+
+
+-- Backward-compatible Legacy 3-argument reject_process_task wrapper
 CREATE OR REPLACE FUNCTION public.reject_process_task(
   p_task_id      uuid,
   p_reason       text,
@@ -4054,118 +4150,23 @@ CREATE OR REPLACE FUNCTION public.reject_process_task(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
 AS $$
 DECLARE
-  v_caller_id       uuid;
-  v_task            RECORD;
-  v_instance        RECORD;
-  v_task_list       RECORD;
-  v_workspace_id    uuid;
-  v_process_name    text;
-  v_is_accountable  boolean := false;
-  v_new_cycle       integer;
-  v_recipient       RECORD;
-  v_target_due_date date;
+  v_cycle integer;
 BEGIN
-  v_caller_id := auth.uid();
-  IF v_caller_id IS NULL THEN
-    RAISE EXCEPTION 'Authentication required.';
+  SELECT current_cycle_number INTO v_cycle FROM public.tasks WHERE id = p_task_id;
+  IF v_cycle IS NULL THEN
+    v_cycle := 1;
   END IF;
 
-  IF p_reason IS NULL OR btrim(p_reason) = '' THEN
-    RAISE EXCEPTION 'Rejection reason is required.';
-  END IF;
-
-  END IF;
-
-  SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
-
-  SELECT p.workspace_id INTO v_workspace_id
-  FROM public.projects p WHERE p.id = v_task.project_id;
-
-  -- Verify caller is Accountable (A)
-  SELECT EXISTS (
-    SELECT 1 FROM public.task_raci_assignments ra
-    WHERE ra.task_id = p_task_id AND ra.raci_role = 'A'
-      AND (
-        ra.user_id = v_caller_id
-        OR (
-          ra.department_id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM public.department_memberships dm
-            WHERE dm.department_id = ra.department_id AND dm.user_id = v_caller_id AND dm.is_active = true
-          )
-        )
-      )
-  ) INTO v_is_accountable;
-
-  IF NOT v_is_accountable THEN
-    RAISE EXCEPTION 'Caller is not the assigned Accountable user for this task.';
-  END IF;
-
-  v_new_cycle := v_task.current_cycle_number + 1;
-
-  -- Enable bypass marker
-  PERFORM set_config('sns.process_engine_write', 'on', true);
-
-  -- Update current approval cycle to rejected
-  UPDATE public.task_approval_cycles
-  SET status = 'rejected',
-      decided_by = v_caller_id,
-      decided_at = now(),
-      rejection_reason = p_reason,
-      new_due_date = p_new_due_date
-  WHERE task_id = p_task_id AND cycle_number = v_task.current_cycle_number;
-
-  -- Update task state to rework_required and increment cycle
-  UPDATE public.tasks
-  SET current_cycle_number = v_new_cycle,
-      workflow_state = 'rework_required',
-      due_date = p_new_due_date,
-      overdue_cycle_notified = false
-  WHERE id = p_task_id;
-
-  -- Audit event
-  INSERT INTO public.process_audit_events (
-    workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
-  ) VALUES (
-    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_REWORK_REQUIRED', v_caller_id,
-    jsonb_build_object(
-      'previous_cycle', v_task.current_cycle_number,
-      'new_cycle', v_new_cycle,
-      'reason', p_reason,
-      'new_due_date', p_new_due_date
-    )
-  );
-
-  -- Notify RACI
-  FOR v_recipient IN
-    SELECT DISTINCT u_id FROM (
-      SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.user_id IS NOT NULL
-      UNION
-      SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-      JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-      WHERE ra.task_id = p_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
-    ) sub WHERE u_id IS NOT NULL AND u_id <> v_caller_id
-  LOOP
-    PERFORM private.emit_notification(
-      v_workspace_id,
-      v_recipient.u_id,
-      'task_rework_required',
-      'Rework required: ' || v_task.title,
-      'Task "' || v_task.title || '" was rejected. Reason: ' || p_reason,
-      'task',
-      p_task_id,
-      v_task.project_id,
-      p_task_id
-    );
-  END LOOP;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'workflow_state', 'rework_required',
-    'new_cycle_number', v_new_cycle
+  RETURN private.reject_process_task_internal(
+    p_task_id             => p_task_id,
+    p_cycle_number        => v_cycle,
+    p_rejection_reason    => p_reason,
+    p_rework_instructions => NULL,
+    p_new_due_date        => p_new_due_date
   );
 END;
 $$;

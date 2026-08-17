@@ -144,6 +144,23 @@ async function runRealDatabaseLifecycleE2E() {
       VALUES ($1, $2, $3, true);
     `, [workspace.id, department.id, profile.id]);
 
+    await client.query(`
+      INSERT INTO public.workspace_working_calendars (
+        workspace_id,
+        timezone,
+        created_by,
+        monday_working,
+        tuesday_working,
+        wednesday_working,
+        thursday_working,
+        friday_working,
+        saturday_working,
+        sunday_working
+      ) VALUES (
+        $1, 'UTC', $2, true, true, true, true, true, false, false
+      ) ON CONFLICT (workspace_id) DO NOTHING;
+    `, [workspace.id, profile.id]);
+
     // 4. Create published defined process with 3 DAG steps: Step 1 -> Step 2 -> Step 3
     const { rows: [proc] } = await client.query(`
       INSERT INTO public.defined_processes (workspace_id, department_id, name, code, process_owner_id, created_by)
@@ -478,6 +495,226 @@ async function runRealDatabaseLifecycleE2E() {
     `, [tasks3[0].id]);
     assert(compRes.res && (compRes.res.status === 'completed' || compRes.res.status === 'in_review'), 'Test 22: public.complete_responsible_part executes cleanly via SECURITY INVOKER wrapper');
 
+    // =======================================================================
+    // SUITE 8: COMPREHENSIVE 5-PLACEMENT REAL DATABASE LIFECYCLE
+    // =======================================================================
+    console.log('\n--- Suite 8: Comprehensive 5-Placement Real Database Lifecycle ---');
+
+    // 1. Standalone Placement
+    const standaloneReq = `88888888-8888-8888-8888-${Date.now().toString().slice(-12)}`;
+    const { rows: [pStand] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Placement Standalone Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'standalone'
+      ) AS res;
+    `, [version.id, standaloneReq]);
+    const { rows: [standInst] } = await client.query(`SELECT * FROM public.process_instances WHERE id = $1;`, [pStand.res.process_instance_id]);
+    const { rows: standTasks } = await client.query(`SELECT * FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [pStand.res.process_instance_id]);
+    assert(standInst.placement_type === 'standalone' && standInst.project_id === null && standTasks.length === 4 && standTasks[0].project_id === null,
+      'Test 23: Standalone placement creates container task with null project and 3 subtasks');
+
+    // 2. Project Placement
+    const projectReq = `88888888-8888-8888-8889-${Date.now().toString().slice(-12)}`;
+    const { rows: [pProj] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Placement Project Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'project',
+        p_project_id => $3
+      ) AS res;
+    `, [version.id, projectReq, project.id]);
+    const { rows: [projInst] } = await client.query(`SELECT * FROM public.process_instances WHERE id = $1;`, [pProj.res.process_instance_id]);
+    const { rows: projTasks } = await client.query(`SELECT * FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [pProj.res.process_instance_id]);
+    assert(projInst.placement_type === 'project' && projInst.project_id === project.id && projTasks.length === 3 && projTasks[0].task_list_id === null,
+      'Test 24: Project placement creates instance and step tasks with project_id and null task_list');
+
+    // 3. Phase Placement
+    const phaseReq = `88888888-8888-8888-8890-${Date.now().toString().slice(-12)}`;
+    const { rows: [pPhase] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Placement Phase Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'phase',
+        p_project_id => $3,
+        p_phase_id => $4
+      ) AS res;
+    `, [version.id, phaseReq, project.id, phase.id]);
+    const { rows: [phaseInst] } = await client.query(`SELECT * FROM public.process_instances WHERE id = $1;`, [pPhase.res.process_instance_id]);
+    const { rows: phaseTasks } = await client.query(`SELECT * FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [pPhase.res.process_instance_id]);
+    assert(phaseInst.placement_type === 'phase' && phaseInst.phase_id === phase.id && phaseTasks.length === 3 && phaseTasks[0].phase_id === phase.id,
+      'Test 25: Phase placement creates instance and step tasks with project_id and phase_id');
+
+    // 4. Task List Placement
+    const taskListReq = `88888888-8888-8888-8891-${Date.now().toString().slice(-12)}`;
+    const { rows: [pTaskList] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Placement TaskList Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'task_list',
+        p_project_id => $3,
+        p_phase_id => $4,
+        p_task_list_id => $5
+      ) AS res;
+    `, [version.id, taskListReq, project.id, phase.id, hostTaskList.id]);
+    const { rows: [tlInst] } = await client.query(`SELECT * FROM public.process_instances WHERE id = $1;`, [pTaskList.res.process_instance_id]);
+    const { rows: tlTasks } = await client.query(`SELECT * FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [pTaskList.res.process_instance_id]);
+    assert(tlInst.placement_type === 'task_list' && tlTasks.length === 3 && tlTasks[0].task_list_id === hostTaskList.id,
+      'Test 26: Task List placement creates instance and step tasks in host custom task list');
+
+    // 5. Task-Bound Placement
+    const { rows: [todoStatus] } = await client.query(`
+      SELECT id FROM public.task_statuses WHERE project_id = $1 LIMIT 1;
+    `, [project.id]);
+
+    // Create an ad-hoc parent task in the project
+    const { rows: [hostTask] } = await client.query(`
+      INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, position, created_by)
+      VALUES ($1, $2, $2, $3, 'Host Parent Task', $4, 5000, $5)
+      RETURNING *;
+    `, [project.id, phase.id, hostTaskList.id, todoStatus ? todoStatus.id : null, profile.id]);
+
+    const taskBoundReq = `88888888-8888-8888-8892-${Date.now().toString().slice(-12)}`;
+    const { rows: [pTaskBound] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Placement TaskBound Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'task',
+        p_parent_task_id => $3
+      ) AS res;
+    `, [version.id, taskBoundReq, hostTask.id]);
+    const { rows: [tbInst] } = await client.query(`SELECT * FROM public.process_instances WHERE id = $1;`, [pTaskBound.res.process_instance_id]);
+    const { rows: tbTasks } = await client.query(`SELECT * FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [pTaskBound.res.process_instance_id]);
+    assert(tbInst.placement_type === 'task' && tbInst.parent_task_id === hostTask.id && tbTasks.length === 3 && tbTasks[0].parent_task_id === hostTask.id,
+      'Test 27: Task placement creates instance and child step tasks with parent_task_id hierarchy');
+
+    // =======================================================================
+    // SUITE 9: SAME-PROCESS MULTIPLE INSTANCE COLLISION INVARIANT
+    // =======================================================================
+    console.log('\n--- Suite 9: Same-Process Multiple Instance Collision Invariant ---');
+
+    const multiReq1 = `99999999-9999-9999-9999-${Date.now().toString().slice(-12)}`;
+    const multiReq2 = `99999999-9999-9999-8888-${Date.now().toString().slice(-12)}`;
+
+    const { rows: [mRes1] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Concurrent Instance 1',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'task_list',
+        p_project_id => $3,
+        p_phase_id => $4,
+        p_task_list_id => $5
+      ) AS res;
+    `, [version.id, multiReq1, project.id, phase.id, hostTaskList.id]);
+
+    const { rows: [mRes2] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Concurrent Instance 2',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'task_list',
+        p_project_id => $3,
+        p_phase_id => $4,
+        p_task_list_id => $5
+      ) AS res;
+    `, [version.id, multiReq2, project.id, phase.id, hostTaskList.id]);
+
+    assert(mRes1.res.process_instance_id !== mRes2.res.process_instance_id,
+      'Test 28: Starting same process twice in same task list creates distinct instances with no unique-index collision');
+
+    const { rows: mTasks1 } = await client.query(`SELECT id, workflow_state FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [mRes1.res.process_instance_id]);
+    const { rows: mTasks2 } = await client.query(`SELECT id, workflow_state FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;`, [mRes2.res.process_instance_id]);
+    assert(mTasks1.length === 3 && mTasks2.length === 3,
+      'Test 29: Both concurrent instances contain exactly 3 materialized step tasks');
+
+    // Complete Step 1 of Instance 1
+    await client.query(`SELECT private.complete_task_and_advance($1::uuid, $2::uuid);`, [mTasks1[0].id, profile.id]);
+    const { rows: [mTask1_2] } = await client.query(`SELECT workflow_state FROM public.tasks WHERE id = $1;`, [mTasks1[1].id]);
+    const { rows: [mTask2_1] } = await client.query(`SELECT workflow_state FROM public.tasks WHERE id = $1;`, [mTasks2[0].id]);
+    const { rows: [mTask2_2] } = await client.query(`SELECT workflow_state FROM public.tasks WHERE id = $1;`, [mTasks2[1].id]);
+    assert(mTask1_2.workflow_state === 'ready' && mTask2_1.workflow_state === 'ready' && mTask2_2.workflow_state === 'waiting',
+      'Test 30: Progressing Step 1 of Instance 1 does not mutate Instance 2 state');
+
+    // =======================================================================
+    // SUITE 10: LEGACY DEFINED PROCESS INVARIANT & REGRESSION
+    // =======================================================================
+    console.log('\n--- Suite 10: Legacy Defined Process Invariant & Regression ---');
+
+    // Create a legacy defined task list with version.id
+    const { rows: [legacyTaskList] } = await client.query(`
+      INSERT INTO public.task_lists (project_id, milestone_id, name, task_list_type, defined_process_id, defined_process_version_id, process_state, started_by, started_at, position)
+      VALUES ($1, $2, 'Legacy Defined Task List', 'defined', $3, $4, 'active', $5, now(), 8000)
+      RETURNING *;
+    `, [project.id, phase.id, proc.id, version.id, profile.id]);
+
+    // Test 31: Legacy version coherence validation trigger
+    // Attempt to insert legacy step task with a bogus/mismatched version_id into legacyTaskList
+    let versionMismatchCaught = false;
+    await client.query('SAVEPOINT sp_version_mismatch;');
+    try {
+      const bogusVersionId = '00000000-0000-0000-0000-000000000001';
+      await client.query(`
+        INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+        VALUES ($1, $2, $2, $3, 'Mismatch Step Task', $4, $5, $6, 'ready', 1, false, 9000, $7);
+      `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, bogusVersionId, profile.id]);
+    } catch (err) {
+      versionMismatchCaught = err.message.includes('Version coherence violation');
+      await client.query('ROLLBACK TO SAVEPOINT sp_version_mismatch;');
+    }
+    assert(versionMismatchCaught, 'Test 31: Legacy step task insertion into mismatched task list is rejected by validation trigger');
+
+    // Insert valid legacy step 1 task
+    const { rows: [legTask1] } = await client.query(`
+      INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+      VALUES ($1, $2, $2, $3, 'Legacy Step 1 Task', $4, $5, $6, 'ready', 1, false, 9000, $7)
+      RETURNING *;
+    `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, version.id, profile.id]);
+
+    // Assign caller as Responsible on legacy task
+    await client.query(`
+      INSERT INTO public.task_raci_assignments (task_id, raci_role, user_id, created_by)
+      VALUES ($1, 'R', $2, $2);
+    `, [legTask1.id, profile.id]);
+
+    // Test 32: Legacy unique index uq_tasks_legacy_task_list_step (duplicate step in legacy task list)
+    let duplicateStepCaught = false;
+    await client.query('SAVEPOINT sp_dup_legacy;');
+    try {
+      await client.query(`
+        INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+        VALUES ($1, $2, $2, $3, 'Duplicate Legacy Step 1', $4, $5, $6, 'ready', 1, false, 9100, $7);
+      `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, version.id, profile.id]);
+    } catch (err) {
+      duplicateStepCaught = err.message.includes('uq_tasks_legacy_task_list_step') || err.message.includes('duplicate key value');
+      await client.query('ROLLBACK TO SAVEPOINT sp_dup_legacy;');
+    }
+    assert(duplicateStepCaught, 'Test 32: Duplicate legacy (task_list_id, process_step_id) insertion is rejected by partial unique index');
+
+    // Test 33: Legacy start_defined_process RPC
+    const { rows: [legacyStart] } = await client.query(`
+      SELECT public.start_defined_process(
+        p_version_id => $1,
+        p_project_id => $2,
+        p_milestone_id => $3,
+        p_instance_name => 'Legacy Process Run'
+      ) AS res;
+    `, [version.id, project.id, phase.id]);
+    assert(legacyStart.res && legacyStart.res.task_list_id && legacyStart.res.task_count === 3,
+      'Test 33: Legacy start_defined_process RPC functions and instantiates legacy step tasks');
+
+    // Test 34: Legacy 2-argument complete_responsible_part(uuid, text)
+    const { rows: [legacyComp] } = await client.query(`
+      SELECT public.complete_responsible_part($1::uuid, 'Completed via legacy 2-arg signature') AS res;
+    `, [legTask1.id]);
+    assert(legacyComp.res && (legacyComp.res.status === 'completed' || legacyComp.res.completed === true),
+      'Test 34: Legacy 2-argument complete_responsible_part(uuid, text) functions seamlessly');
+
     // Always rollback isolated test transaction
     await client.query('ROLLBACK;');
     console.log('\nAll test database transactions rolled back cleanly.');
@@ -503,3 +740,4 @@ runRealDatabaseLifecycleE2E().catch(err => {
   console.error('Unhandled test suite error:', err);
   process.exit(1);
 });
+
