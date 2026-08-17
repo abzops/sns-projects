@@ -1,4 +1,4 @@
-import { evaluateSafetyGuard, PROTECTED_PRODUCTION_EMPLOYEES } from './test-auth-lifecycle-e2e.mjs';
+import { evaluateSafetyGuard, PRODUCTION_PROJECT_REF } from './test-auth-lifecycle-e2e.mjs';
 import process from 'node:process';
 
 async function runSafetyHarnessTests() {
@@ -19,86 +19,53 @@ async function runSafetyHarnessTests() {
     }
   }
 
-  const prodUrl = 'https://gqerfixdmgbqahgslzsq.supabase.co';
+  const prodUrl = `https://${PRODUCTION_PROJECT_REF}.supabase.co`;
   const localUrl = 'http://127.0.0.1:54321';
+  const stagingUrl = 'https://staging-project-ref.supabase.co';
 
   // ═════════════════════════════════════════════════════════════════════
-  // 1. DEFAULT PRODUCTION REJECTION (Fail-Closed)
+  // 1. PERMANENT PRODUCTION FAIL-CLOSED PROTECTION (NO OVERRIDES)
   // ═════════════════════════════════════════════════════════════════════
-  console.log('--- 1. Default Production Execution Guard ---');
+  console.log('--- 1. Permanent Production Fail-Closed Policy ---');
 
-  // Test 1: No env vars provided against production -> MUST REJECT
-  const defaultProdCheck = evaluateSafetyGuard({
-    supabaseUrl: prodUrl,
-    allowProduction: undefined,
-    testEmail: undefined,
-  });
+  // Test 1: Production URL is permanently blocked by default
+  const defaultProdCheck = evaluateSafetyGuard({ supabaseUrl: prodUrl });
   assert(defaultProdCheck.allowed === false, 'Test 1: Default execution against production is refused.');
-  assert(defaultProdCheck.isProduction === true, 'Test 2: Correctly identifies production project gqerfixdmgbqahgslzsq.');
+  assert(defaultProdCheck.isProduction === true, 'Test 2: Correctly identifies production project ref.');
+  assert(defaultProdCheck.reason.includes('PERMANENTLY BLOCKED'), 'Test 3: Explains permanent production block.');
 
-  // Test 2: allowProduction is false -> MUST REJECT
-  const falseProdCheck = evaluateSafetyGuard({
-    supabaseUrl: prodUrl,
-    allowProduction: false,
-    testEmail: 'test.bot@stacknstock.in',
-  });
-  assert(falseProdCheck.allowed === false, 'Test 3: ALLOW_PRODUCTION_AUTH_E2E=false is refused.');
-
-  // Test 3: allowProduction is true but NO testEmail -> MUST REJECT
-  const noEmailCheck = evaluateSafetyGuard({
+  // Test 2: Attempted override with ALLOW_PRODUCTION_AUTH_E2E=true must STILL BE BLOCKED
+  const overrideAttemptCheck = evaluateSafetyGuard({
     supabaseUrl: prodUrl,
     allowProduction: true,
-    testEmail: undefined,
+    ALLOW_PRODUCTION_AUTH_E2E: 'true',
+    testEmail: 'bot@test.com',
   });
-  assert(noEmailCheck.allowed === false, 'Test 4: Missing AUTH_E2E_TEST_EMAIL is refused even if ALLOW_PRODUCTION=true.');
+  assert(overrideAttemptCheck.allowed === false,
+    'Test 4: Environment flags (ALLOW_PRODUCTION_AUTH_E2E) CANNOT bypass production block.');
 
-  // ═════════════════════════════════════════════════════════════════════
-  // 2. PRODUCTION EMPLOYEE BLACKLIST ENFORCEMENT
-  // ═════════════════════════════════════════════════════════════════════
-  console.log('\n--- 2. Production Employee Blacklist Enforcement ---');
-
-  for (const empEmail of PROTECTED_PRODUCTION_EMPLOYEES) {
-    const empCheck = evaluateSafetyGuard({
-      supabaseUrl: prodUrl,
-      allowProduction: true,
-      testEmail: empEmail,
-    });
-    assert(empCheck.allowed === false && empCheck.reason.includes('SAFETY VIOLATION'),
-      `Test: Protected employee '${empEmail}' cannot be targeted by automated lifecycle test.`);
-  }
-
-  // Case-insensitivity check
-  const upperCaseJithin = evaluateSafetyGuard({
+  // Test 3: Attempted override with any email or parameters must STILL BE BLOCKED
+  const customEmailCheck = evaluateSafetyGuard({
     supabaseUrl: prodUrl,
-    allowProduction: true,
-    testEmail: 'JITHINSTALIN@STACKNSTOCK.IN',
+    testEmail: 'custom.disposable@example.com',
   });
-  assert(upperCaseJithin.allowed === false, 'Test: Case-insensitive match protects Jithin Stalin.');
+  assert(customEmailCheck.allowed === false,
+    'Test 5: Custom test emails cannot bypass production block.');
 
   // ═════════════════════════════════════════════════════════════════════
-  // 3. ALLOWED DEDICATED TEST IDENTITIES
+  // 2. LOCAL & STAGING ENVIRONMENT PERMISSIONS
   // ═════════════════════════════════════════════════════════════════════
-  console.log('\n--- 3. Authorized Dedicated Test Identity ---');
+  console.log('\n--- 2. Local & Staging Environment Execution Policy ---');
 
-  const approvedIdentityCheck = evaluateSafetyGuard({
-    supabaseUrl: prodUrl,
-    allowProduction: 'true',
-    testEmail: 'e2e.test.bot@stacknstock.in',
-  });
-  assert(approvedIdentityCheck.allowed === true, 'Test: Explicitly allowed non-employee test identity passes guard.');
-
-  // ═════════════════════════════════════════════════════════════════════
-  // 4. LOCAL / STAGING ENVIRONMENT FREEDOM
-  // ═════════════════════════════════════════════════════════════════════
-  console.log('\n--- 4. Local / Staging Environment Policy ---');
-
-  const localCheck = evaluateSafetyGuard({
-    supabaseUrl: localUrl,
-    allowProduction: false,
-    testEmail: undefined,
-  });
+  // Test 4: Local development URL is allowed
+  const localCheck = evaluateSafetyGuard({ supabaseUrl: localUrl });
   assert(localCheck.allowed === true && localCheck.isProduction === false,
-    'Test: Local/staging environment allows E2E testing without production flags.');
+    'Test 6: Local Supabase instance (127.0.0.1) allows auth lifecycle execution.');
+
+  // Test 5: Non-production staging instance is allowed
+  const stagingCheck = evaluateSafetyGuard({ supabaseUrl: stagingUrl });
+  assert(stagingCheck.allowed === true && stagingCheck.isProduction === false,
+    'Test 7: Separate non-production staging instance allows auth lifecycle execution.');
 
   // ═════════════════════════════════════════════════════════════════════
   // SUMMARY

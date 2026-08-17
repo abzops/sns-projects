@@ -6,60 +6,36 @@ import { createClient } from '@supabase/supabase-js';
 const repoRoot = process.cwd();
 const envAppPath = path.join(repoRoot, '.env');
 
-const PRODUCTION_PROJECT_REF = 'gqerfixdmgbqahgslzsq';
+export const PRODUCTION_PROJECT_REF = 'gqerfixdmgbqahgslzsq';
 
-// Blacklist of real production employees protected from automated destructive auth testing
-export const PROTECTED_PRODUCTION_EMPLOYEES = [
-  'jithinstalin@stacknstock.in',
-  'abhijith.gopi@stacknstock.in',
-  'hari@stacknstock.in',
-  'ops@stacknstock.in',
-  'joseph.george@stacknstock.in',
-  'projects@stacknstock.in',
-  'saravana@stacknstock.in',
-  'siva@stacknstock.in',
-  'sourav@stacknstock.in',
-  'surya@stacknstock.in',
-  'sourcing@stacknstock.in',
-  'abhinand@stacknstock.in',
-];
-
-export function evaluateSafetyGuard({ supabaseUrl, allowProduction, testEmail }) {
+/**
+ * Hard fail-closed safety guard for Auth Lifecycle E2E testing.
+ * 
+ * Rules:
+ * 1. If target Supabase URL matches production project ref (gqerfixdmgbqahgslzsq),
+ *    auth lifecycle E2E testing is PERMANENTLY BLOCKED.
+ * 2. No environment variable, flag, or override can bypass this production block.
+ * 3. Production is strictly restricted to:
+ *    - Deployed bundle checks (test-deployed-bundle.mjs)
+ *    - Read-only checks & CORS preflight (test-production-readonly.mjs)
+ *    - Unauthenticated 401 gate checks
+ * 4. Auth lifecycle mutations and logins may ONLY run against local or staging instances.
+ */
+export function evaluateSafetyGuard({ supabaseUrl }) {
   const isProduction = typeof supabaseUrl === 'string' && supabaseUrl.includes(PRODUCTION_PROJECT_REF);
 
-  if (!isProduction) {
-    return { isProduction: false, allowed: true, reason: 'Target is local/staging environment.' };
-  }
-
-  if (allowProduction !== true && allowProduction !== 'true') {
+  if (isProduction) {
     return {
       isProduction: true,
       allowed: false,
-      reason: `Refusing auth lifecycle mutation against production project (${PRODUCTION_PROJECT_REF}). Requires ALLOW_PRODUCTION_AUTH_E2E=true.`,
-    };
-  }
-
-  if (!testEmail || typeof testEmail !== 'string' || !testEmail.trim()) {
-    return {
-      isProduction: true,
-      allowed: false,
-      reason: 'Production auth lifecycle test requires explicit AUTH_E2E_TEST_EMAIL environment variable.',
-    };
-  }
-
-  const normalizedEmail = testEmail.toLowerCase().trim();
-  if (PROTECTED_PRODUCTION_EMPLOYEES.includes(normalizedEmail)) {
-    return {
-      isProduction: true,
-      allowed: false,
-      reason: `SAFETY VIOLATION: '${testEmail}' is a protected production employee account. Automated credential lifecycle tests are strictly prohibited.`,
+      reason: `PERMANENTLY BLOCKED: Target is production project (${PRODUCTION_PROJECT_REF}). Auth lifecycle E2E testing is strictly forbidden against production. Run lifecycle tests exclusively against local Supabase (127.0.0.1) or an isolated non-production staging instance.`,
     };
   }
 
   return {
-    isProduction: true,
+    isProduction: false,
     allowed: true,
-    reason: `Targeting production with approved dedicated test identity: ${normalizedEmail}`,
+    reason: 'Target is local/staging environment. Auth lifecycle execution permitted.',
   };
 }
 
@@ -80,39 +56,33 @@ function parseEnv(content) {
 
 async function runAuthLifecycleE2E() {
   console.log('================================================================');
-  console.log('SNS Projects — Auth Lifecycle E2E Test (Production-Guarded)');
+  console.log('SNS Projects — Auth Lifecycle E2E Test (Production Fail-Closed)');
   console.log('================================================================\n');
 
   const env = parseEnv(await readFile(envAppPath, 'utf8'));
   const supabaseUrl = env.VITE_SUPABASE_URL || '';
-  const allowProduction = process.env.ALLOW_PRODUCTION_AUTH_E2E;
-  const testEmail = process.env.AUTH_E2E_TEST_EMAIL;
 
-  const guard = evaluateSafetyGuard({ supabaseUrl, allowProduction, testEmail });
+  const guard = evaluateSafetyGuard({ supabaseUrl });
 
   if (!guard.allowed) {
     console.log(`[SAFETY GUARD BLOCKED] ${guard.reason}`);
-    console.log('[SAFETY GUARD] Execution halted safely. Zero auth requests sent to backend.');
-    console.log('[SAFETY GUARD] To run auth lifecycle tests against production:');
-    console.log('  1. Provision a dedicated disposable test account (e.g. e2e.test.bot@stacknstock.in)');
-    console.log('  2. Set ALLOW_PRODUCTION_AUTH_E2E=true');
-    console.log('  3. Set AUTH_E2E_TEST_EMAIL=e2e.test.bot@stacknstock.in');
-    console.log('  4. Set AUTH_E2E_TEST_PASSWORD=<current_temp_or_perm_password>');
+    console.log('[SAFETY GUARD] Execution halted safely. Zero network requests sent to backend.');
     return;
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // SAFE CONTROLLED EXECUTION (Only reached if explicit guard passes)
+  // LOCAL / STAGING EXECUTION ONLY
   // ═════════════════════════════════════════════════════════════════════
   const supabase = createClient(supabaseUrl, env.VITE_SUPABASE_ANON_KEY);
-  const testPassword = process.env.AUTH_E2E_TEST_PASSWORD;
+  const testEmail = process.env.LOCAL_AUTH_TEST_EMAIL;
+  const testPassword = process.env.LOCAL_AUTH_TEST_PASSWORD;
 
-  if (!testPassword) {
-    console.error('[FAIL] AUTH_E2E_TEST_PASSWORD is required when running authorized lifecycle test.');
-    process.exit(1);
+  if (!testEmail || !testPassword) {
+    console.log('[SKIP] LOCAL_AUTH_TEST_EMAIL and LOCAL_AUTH_TEST_PASSWORD not set for local/staging run.');
+    return;
   }
 
-  console.log(`Attempting single authentication for authorized test identity: ${testEmail}`);
+  console.log(`Attempting single authentication on non-production target: ${testEmail}`);
 
   // Exactly 1 attempt — never loop, never guess
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -125,16 +95,15 @@ async function runAuthLifecycleE2E() {
       console.error('[FAIL] Rate limit encountered (HTTP 429). Halting immediately without retrying.');
       process.exit(1);
     }
-    console.error(`[FAIL] Authentication failed for test identity: ${error.message}`);
+    console.error(`[FAIL] Authentication failed: ${error.message}`);
     process.exit(1);
   }
 
-  console.log(`[PASS] Successfully authenticated test identity (ID: ${data.user.id}).`);
-  console.log(`[PASS] must_change_password flag: ${data.user.app_metadata?.must_change_password ?? 'none'}`);
+  console.log(`[PASS] Successfully authenticated local/staging identity (ID: ${data.user.id}).`);
 
-  // Safe signOut
+  // Safe local signOut
   await supabase.auth.signOut({ scope: 'local' });
-  console.log('[PASS] Test completed cleanly.');
+  console.log('[PASS] Local test completed cleanly.');
 }
 
 if (process.argv[1] && process.argv[1].endsWith('test-auth-lifecycle-e2e.mjs')) {
