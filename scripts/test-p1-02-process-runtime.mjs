@@ -348,7 +348,7 @@ async function runTests() {
   console.log('\n--- Group 10: Legacy Compatibility & Regression (Tests 43–45) ---');
 
   assert(
-    schemaSql.includes("CREATE OR REPLACE FUNCTION public.start_defined_process(") &&
+    (schemaSql.includes("CREATE FUNCTION public.start_defined_process(") || schemaSql.includes("CREATE OR REPLACE FUNCTION public.start_defined_process(")) &&
     schemaSql.includes("task_list_type,") &&
     schemaSql.includes("'defined',"),
     'Test 43: Legacy start_defined_process contract remains 100% intact in schema.sql'

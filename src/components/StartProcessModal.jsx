@@ -5,7 +5,7 @@ import Modal from './Modal';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../hooks/useProjects';
-import { useMilestones } from '../hooks/useMilestones';
+import { usePhases } from '../hooks/usePhases';
 import { useToast } from './Toast';
 import styles from './StartProcessModal.module.css';
 
@@ -22,7 +22,7 @@ export default function StartProcessModal({
 
   const [selectedProcessId, setSelectedProcessId] = useState(initialProcessId || '');
   const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [selectedMilestoneId, setSelectedMilestoneId] = useState('');
+  const [selectedPhaseId, setSelectedPhaseId] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [starting, setStarting] = useState(false);
 
@@ -34,8 +34,8 @@ export default function StartProcessModal({
   // Fetch projects in workspace
   const { projects = [] } = useProjects(workspaceId);
 
-  // Fetch milestones for selected project
-  const { milestones = [] } = useMilestones(selectedProjectId);
+  // Fetch phases for selected project
+  const { phases = [] } = usePhases(selectedProjectId);
 
   // Reset form when modal opens or initialProcessId changes
   useEffect(() => {
@@ -50,14 +50,14 @@ export default function StartProcessModal({
     }
   }, [isOpen, initialProcessId, processes, projects]);
 
-  // Set default milestone when project changes
+  // Set default phase when project changes
   useEffect(() => {
-    if (milestones.length > 0) {
-      setSelectedMilestoneId(milestones[0].id);
+    if (phases.length > 0) {
+      setSelectedPhaseId(phases[0].id);
     } else {
-      setSelectedMilestoneId('');
+      setSelectedPhaseId('');
     }
-  }, [milestones, selectedProjectId]);
+  }, [phases, selectedProjectId]);
 
   const selectedProcess = useMemo(() => {
     return processes.find((p) => p.id === selectedProcessId) || null;
@@ -155,7 +155,7 @@ export default function StartProcessModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!publishedVersion?.id || !selectedProjectId || !selectedMilestoneId || !instanceName.trim()) {
+    if (!publishedVersion?.id || !selectedProjectId || !selectedPhaseId || !instanceName.trim()) {
       showToast('Please fill all required fields.', 'error');
       return;
     }
@@ -170,7 +170,7 @@ export default function StartProcessModal({
       const { data, error: rpcErr } = await supabase.rpc('start_defined_process', {
         p_version_id: publishedVersion.id,
         p_project_id: selectedProjectId,
-        p_milestone_id: selectedMilestoneId,
+        p_phase_id: selectedPhaseId,
         p_instance_name: instanceName.trim(),
         p_raci_overrides: null,
       });
@@ -195,7 +195,7 @@ export default function StartProcessModal({
   const isFormValid =
     !!publishedVersion &&
     !!selectedProjectId &&
-    !!selectedMilestoneId &&
+    !!selectedPhaseId &&
     instanceName.trim().length > 0 &&
     isUserRootResponsible &&
     !rootCheckLoading;
@@ -259,22 +259,22 @@ export default function StartProcessModal({
           </select>
         </div>
 
-        {/* Milestone Target */}
+        {/* Phase Target */}
         <div className={styles.field}>
-          <label className={styles.label}>Target Milestone</label>
+          <label className={styles.label}>Target Phase</label>
           <select
             className={styles.select}
-            value={selectedMilestoneId}
-            onChange={(e) => setSelectedMilestoneId(e.target.value)}
+            value={selectedPhaseId}
+            onChange={(e) => setSelectedPhaseId(e.target.value)}
             required
-            disabled={milestones.length === 0}
+            disabled={phases.length === 0}
           >
-            {milestones.length === 0 ? (
-              <option value="">No milestones in project</option>
+            {phases.length === 0 ? (
+              <option value="">No phases in project</option>
             ) : (
-              milestones.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))
             )}

@@ -28,6 +28,9 @@ dist-ssr
 
 # Large brand source/reference assets not required by the app bundle
 brand guideline stack n stock TM.pdf
+
+# Temporary scratch
+scratch/
 *.ai
 
 # Local data backups

@@ -107,10 +107,10 @@ export default function TaskCard({
                 <ShieldAlert size={11} /> Blocked
               </span>
             )}
-            {showHierarchy && (task.milestones?.name || task.task_lists?.name) && (
-              <span className={styles.hierarchyBadge} title={`${task.milestones?.name || ''} › ${task.task_lists?.name || ''}`}>
+            {showHierarchy && (task.phases?.name || task.task_lists?.name) && (
+              <span className={styles.hierarchyBadge} title={`${task.phases?.name || ''} › ${task.task_lists?.name || ''}`}>
                 <Layers size={10} />
-                <span>{task.task_lists?.name || task.milestones?.name}</span>
+                <span>{task.task_lists?.name || task.phases?.name}</span>
               </span>
             )}
           </div>

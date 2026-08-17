@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-const taskListsCache = new Map(); // `${projectId}:${milestoneId || 'all'}` -> taskLists[]
+const taskListsCache = new Map(); // `${projectId}:${phaseId || 'all'}` -> taskLists[]
 
-export function useTaskLists(projectId, milestoneId = null) {
-  const cacheKey = `${projectId}:${milestoneId || 'all'}`;
+export function useTaskLists(projectId, phaseId = null) {
+  const cacheKey = `${projectId}:${phaseId || 'all'}`;
   const [taskLists, setTaskLists] = useState(() => taskListsCache.get(cacheKey) || []);
   const [loading, setLoading] = useState(() => !taskListsCache.has(cacheKey));
   const [refreshing, setRefreshing] = useState(false);
@@ -33,8 +33,8 @@ export function useTaskLists(projectId, milestoneId = null) {
         .select('*')
         .eq('project_id', projectId);
 
-      if (milestoneId) {
-        query = query.eq('milestone_id', milestoneId);
+      if (phaseId) {
+        query = query.eq('phase_id', phaseId);
       }
 
       const { data: listData, error: lErr } = await query
@@ -101,7 +101,7 @@ export function useTaskLists(projectId, milestoneId = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [projectId, milestoneId, cacheKey]);
+  }, [projectId, phaseId, cacheKey]);
 
   useEffect(() => {
     if (taskListsCache.has(cacheKey)) {
@@ -111,10 +111,10 @@ export function useTaskLists(projectId, milestoneId = null) {
     fetchTaskLists();
   }, [fetchTaskLists, cacheKey]);
 
-  const createTaskList = async ({ milestoneId: targetMilestoneId, name, description }) => {
-    const finalMilestoneId = targetMilestoneId || milestoneId;
-    if (!projectId || !finalMilestoneId || !name?.trim()) {
-      return { data: null, error: new Error('Project ID, Milestone ID, and Task List name are required') };
+  const createTaskList = async ({ phaseId: targetPhaseId, name, description }) => {
+    const finalPhaseId = targetPhaseId || phaseId;
+    if (!projectId || !finalPhaseId || !name?.trim()) {
+      return { data: null, error: new Error('Project ID, Phase ID, and Task List name are required') };
     }
 
     try {
@@ -123,7 +123,7 @@ export function useTaskLists(projectId, milestoneId = null) {
         .from('task_lists')
         .insert({
           project_id: projectId,
-          milestone_id: finalMilestoneId,
+          phase_id: finalPhaseId,
           name: name.trim(),
           description: description?.trim() || null,
           position,

@@ -81,7 +81,7 @@ export function useTasks(projectId, workspaceId) {
         .select(`
           id,
           project_id,
-          milestone_id,
+          phase_id,
           task_list_id,
           title,
           description,
@@ -93,7 +93,7 @@ export function useTasks(projectId, workspaceId) {
           created_by,
           created_at,
           updated_at,
-          milestones:milestone_id (
+          phases:phase_id (
             id,
             name,
             start_date,
@@ -189,14 +189,14 @@ export function useTasks(projectId, workspaceId) {
       .filter((task) => task.status_id === targetStatusId)
       .reduce((max, task) => Math.max(max, task.position ?? 0), -1);
 
-    // Validate hierarchy consistency if milestone or task_list is provided
-    const milestoneId = taskData.milestone_id || null;
+    // Validate hierarchy consistency if phase or task_list is provided
+    const phaseId = taskData.phase_id || null;
     const taskListId = taskData.task_list_id || null;
 
-    if ((milestoneId && !taskListId) || (!milestoneId && taskListId)) {
+    if ((phaseId && !taskListId) || (!phaseId && taskListId)) {
       return {
         data: null,
-        error: new Error('Structured tasks must specify both Milestone and Task List (or leave both empty for uncategorized).'),
+        error: new Error('Structured tasks must specify both Phase and Task List (or leave both empty for uncategorized).'),
       };
     }
 
@@ -216,7 +216,7 @@ export function useTasks(projectId, workspaceId) {
       .from('tasks')
       .insert({
         project_id: projectId,
-        milestone_id: milestoneId,
+        phase_id: phaseId,
         task_list_id: taskListId,
         title: taskData.title?.trim(),
         description: taskData.description?.trim() || null,
@@ -230,7 +230,7 @@ export function useTasks(projectId, workspaceId) {
       .select(`
         id,
         project_id,
-        milestone_id,
+        phase_id,
         task_list_id,
         title,
         description,
@@ -315,21 +315,21 @@ export function useTasks(projectId, workspaceId) {
       updated_at: new Date().toISOString(),
     };
 
-    if ('milestone_id' in updates) {
-      payload.milestone_id = updates.milestone_id || null;
+    if ('phase_id' in updates) {
+      payload.phase_id = updates.phase_id || null;
     }
     if ('task_list_id' in updates) {
       payload.task_list_id = updates.task_list_id || null;
     }
 
     // If updating hierarchy, validate both or none
-    if ('milestone_id' in payload || 'task_list_id' in payload) {
-      const mId = 'milestone_id' in payload ? payload.milestone_id : updates.milestone_id;
+    if ('phase_id' in payload || 'task_list_id' in payload) {
+      const pId = 'phase_id' in payload ? payload.phase_id : updates.phase_id;
       const tlId = 'task_list_id' in payload ? payload.task_list_id : updates.task_list_id;
-      if ((mId && !tlId) || (!mId && tlId)) {
+      if ((pId && !tlId) || (!pId && tlId)) {
         return {
           data: null,
-          error: new Error('Structured tasks must specify both Milestone and Task List (or leave both empty for uncategorized).'),
+          error: new Error('Structured tasks must specify both Phase and Task List (or leave both empty for uncategorized).'),
         };
       }
     }

@@ -61,7 +61,7 @@ export default function TaskDetailPanel({
     priority: 'none',
     assignee_id: '',
     due_date: '',
-    milestone_id: '',
+    phase_id: '',
     task_list_id: '',
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -134,7 +134,7 @@ export default function TaskDetailPanel({
         priority: task.priority || 'none',
         assignee_id: task.assignee_id || '',
         due_date: task.due_date || '',
-        milestone_id: task.milestone_id || '',
+        phase_id: task.phase_id || '',
         task_list_id: task.task_list_id || '',
       });
       setConfirmDelete(false);
@@ -385,10 +385,10 @@ export default function TaskDetailPanel({
                 <Workflow size={12} />
                 <span>Defined Workflow Step</span>
               </div>
-            ) : task.milestones?.name || task.task_lists?.name ? (
+            ) : task.phases?.name || task.task_lists?.name ? (
               <div className={styles.hierarchyTag}>
                 <Layers size={12} />
-                <span>{task.milestones?.name || 'Milestone'}</span>
+                <span>{task.phases?.name || 'Phase'}</span>
                 <span className={styles.hierarchySep}>›</span>
                 <span>{task.task_lists?.name || 'Task List'}</span>
               </div>

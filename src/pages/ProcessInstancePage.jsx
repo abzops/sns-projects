@@ -252,7 +252,7 @@ export default function ProcessInstancePage() {
         <div className={styles.breadcrumbPath}>
           <span>{instance.projects?.name}</span>
           <ChevronRight size={14} />
-          <span>{instance.milestones?.name}</span>
+          <span>{instance.phases?.name}</span>
           <ChevronRight size={14} />
           <span className={styles.activeBreadcrumb}>{instance.name}</span>
         </div>

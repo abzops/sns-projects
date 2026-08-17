@@ -269,12 +269,20 @@ async function runRealDatabaseLifecycleE2E() {
       INSERT INTO public.projects (workspace_id, name) VALUES ($1, 'Host Project') RETURNING id;
     `, [workspace.id]);
 
+    await client.query(`
+      INSERT INTO public.task_statuses (project_id, name, color, system_code, position)
+      VALUES 
+        ($1, 'To Do', '#94a3b8', 'todo', 1000),
+        ($1, 'In Progress', '#3b82f6', 'in_progress', 2000),
+        ($1, 'Done', '#22c55e', 'done', 3000);
+    `, [project.id]);
+
     const { rows: [phase] } = await client.query(`
-      INSERT INTO public.milestones (project_id, name) VALUES ($1, 'Host Phase') RETURNING id;
+      INSERT INTO public.phases (project_id, name) VALUES ($1, 'Host Phase') RETURNING id;
     `, [project.id]);
 
     const { rows: [hostTaskList] } = await client.query(`
-      INSERT INTO public.task_lists (project_id, milestone_id, name, task_list_type, process_state)
+      INSERT INTO public.task_lists (project_id, phase_id, name, task_list_type, process_state)
       VALUES ($1, $2, 'Host Regular Task List', 'custom', NULL)
       RETURNING id, process_state, completed_at;
     `, [project.id, phase.id]);
@@ -573,8 +581,8 @@ async function runRealDatabaseLifecycleE2E() {
 
     // Create an ad-hoc parent task in the project
     const { rows: [hostTask] } = await client.query(`
-      INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, position, created_by)
-      VALUES ($1, $2, $2, $3, 'Host Parent Task', $4, 5000, $5)
+      INSERT INTO public.tasks (project_id, phase_id, task_list_id, title, status_id, position, created_by)
+      VALUES ($1, $2, $3, 'Host Parent Task', $4, 5000, $5)
       RETURNING *;
     `, [project.id, phase.id, hostTaskList.id, todoStatus ? todoStatus.id : null, profile.id]);
 
@@ -648,7 +656,7 @@ async function runRealDatabaseLifecycleE2E() {
 
     // Create a legacy defined task list with version.id
     const { rows: [legacyTaskList] } = await client.query(`
-      INSERT INTO public.task_lists (project_id, milestone_id, name, task_list_type, defined_process_id, defined_process_version_id, process_state, started_by, started_at, position)
+      INSERT INTO public.task_lists (project_id, phase_id, name, task_list_type, defined_process_id, defined_process_version_id, process_state, started_by, started_at, position)
       VALUES ($1, $2, 'Legacy Defined Task List', 'defined', $3, $4, 'active', $5, now(), 8000)
       RETURNING *;
     `, [project.id, phase.id, proc.id, version.id, profile.id]);
@@ -660,8 +668,8 @@ async function runRealDatabaseLifecycleE2E() {
     try {
       const bogusVersionId = '00000000-0000-0000-0000-000000000001';
       await client.query(`
-        INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
-        VALUES ($1, $2, $2, $3, 'Mismatch Step Task', $4, $5, $6, 'ready', 1, false, 9000, $7);
+        INSERT INTO public.tasks (project_id, phase_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+        VALUES ($1, $2, $3, 'Mismatch Step Task', $4, $5, $6, 'ready', 1, false, 9000, $7);
       `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, bogusVersionId, profile.id]);
     } catch (err) {
       versionMismatchCaught = err.message.includes('Version coherence violation');
@@ -671,8 +679,8 @@ async function runRealDatabaseLifecycleE2E() {
 
     // Insert valid legacy step 1 task
     const { rows: [legTask1] } = await client.query(`
-      INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
-      VALUES ($1, $2, $2, $3, 'Legacy Step 1 Task', $4, $5, $6, 'ready', 1, false, 9000, $7)
+      INSERT INTO public.tasks (project_id, phase_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+      VALUES ($1, $2, $3, 'Legacy Step 1 Task', $4, $5, $6, 'ready', 1, false, 9000, $7)
       RETURNING *;
     `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, version.id, profile.id]);
 
@@ -687,8 +695,8 @@ async function runRealDatabaseLifecycleE2E() {
     await client.query('SAVEPOINT sp_dup_legacy;');
     try {
       await client.query(`
-        INSERT INTO public.tasks (project_id, phase_id, milestone_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
-        VALUES ($1, $2, $2, $3, 'Duplicate Legacy Step 1', $4, $5, $6, 'ready', 1, false, 9100, $7);
+        INSERT INTO public.tasks (project_id, phase_id, task_list_id, title, status_id, process_step_id, defined_process_version_id, workflow_state, current_cycle_number, overdue_cycle_notified, position, created_by)
+        VALUES ($1, $2, $3, 'Duplicate Legacy Step 1', $4, $5, $6, 'ready', 1, false, 9100, $7);
       `, [project.id, phase.id, legacyTaskList.id, todoStatus ? todoStatus.id : null, step1.id, version.id, profile.id]);
     } catch (err) {
       duplicateStepCaught = err.message.includes('uq_tasks_legacy_task_list_step') || err.message.includes('duplicate key value');
@@ -701,7 +709,7 @@ async function runRealDatabaseLifecycleE2E() {
       SELECT public.start_defined_process(
         p_version_id => $1,
         p_project_id => $2,
-        p_milestone_id => $3,
+        p_phase_id => $3,
         p_instance_name => 'Legacy Process Run'
       ) AS res;
     `, [version.id, project.id, phase.id]);

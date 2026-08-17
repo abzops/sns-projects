@@ -1,47 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-const milestonesCache = new Map(); // projectId -> milestones[]
+const phasesCache = new Map(); // projectId -> phases[]
 
-export function useMilestones(projectId) {
-  const [milestones, setMilestones] = useState(() => milestonesCache.get(projectId) || []);
-  const [loading, setLoading] = useState(() => !milestonesCache.has(projectId));
+export function usePhases(projectId) {
+  const [phases, setPhases] = useState(() => phasesCache.get(projectId) || []);
+  const [loading, setLoading] = useState(() => !phasesCache.has(projectId));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchMilestones = useCallback(async (options = {}) => {
+  const fetchPhases = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
     if (!projectId) {
-      setMilestones([]);
+      setPhases([]);
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
     try {
-      if (!isSilent && !milestonesCache.has(projectId)) {
+      if (!isSilent && !phasesCache.has(projectId)) {
         setLoading(true);
       } else {
         setRefreshing(true);
       }
       setError(null);
 
-      // 1. Fetch milestones
-      const { data: milestoneData, error: mErr } = await supabase
-        .from('milestones')
+      // 1. Fetch phases
+      const { data: phaseData, error: pErr } = await supabase
+        .from('phases')
         .select('*')
         .eq('project_id', projectId)
         .order('position', { ascending: true })
         .order('created_at', { ascending: true });
 
-      if (mErr) throw mErr;
+      if (pErr) throw pErr;
 
       // 2. Fetch all descendant tasks for this project to calculate progress
       const { data: taskData, error: tErr } = await supabase
         .from('tasks')
         .select(`
           id,
-          milestone_id,
+          phase_id,
           task_statuses:status_id (
             id,
             system_code,
@@ -49,18 +49,18 @@ export function useMilestones(projectId) {
           )
         `)
         .eq('project_id', projectId)
-        .not('milestone_id', 'is', null);
+        .not('phase_id', 'is', null);
 
       if (tErr) throw tErr;
 
-      // Group tasks by milestone_id and calculate progress
-      const taskStatsByMilestone = new Map();
+      // Group tasks by phase_id and calculate progress
+      const taskStatsByPhase = new Map();
       for (const t of taskData || []) {
-        const mId = t.milestone_id;
-        if (!taskStatsByMilestone.has(mId)) {
-          taskStatsByMilestone.set(mId, { total: 0, completed: 0 });
+        const pId = t.phase_id;
+        if (!taskStatsByPhase.has(pId)) {
+          taskStatsByPhase.set(pId, { total: 0, completed: 0 });
         }
-        const stats = taskStatsByMilestone.get(mId);
+        const stats = taskStatsByPhase.get(pId);
         const sysCode = t.task_statuses?.system_code || '';
         const isCancelled = sysCode === 'cancelled';
         const isDone = sysCode === 'done';
@@ -73,23 +73,23 @@ export function useMilestones(projectId) {
         }
       }
 
-      const enriched = (milestoneData || []).map((m) => {
-        const stats = taskStatsByMilestone.get(m.id) || { total: 0, completed: 0 };
+      const enriched = (phaseData || []).map((p) => {
+        const stats = taskStatsByPhase.get(p.id) || { total: 0, completed: 0 };
         const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
         return {
-          ...m,
+          ...p,
           task_count: stats.total,
           completed_count: stats.completed,
           progress,
         };
       });
 
-      milestonesCache.set(projectId, enriched);
-      setMilestones(enriched);
+      phasesCache.set(projectId, enriched);
+      setPhases(enriched);
     } catch (err) {
-      console.error('Error fetching milestones:', err);
-      setError(err.message || 'Failed to load milestones');
+      console.error('Error fetching phases:', err);
+      setError(err.message || 'Failed to load phases');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -97,20 +97,20 @@ export function useMilestones(projectId) {
   }, [projectId]);
 
   useEffect(() => {
-    if (milestonesCache.has(projectId)) {
-      setMilestones(milestonesCache.get(projectId));
+    if (phasesCache.has(projectId)) {
+      setPhases(phasesCache.get(projectId));
       setLoading(false);
     }
-    fetchMilestones();
-  }, [fetchMilestones, projectId]);
+    fetchPhases();
+  }, [fetchPhases, projectId]);
 
-  const createMilestone = async ({ name, description, start_date, end_date }) => {
-    if (!projectId || !name?.trim()) return { data: null, error: new Error('Project ID and Milestone name are required') };
+  const createPhase = async ({ name, description, start_date, end_date }) => {
+    if (!projectId || !name?.trim()) return { data: null, error: new Error('Project ID and Phase name are required') };
 
     try {
-      const position = milestones.length;
+      const position = phases.length;
       const { data, error: insertErr } = await supabase
-        .from('milestones')
+        .from('phases')
         .insert({
           project_id: projectId,
           name: name.trim(),
@@ -123,18 +123,18 @@ export function useMilestones(projectId) {
         .single();
 
       if (insertErr) throw insertErr;
-      await fetchMilestones({ silent: true });
+      await fetchPhases({ silent: true });
       return { data, error: null };
     } catch (err) {
-      console.error('Error creating milestone:', err);
+      console.error('Error creating phase:', err);
       return { data: null, error: err };
     }
   };
 
-  const updateMilestone = async (id, updates) => {
+  const updatePhase = async (id, updates) => {
     try {
       const { data, error: updateErr } = await supabase
-        .from('milestones')
+        .from('phases')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
@@ -144,38 +144,38 @@ export function useMilestones(projectId) {
         .single();
 
       if (updateErr) throw updateErr;
-      await fetchMilestones({ silent: true });
+      await fetchPhases({ silent: true });
       return { data, error: null };
     } catch (err) {
-      console.error('Error updating milestone:', err);
+      console.error('Error updating phase:', err);
       return { data: null, error: err };
     }
   };
 
-  const deleteMilestone = async (id) => {
+  const deletePhase = async (id) => {
     try {
       const { error: deleteErr } = await supabase
-        .from('milestones')
+        .from('phases')
         .delete()
         .eq('id', id);
 
       if (deleteErr) throw deleteErr;
-      await fetchMilestones({ silent: true });
+      await fetchPhases({ silent: true });
       return { error: null };
     } catch (err) {
-      console.error('Error deleting milestone:', err);
+      console.error('Error deleting phase:', err);
       return { error: err };
     }
   };
 
   return {
-    milestones,
+    phases,
     loading,
     refreshing,
     error,
-    createMilestone,
-    updateMilestone,
-    deleteMilestone,
-    refetch: fetchMilestones,
+    createPhase,
+    updatePhase,
+    deletePhase,
+    refetch: fetchPhases,
   };
 }

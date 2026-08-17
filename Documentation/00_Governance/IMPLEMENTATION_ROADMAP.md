@@ -57,9 +57,10 @@ graph TD
 - **P1-02E (`VERIFIED`)**: Legacy Version Trigger Security Closure. Moved legacy version validation trigger helper from `public` schema to `private.sync_validate_legacy_task_list_version()`, revoked direct client execution, dropped obsolete public RPC, and eliminated the `authenticated_security_definer_function_executable` warning. [P1-02E Spec](../06_Implementation_Packages/Package_01_Core_Foundation/P1-02E_Legacy_Version_Trigger_Security_Closure.md).
 
 > [!NOTE]
-> **Package 1 Status**: **`VERIFIED`** across both remote production Supabase and live local PostgreSQL E2E suite. Package 2 is **`READY FOR REVIEW`**.
+> **Package 1 Status**: **`VERIFIED`** across both remote production Supabase and live local PostgreSQL E2E suite.
 
 ### Package 2: Process Runtime Refactor
+- **P2-01 (`VERIFIED`)**: Controlled Milestone $\to$ Phase Physical Rename. Physical table rename `milestones` $\to$ `phases`, column normalization (`phase_id` canonical, `milestone_id` dropped), composite hierarchy integrity (`phases_id_project_unique`, `task_lists_id_phase_project_unique`, composite RESTRICT foreign keys), elimination of dual sync triggers, RLS policy renames, explicit table grants, and full frontend Phase-only migration (`usePhases.js`, zero active milestone symbols). [P2-01 Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md).
 - Multi-instance process execution per Task and Task List.
 - Step-level task execution with independent RACI, approval cycles, and evidence submission.
 - Complete lifecycle management (`running` $\to$ `completed` / `cancelled`).

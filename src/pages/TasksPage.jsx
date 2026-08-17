@@ -5,7 +5,7 @@ import { useTaskStatuses } from '../hooks/useTaskStatuses';
 import { useMembers } from '../hooks/useMembers';
 import { useProjects } from '../hooks/useProjects';
 import { useDepartments } from '../hooks/useDepartments';
-import { useMilestones } from '../hooks/useMilestones';
+import { usePhases } from '../hooks/usePhases';
 import { useTaskLists } from '../hooks/useTaskLists';
 import { useUserContext } from '../hooks/useUserContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -245,11 +245,11 @@ export default function TasksPage() {
   const { projects = [] } = useProjects(workspaceId);
   const { departments = [] } = useDepartments(workspaceId);
   const {
-    milestones = [],
-    loading: milestonesLoading,
-    createMilestone,
-    deleteMilestone,
-  } = useMilestones(projectId);
+    phases = [],
+    loading: phasesLoading,
+    createPhase,
+    deletePhase,
+  } = usePhases(projectId);
   const {
     taskLists = [],
     loading: taskListsLoading,
@@ -282,7 +282,7 @@ export default function TasksPage() {
   // View state: 'hierarchy' | 'kanban' | 'list'
   const [view, setView] = useState('hierarchy');
   const [search, setSearch] = useState('');
-  const [filterMilestone, setFilterMilestone] = useState('');
+  const [filterPhase, setFilterPhase] = useState('');
   const [filterTaskList, setFilterTaskList] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
@@ -291,12 +291,12 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState(null);
 
   // Collapsed state for Hierarchy accordion
-  const [collapsedMilestones, setCollapsedMilestones] = useState(new Set());
+  const [collapsedPhases, setCollapsedPhases] = useState(new Set());
   const [collapsedTaskLists, setCollapsedTaskLists] = useState(new Set());
 
   // Modals state
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
-  const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
+  const [showAddPhaseModal, setShowAddPhaseModal] = useState(false);
   const [showAddTaskListModal, setShowAddTaskListModal] = useState(false);
 
   // Kanban local board state & dragging refs
@@ -310,7 +310,7 @@ export default function TasksPage() {
   // New task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
-  const [newTaskMilestoneId, setNewTaskMilestoneId] = useState('');
+  const [newTaskPhaseId, setNewTaskPhaseId] = useState('');
   const [newTaskTaskListId, setNewTaskTaskListId] = useState('');
   const [newTaskStatus, setNewTaskStatus] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState('medium');
@@ -319,15 +319,15 @@ export default function TasksPage() {
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [addingTask, setAddingTask] = useState(false);
 
-  // New milestone form state
-  const [newMilestoneName, setNewMilestoneName] = useState('');
-  const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
-  const [newMilestoneStart, setNewMilestoneStart] = useState('');
-  const [newMilestoneEnd, setNewMilestoneEnd] = useState('');
-  const [addingMilestone, setAddingMilestone] = useState(false);
+  // New phase form state
+  const [newPhaseName, setNewPhaseName] = useState('');
+  const [newPhaseDesc, setNewPhaseDesc] = useState('');
+  const [newPhaseStart, setNewPhaseStart] = useState('');
+  const [newPhaseEnd, setNewPhaseEnd] = useState('');
+  const [addingPhase, setAddingPhase] = useState(false);
 
   // New task list form state
-  const [newTaskListMilestoneId, setNewTaskListMilestoneId] = useState('');
+  const [newTaskListPhaseId, setNewTaskListPhaseId] = useState('');
   const [newTaskListName, setNewTaskListName] = useState('');
   const [newTaskListDesc, setNewTaskListDesc] = useState('');
   const [addingTaskList, setAddingTaskList] = useState(false);
@@ -355,11 +355,11 @@ export default function TasksPage() {
   }, []);
 
   // Accordion toggle helpers
-  const toggleMilestoneCollapse = (milestoneId) => {
-    setCollapsedMilestones((prev) => {
+  const togglePhaseCollapse = (phaseId) => {
+    setCollapsedPhases((prev) => {
       const next = new Set(prev);
-      if (next.has(milestoneId)) next.delete(milestoneId);
-      else next.add(milestoneId);
+      if (next.has(phaseId)) next.delete(phaseId);
+      else next.add(phaseId);
       return next;
     });
   };
@@ -373,16 +373,16 @@ export default function TasksPage() {
     });
   };
 
-  /* ── Filtered Task Lists based on selected milestone (for cascading pickers) ── */
-  const availableTaskListsForSelectedMilestone = useMemo(() => {
-    if (!newTaskMilestoneId) return [];
-    return taskLists.filter((tl) => tl.milestone_id === newTaskMilestoneId);
-  }, [taskLists, newTaskMilestoneId]);
+  /* ── Filtered Task Lists based on selected phase (for cascading pickers) ── */
+  const availableTaskListsForSelectedPhase = useMemo(() => {
+    if (!newTaskPhaseId) return [];
+    return taskLists.filter((tl) => tl.phase_id === newTaskPhaseId);
+  }, [taskLists, newTaskPhaseId]);
 
   const kanbanAvailableTaskLists = useMemo(() => {
-    if (!filterMilestone) return taskLists;
-    return taskLists.filter((tl) => tl.milestone_id === filterMilestone);
-  }, [taskLists, filterMilestone]);
+    if (!filterPhase) return taskLists;
+    return taskLists.filter((tl) => tl.phase_id === filterPhase);
+  }, [taskLists, filterPhase]);
 
   /* ── Filtered tasks ── */
   const filteredTasks = useMemo(() => {
@@ -396,8 +396,8 @@ export default function TasksPage() {
           t.description?.toLowerCase().includes(q)
       );
     }
-    if (filterMilestone) {
-      result = result.filter((t) => t.milestone_id === filterMilestone);
+    if (filterPhase) {
+      result = result.filter((t) => t.phase_id === filterPhase);
     }
     if (filterTaskList) {
       result = result.filter((t) => t.task_list_id === filterTaskList);
@@ -415,7 +415,7 @@ export default function TasksPage() {
     }
 
     return result;
-  }, [tasks, search, filterMilestone, filterTaskList, filterPriority, filterAssignee]);
+  }, [tasks, search, filterPhase, filterTaskList, filterPriority, filterAssignee]);
 
   /* ── Sorted tasks (for list view) ── */
   const sortedTasks = useMemo(() => {
@@ -434,7 +434,7 @@ export default function TasksPage() {
 
   /* ── Legacy Uncategorized Tasks ── */
   const uncategorizedTasks = useMemo(() => {
-    return tasks.filter((t) => !t.milestone_id && !t.task_list_id);
+    return tasks.filter((t) => !t.phase_id && !t.task_list_id);
   }, [tasks]);
 
   /* ── Handlers ── */
@@ -447,10 +447,10 @@ export default function TasksPage() {
     }
   };
 
-  const handleOpenAddTask = (presetMilestoneId = '', presetTaskListId = '') => {
+  const handleOpenAddTask = (presetPhaseId = '', presetTaskListId = '') => {
     setNewTaskTitle('');
     setNewTaskDesc('');
-    setNewTaskMilestoneId(presetMilestoneId || (milestones[0]?.id ?? ''));
+    setNewTaskPhaseId(presetPhaseId || (phases[0]?.id ?? ''));
     setNewTaskTaskListId(presetTaskListId || '');
     setNewTaskStatus(statuses?.[0]?.id ?? '');
     setNewTaskPriority('medium');
@@ -474,7 +474,7 @@ export default function TasksPage() {
       const { error: createErr } = await createTask({
         title: newTaskTitle.trim(),
         description: newTaskDesc.trim(),
-        milestone_id: newTaskMilestoneId || null,
+        phase_id: newTaskPhaseId || null,
         task_list_id: newTaskTaskListId || null,
         status_id: newTaskStatus || statuses?.[0]?.id,
         priority: newTaskPriority,
@@ -495,41 +495,41 @@ export default function TasksPage() {
     }
   };
 
-  const handleCreateMilestoneSubmit = async (e) => {
+  const handleCreatePhaseSubmit = async (e) => {
     e.preventDefault();
-    if (!newMilestoneName.trim()) return;
+    if (!newPhaseName.trim()) return;
 
-    setAddingMilestone(true);
+    setAddingPhase(true);
     try {
-      const { error: mErr } = await createMilestone({
-        name: newMilestoneName.trim(),
-        description: newMilestoneDesc.trim(),
-        start_date: newMilestoneStart || null,
-        end_date: newMilestoneEnd || null,
+      const { error: pErr } = await createPhase({
+        name: newPhaseName.trim(),
+        description: newPhaseDesc.trim(),
+        start_date: newPhaseStart || null,
+        end_date: newPhaseEnd || null,
       });
 
-      if (mErr) throw mErr;
-      showToast('Milestone created', 'success');
-      setNewMilestoneName('');
-      setNewMilestoneDesc('');
-      setNewMilestoneStart('');
-      setNewMilestoneEnd('');
-      setShowAddMilestoneModal(false);
+      if (pErr) throw pErr;
+      showToast('Phase created', 'success');
+      setNewPhaseName('');
+      setNewPhaseDesc('');
+      setNewPhaseStart('');
+      setNewPhaseEnd('');
+      setShowAddPhaseModal(false);
     } catch (err) {
-      showToast(err.message || 'Failed to create milestone', 'error');
+      showToast(err.message || 'Failed to create phase', 'error');
     } finally {
-      setAddingMilestone(false);
+      setAddingPhase(false);
     }
   };
 
   const handleCreateTaskListSubmit = async (e) => {
     e.preventDefault();
-    if (!newTaskListName.trim() || !newTaskListMilestoneId) return;
+    if (!newTaskListName.trim() || !newTaskListPhaseId) return;
 
     setAddingTaskList(true);
     try {
       const { error: tlErr } = await createTaskList({
-        milestoneId: newTaskListMilestoneId,
+        phaseId: newTaskListPhaseId,
         name: newTaskListName.trim(),
         description: newTaskListDesc.trim(),
       });
@@ -546,13 +546,13 @@ export default function TasksPage() {
     }
   };
 
-  const handleDeleteMilestoneClick = async (milestone) => {
-    if (confirm(`Delete milestone "${milestone.name}"? This is only allowed if it contains no tasks or task lists.`)) {
-      const { error: delErr } = await deleteMilestone(milestone.id);
+  const handleDeletePhaseClick = async (phase) => {
+    if (confirm(`Delete phase "${phase.name}"? This is only allowed if it contains no tasks or task lists.`)) {
+      const { error: delErr } = await deletePhase(phase.id);
       if (delErr) {
-        showToast(delErr.message || 'Cannot delete milestone with existing task lists or tasks', 'error');
+        showToast(delErr.message || 'Cannot delete phase with existing task lists or tasks', 'error');
       } else {
-        showToast('Milestone deleted', 'success');
+        showToast('Phase deleted', 'success');
       }
     }
   };
@@ -914,7 +914,7 @@ export default function TasksPage() {
   const isInitialLoading =
     (tasksLoading && tasks.length === 0) ||
     (statusesLoading && statuses.length === 0) ||
-    (milestonesLoading && milestones.length === 0) ||
+    (phasesLoading && phases.length === 0) ||
     (taskListsLoading && taskLists.length === 0);
 
   return (
@@ -971,7 +971,7 @@ export default function TasksPage() {
               </div>
               <div className={styles.metaItem}>
                 <Layers size={13} />
-                <span>{milestones.length} Milestones, {taskLists.length} Task Lists</span>
+                <span>{phases.length} Phases, {taskLists.length} Task Lists</span>
               </div>
             </div>
           </div>
@@ -1009,20 +1009,20 @@ export default function TasksPage() {
           <div className={styles.actionButtons}>
             <button
               className={styles.secondaryActionBtn}
-              onClick={() => setShowAddMilestoneModal(true)}
-              title="Create Milestone"
+              onClick={() => setShowAddPhaseModal(true)}
+              title="Create Phase"
             >
               <BookmarkPlus size={15} />
-              <span>+ Milestone</span>
+              <span>+ Phase</span>
             </button>
             <button
               className={styles.secondaryActionBtn}
               onClick={() => {
-                setNewTaskListMilestoneId(milestones[0]?.id || '');
+                setNewTaskListPhaseId(phases[0]?.id || '');
                 setShowAddTaskListModal(true);
               }}
               title="Create Task List"
-              disabled={milestones.length === 0}
+              disabled={phases.length === 0}
             >
               <FolderPlus size={15} />
               <span>+ Task List</span>
@@ -1055,16 +1055,16 @@ export default function TasksPage() {
           <div className={styles.filters}>
             <select
               className={styles.filterSelect}
-              value={filterMilestone}
+              value={filterPhase}
               onChange={(e) => {
-                setFilterMilestone(e.target.value);
+                setFilterPhase(e.target.value);
                 setFilterTaskList('');
               }}
             >
-              <option value="">All Milestones</option>
-              {milestones.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              <option value="">All Phases</option>
+              {phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -1120,100 +1120,100 @@ export default function TasksPage() {
           {/* ═════════════════════════════════════════════════════════════════ */}
           {view === 'hierarchy' && (
         <div className={styles.hierarchyView}>
-          {/* Milestones Tree */}
-          {milestones.length === 0 && uncategorizedTasks.length === 0 ? (
+          {/* Phases Tree */}
+          {phases.length === 0 && uncategorizedTasks.length === 0 ? (
             <EmptyState
               icon={Layers}
-              title="No Milestones configured"
-              description="Create milestones and task lists to organize project execution into structured deliverables."
-              actionLabel="Create First Milestone"
-              onAction={() => setShowAddMilestoneModal(true)}
+              title="No Phases configured"
+              description="Create phases and task lists to organize project execution into structured deliverables."
+              actionLabel="Create First Phase"
+              onAction={() => setShowAddPhaseModal(true)}
             />
           ) : (
-            <div className={styles.milestonesList}>
-              {milestones.map((milestone) => {
-                const isMilestoneCollapsed = collapsedMilestones.has(milestone.id);
-                const milestoneTaskLists = taskLists.filter((tl) => tl.milestone_id === milestone.id);
+            <div className={styles.phasesList}>
+              {phases.map((phase) => {
+                const isPhaseCollapsed = collapsedPhases.has(phase.id);
+                const phaseTaskLists = taskLists.filter((tl) => tl.phase_id === phase.id);
 
                 return (
-                  <div key={milestone.id} className={styles.milestoneCard}>
-                    {/* Milestone Accordion Header */}
-                    <div className={styles.milestoneHeader}>
+                  <div key={phase.id} className={styles.phaseCard}>
+                    {/* Phase Accordion Header */}
+                    <div className={styles.phaseHeader}>
                       <button
                         type="button"
                         className={styles.collapseToggle}
-                        onClick={() => toggleMilestoneCollapse(milestone.id)}
+                        onClick={() => togglePhaseCollapse(phase.id)}
                       >
-                        {isMilestoneCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                        {isPhaseCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                       </button>
 
-                      <div className={styles.milestoneMain}>
-                        <div className={styles.milestoneTitleRow}>
-                          <span className={styles.milestoneTag}>Milestone</span>
-                          <h3 className={styles.milestoneName}>{milestone.name}</h3>
-                          {milestone.end_date && (
-                            <span className={styles.milestoneDate}>
+                      <div className={styles.phaseMain}>
+                        <div className={styles.phaseTitleRow}>
+                          <span className={styles.phaseTag}>Phase</span>
+                          <h3 className={styles.phaseName}>{phase.name}</h3>
+                          {phase.end_date && (
+                            <span className={styles.phaseDate}>
                               <Calendar size={12} />
-                              Target: {milestone.end_date}
+                              Target: {phase.end_date}
                             </span>
                           )}
                         </div>
-                        {milestone.description && (
-                          <p className={styles.milestoneDesc}>{milestone.description}</p>
+                        {phase.description && (
+                          <p className={styles.phaseDesc}>{phase.description}</p>
                         )}
                       </div>
 
-                      {/* Milestone Progress Bar */}
-                      <div className={styles.milestoneProgressWrap}>
+                      {/* Phase Progress Bar */}
+                      <div className={styles.phaseProgressWrap}>
                         <div className={styles.progressTop}>
                           <span className={styles.progressLabel}>Progress</span>
-                          <span className={styles.progressPercent}>{milestone.progress}%</span>
+                          <span className={styles.progressPercent}>{phase.progress}%</span>
                         </div>
                         <div className={styles.progressBar}>
                           <div
                             className={styles.progressFill}
-                            style={{ width: `${milestone.progress}%` }}
+                            style={{ width: `${phase.progress}%` }}
                           />
                         </div>
                         <span className={styles.taskCountSubtitle}>
-                          {milestone.completed_count}/{milestone.task_count} tasks
+                          {phase.completed_count}/{phase.task_count} tasks
                         </span>
                       </div>
 
                       {/* Actions */}
-                      <div className={styles.milestoneActions}>
+                      <div className={styles.phaseActions}>
                         <button
                           type="button"
                           className={styles.addTaskListBtn}
                           onClick={() => {
-                            setNewTaskListMilestoneId(milestone.id);
+                            setNewTaskListPhaseId(phase.id);
                             setShowAddTaskListModal(true);
                           }}
-                          title="Add Task List under this Milestone"
+                          title="Add Task List under this Phase"
                         >
                           <Plus size={13} /> Task List
                         </button>
                         <button
                           type="button"
-                          className={styles.deleteMilestoneBtn}
-                          onClick={() => handleDeleteMilestoneClick(milestone)}
-                          title="Delete Milestone (if empty)"
+                          className={styles.deletePhaseBtn}
+                          onClick={() => handleDeletePhaseClick(phase)}
+                          title="Delete Phase (if empty)"
                         >
                           Delete
                         </button>
                       </div>
                     </div>
 
-                    {/* Milestone Body: Task Lists */}
-                    {!isMilestoneCollapsed && (
-                      <div className={styles.milestoneBody}>
-                        {milestoneTaskLists.length === 0 ? (
+                    {/* Phase Body: Task Lists */}
+                    {!isPhaseCollapsed && (
+                      <div className={styles.phaseBody}>
+                        {phaseTaskLists.length === 0 ? (
                           <div className={styles.emptyTaskListNotice}>
-                            <span>No task lists in this milestone.</span>
+                            <span>No task lists in this phase.</span>
                             <button
                               type="button"
                               onClick={() => {
-                                setNewTaskListMilestoneId(milestone.id);
+                                setNewTaskListPhaseId(phase.id);
                                 setShowAddTaskListModal(true);
                               }}
                               className={styles.inlineAddLink}
@@ -1222,7 +1222,7 @@ export default function TasksPage() {
                             </button>
                           </div>
                         ) : (
-                          milestoneTaskLists.map((taskList) => {
+                          phaseTaskLists.map((taskList) => {
                             const isTaskListCollapsed = collapsedTaskLists.has(taskList.id);
                             const listTasks = tasks.filter((t) => t.task_list_id === taskList.id);
 
@@ -1294,7 +1294,7 @@ export default function TasksPage() {
                                         <button
                                           type="button"
                                           className={styles.addTaskInlineBtn}
-                                          onClick={() => handleOpenAddTask(milestone.id, taskList.id)}
+                                          onClick={() => handleOpenAddTask(phase.id, taskList.id)}
                                         >
                                           <Plus size={13} /> Add Task
                                         </button>
@@ -1368,7 +1368,7 @@ export default function TasksPage() {
                   </span>
                 </div>
                 <p className={styles.uncategorizedHint}>
-                  Legacy tasks without milestone assignments. Open task details to categorize into milestones and task lists.
+                  Legacy tasks without phase assignments. Open task details to categorize into phases and task lists.
                 </p>
               </div>
 
@@ -1454,7 +1454,7 @@ export default function TasksPage() {
             <EmptyState
               icon={List}
               title="No tasks found"
-              description="Adjust your milestone/task list filters or create a new task."
+              description="Adjust your phase/task list filters or create a new task."
             />
           ) : (
             <div className={styles.tableCard}>
@@ -1515,71 +1515,71 @@ export default function TasksPage() {
         />
       )}
 
-      {/* ───── Create Milestone Modal ───── */}
+      {/* ───── Create Phase Modal ───── */}
       <Modal
-        isOpen={showAddMilestoneModal}
-        onClose={() => setShowAddMilestoneModal(false)}
-        title="Create Milestone"
+        isOpen={showAddPhaseModal}
+        onClose={() => setShowAddPhaseModal(false)}
+        title="Create Phase"
       >
-        <form onSubmit={handleCreateMilestoneSubmit}>
+        <form onSubmit={handleCreatePhaseSubmit}>
           <div className={styles.modalField}>
-            <label className={styles.modalLabel} htmlFor="milestoneName">
-              Milestone Name
+            <label className={styles.modalLabel} htmlFor="phaseName">
+              Phase Name
             </label>
             <input
-              id="milestoneName"
+              id="phaseName"
               type="text"
               className={styles.modalInput}
               placeholder="e.g. Design Freeze & Mechanical Sign-off"
-              value={newMilestoneName}
-              onChange={(e) => setNewMilestoneName(e.target.value)}
+              value={newPhaseName}
+              onChange={(e) => setNewPhaseName(e.target.value)}
               required
               autoFocus
-              disabled={addingMilestone}
+              disabled={addingPhase}
             />
           </div>
 
           <div className={styles.modalField}>
-            <label className={styles.modalLabel} htmlFor="milestoneDesc">
+            <label className={styles.modalLabel} htmlFor="phaseDesc">
               Description & Key Objectives
             </label>
             <textarea
-              id="milestoneDesc"
+              id="phaseDesc"
               className={styles.modalTextarea}
-              placeholder="Define milestone scope, deliverables, and completion criteria…"
-              value={newMilestoneDesc}
-              onChange={(e) => setNewMilestoneDesc(e.target.value)}
+              placeholder="Define phase scope, deliverables, and completion criteria…"
+              value={newPhaseDesc}
+              onChange={(e) => setNewPhaseDesc(e.target.value)}
               rows={3}
-              disabled={addingMilestone}
+              disabled={addingPhase}
             />
           </div>
 
           <div className={styles.modalRow}>
             <div className={styles.modalField}>
-              <label className={styles.modalLabel} htmlFor="milestoneStart">
+              <label className={styles.modalLabel} htmlFor="phaseStart">
                 Start Date
               </label>
               <input
-                id="milestoneStart"
+                id="phaseStart"
                 type="date"
                 className={styles.modalInput}
-                value={newMilestoneStart}
-                onChange={(e) => setNewMilestoneStart(e.target.value)}
-                disabled={addingMilestone}
+                value={newPhaseStart}
+                onChange={(e) => setNewPhaseStart(e.target.value)}
+                disabled={addingPhase}
               />
             </div>
 
             <div className={styles.modalField}>
-              <label className={styles.modalLabel} htmlFor="milestoneEnd">
+              <label className={styles.modalLabel} htmlFor="phaseEnd">
                 Target End Date
               </label>
               <input
-                id="milestoneEnd"
+                id="phaseEnd"
                 type="date"
                 className={styles.modalInput}
-                value={newMilestoneEnd}
-                onChange={(e) => setNewMilestoneEnd(e.target.value)}
-                disabled={addingMilestone}
+                value={newPhaseEnd}
+                onChange={(e) => setNewPhaseEnd(e.target.value)}
+                disabled={addingPhase}
               />
             </div>
           </div>
@@ -1588,17 +1588,17 @@ export default function TasksPage() {
             <button
               type="button"
               className={styles.cancelBtn}
-              onClick={() => setShowAddMilestoneModal(false)}
-              disabled={addingMilestone}
+              onClick={() => setShowAddPhaseModal(false)}
+              disabled={addingPhase}
             >
               Cancel
             </button>
             <button
               type="submit"
               className={styles.confirmBtn}
-              disabled={addingMilestone || !newMilestoneName.trim()}
+              disabled={addingPhase || !newPhaseName.trim()}
             >
-              {addingMilestone ? 'Creating…' : 'Create Milestone'}
+              {addingPhase ? 'Creating…' : 'Create Phase'}
             </button>
           </div>
         </form>
@@ -1612,21 +1612,21 @@ export default function TasksPage() {
       >
         <form onSubmit={handleCreateTaskListSubmit}>
           <div className={styles.modalField}>
-            <label className={styles.modalLabel} htmlFor="parentMilestone">
-              Parent Milestone
+            <label className={styles.modalLabel} htmlFor="parentPhase">
+              Parent Phase
             </label>
             <select
-              id="parentMilestone"
+              id="parentPhase"
               className={styles.modalSelect}
-              value={newTaskListMilestoneId}
-              onChange={(e) => setNewTaskListMilestoneId(e.target.value)}
+              value={newTaskListPhaseId}
+              onChange={(e) => setNewTaskListPhaseId(e.target.value)}
               required
               disabled={addingTaskList}
             >
-              <option value="">Select Milestone…</option>
-              {milestones.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              <option value="">Select Phase…</option>
+              {phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -1676,7 +1676,7 @@ export default function TasksPage() {
             <button
               type="submit"
               className={styles.confirmBtn}
-              disabled={addingTaskList || !newTaskListName.trim() || !newTaskListMilestoneId}
+              disabled={addingTaskList || !newTaskListName.trim() || !newTaskListPhaseId}
             >
               {addingTaskList ? 'Creating…' : 'Create Task List'}
             </button>
@@ -1722,23 +1722,23 @@ export default function TasksPage() {
           {/* Cascading Hierarchy Selection */}
           <div className={styles.modalRow}>
             <div className={styles.modalField}>
-              <label className={styles.modalLabel} htmlFor="taskMilestone">
-                Milestone
+              <label className={styles.modalLabel} htmlFor="taskPhase">
+                Phase
               </label>
               <select
-                id="taskMilestone"
+                id="taskPhase"
                 className={styles.modalSelect}
-                value={newTaskMilestoneId}
+                value={newTaskPhaseId}
                 onChange={(e) => {
-                  setNewTaskMilestoneId(e.target.value);
+                  setNewTaskPhaseId(e.target.value);
                   setNewTaskTaskListId('');
                 }}
                 disabled={addingTask}
               >
                 <option value="">None (Uncategorized Task)</option>
-                {milestones.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
+                {phases.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
@@ -1753,13 +1753,13 @@ export default function TasksPage() {
                 className={styles.modalSelect}
                 value={newTaskTaskListId}
                 onChange={(e) => setNewTaskTaskListId(e.target.value)}
-                disabled={addingTask || !newTaskMilestoneId}
-                required={!!newTaskMilestoneId}
+                disabled={addingTask || !newTaskPhaseId}
+                required={!!newTaskPhaseId}
               >
                 <option value="">
-                  {!newTaskMilestoneId ? 'Select Milestone first…' : 'Select Task List…'}
+                  {!newTaskPhaseId ? 'Select Phase first…' : 'Select Task List…'}
                 </option>
-                {availableTaskListsForSelectedMilestone.map((tl) => (
+                {availableTaskListsForSelectedPhase.map((tl) => (
                   <option key={tl.id} value={tl.id}>
                     {tl.name}
                   </option>

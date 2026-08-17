@@ -32,7 +32,7 @@ export function useProcessInstance(taskListId) {
         .select(`
           id,
           project_id,
-          milestone_id,
+          phase_id,
           name,
           description,
           task_list_type,
@@ -52,7 +52,7 @@ export function useProcessInstance(taskListId) {
             workspace_id,
             color
           ),
-          milestones:milestone_id (
+          phases:phase_id (
             id,
             name,
             status
@@ -91,7 +91,7 @@ export function useProcessInstance(taskListId) {
         .select(`
           id,
           project_id,
-          milestone_id,
+          phase_id,
           task_list_id,
           title,
           description,

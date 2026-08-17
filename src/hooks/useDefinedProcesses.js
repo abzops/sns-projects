@@ -156,12 +156,12 @@ export function useDefinedProcesses(workspaceId) {
   };
 
   // RPC: Start process instance
-  const startProcess = async ({ versionId, projectId, milestoneId, instanceName, raciOverrides = null }) => {
+  const startProcess = async ({ versionId, projectId, phaseId, instanceName, raciOverrides = null }) => {
     try {
       const { data, error: rpcErr } = await supabase.rpc('start_defined_process', {
         p_version_id: versionId,
         p_project_id: projectId,
-        p_milestone_id: milestoneId,
+        p_phase_id: phaseId,
         p_instance_name: instanceName,
         p_raci_overrides: raciOverrides,
       });

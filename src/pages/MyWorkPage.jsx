@@ -76,7 +76,7 @@ export default function MyWorkPage() {
               tasks:task_id (
                 id,
                 project_id,
-                milestone_id,
+                phase_id,
                 task_list_id,
                 title,
                 description,
@@ -92,7 +92,7 @@ export default function MyWorkPage() {
                   color,
                   workspace_id
                 ),
-                milestones:milestone_id (
+                phases:phase_id (
                   id,
                   name
                 ),
@@ -120,7 +120,7 @@ export default function MyWorkPage() {
             .select(`
               id,
               project_id,
-              milestone_id,
+              phase_id,
               task_list_id,
               title,
               description,
@@ -136,7 +136,7 @@ export default function MyWorkPage() {
                 color,
                 workspace_id
               ),
-              milestones:milestone_id (
+              phases:phase_id (
                 id,
                 name
               ),

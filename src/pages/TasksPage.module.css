@@ -315,13 +315,13 @@
   gap: 20px;
 }
 
-.milestonesList {
+.phasesList {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.milestoneCard {
+.phaseCard {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -329,7 +329,7 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
-.milestoneHeader {
+.phaseHeader {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -358,7 +358,7 @@
   color: var(--text);
 }
 
-.milestoneMain {
+.phaseMain {
   flex: 1;
   min-width: 220px;
   display: flex;
@@ -366,14 +366,14 @@
   gap: 4px;
 }
 
-.milestoneTitleRow {
+.phaseTitleRow {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.milestoneTag {
+.phaseTag {
   font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -385,14 +385,14 @@
   border-radius: 4px;
 }
 
-.milestoneName {
+.phaseName {
   font-size: 1.05rem;
   font-weight: 800;
   color: var(--text);
   margin: 0;
 }
 
-.milestoneDate {
+.phaseDate {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -400,13 +400,13 @@
   color: var(--muted);
 }
 
-.milestoneDesc {
+.phaseDesc {
   font-size: 0.78rem;
   color: var(--muted-2);
   margin: 0;
 }
 
-.milestoneProgressWrap {
+.phaseProgressWrap {
   width: 140px;
   display: flex;
   flex-direction: column;
@@ -447,7 +447,7 @@
   color: var(--muted-2);
 }
 
-.milestoneActions {
+.phaseActions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -472,7 +472,7 @@
   color: var(--yellow);
 }
 
-.deleteMilestoneBtn {
+.deletePhaseBtn {
   padding: 6px 10px;
   background: transparent;
   border: 1px solid var(--line);
@@ -482,12 +482,12 @@
   cursor: pointer;
 }
 
-.deleteMilestoneBtn:hover {
+.deletePhaseBtn:hover {
   color: var(--red);
   border-color: var(--red);
 }
 
-.milestoneBody {
+.phaseBody {
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -514,7 +514,7 @@
   font-size: 0.82rem;
 }
 
-/* ── Task List inside Milestone ── */
+/* ── Task List inside Phase ── */
 .taskListCard {
   background: var(--panel-2);
   border: 1px solid var(--line);

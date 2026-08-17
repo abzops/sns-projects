@@ -165,7 +165,7 @@ export default function RaciMatrixRow({
             className={styles.titleInput}
             value={step.title || ''}
             onChange={(e) => onUpdateStep(index, { title: e.target.value })}
-            placeholder="Describe procedure or milestone step..."
+            placeholder="Describe procedure or process step..."
             disabled={readonly}
           />
         </td>

@@ -112,7 +112,7 @@ To load it:
 3. Run `npm run db:setup`.
 5. Refresh the app; you will see a workspace named `SNS Projects Dataset`.
 
-This imports 6 projects and 26 tasks. Original assignee, phase/milestone, task list, and subtask details are preserved inside each task description.
+This imports 6 projects and 26 tasks. Original assignee, Phase, task list, and subtask details are preserved inside each task description.
 
 ## Important
 

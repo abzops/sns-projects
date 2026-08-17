@@ -410,7 +410,7 @@ export default function DashboardPage() {
             <div className={styles.emptyCard}>
               <FolderKanban size={36} />
               <h3>No projects created yet</h3>
-              <p>Create your first project to start tracking milestones, RACI matrix, and Kanban boards.</p>
+              <p>Create your first project to start tracking phases, RACI matrix, and Kanban boards.</p>
               <Link to={`/workspace/${workspaceId}/projects`} className={styles.emptyActionBtn}>
                 <Plus size={16} /> Create Project
               </Link>

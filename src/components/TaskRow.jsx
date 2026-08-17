@@ -29,7 +29,7 @@ export default function TaskRow({ task, onClick, showProjectName = false, showHi
   const isBlocked = task.task_statuses?.system_code === 'blocked' || task.task_statuses?.name?.toLowerCase().includes('blocked');
   const overdue = isOverdue(task.due_date, isDone);
   const hasSubtasks = (task.subtask_count || 0) > 0;
-  const hierarchyName = task.task_lists?.name || task.milestones?.name;
+  const hierarchyName = task.task_lists?.name || task.phases?.name;
 
   return (
     <tr
@@ -55,7 +55,7 @@ export default function TaskRow({ task, onClick, showProjectName = false, showHi
 
           <div className={styles.secondaryMetaRow}>
             {showHierarchy && hierarchyName && (
-              <span className={styles.hierarchyMeta} title={task.milestones?.name ? `Milestone: ${task.milestones.name}` : ''}>
+              <span className={styles.hierarchyMeta} title={task.phases?.name ? `Phase: ${task.phases.name}` : ''}>
                 <Layers size={11} className={styles.metaIcon} />
                 <span>{hierarchyName}</span>
               </span>
