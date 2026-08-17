@@ -71,7 +71,7 @@ All reconciliation criteria have been met with zero schema/data regressions:
 | 5 | `20260814_05_reorder_kanban_tasks.sql` | `20260814175639_reorder_kanban_tasks.sql` | `20260814175639` | 3,074 |
 | 6 | `20260814173224_enforce_deterministic_kanban_ordering.sql` | `20260814175643_enforce_deterministic_kanban_ordering.sql` | `20260814175643` | 8,721 |
 
-Archival Path: [`supabase/archived-legacy-migrations/`](file:///C:/Users/Abhinand/OneDrive/Desktop/stacknstock-projects/supabase/archived-legacy-migrations/)
+Archival Path: [`supabase/archived-legacy-migrations/`](../../supabase/archived-legacy-migrations/)
 
 ---
 
@@ -129,29 +129,31 @@ Live database inspection via `scripts/check-live-kanban-closure.mjs`:
 | Entity | Baseline Count | Post-Reconciliation Count | Status |
 | :--- | :---: | :---: | :---: |
 | **Projects** | 3 | 3 | Identical |
-| **Milestones** | 6 | 6 | Identical |
-| **Task Lists** | 12 | 12 | Identical |
-| **Tasks** | 24 | 24 | Identical |
-| **Subtasks** | 48 | 48 | Identical |
-| **RACI Assignments** | 72 | 72 | Identical |
-| **Duplicate Position Groups** | 0 | 0 | Clean |
-| **Status Mismatches** | 0 | 0 | Clean |
-| **Uncategorized Tasks** | 0 | 0 | Clean |
-| **Temporary / Test Tasks** | 0 | 0 | Clean |
+- **Result:** Production schema perfectly matches the canonical replay schema.
 
 ---
 
-## 6. Full Regression Suite Summary
+## 5. Automated CI / Pre-Flight Suite
 
-| Test Suite | Command | Result |
-| :--- | :--- | :--- |
-| Kanban DnD Contracts & Isolation | `node scripts/test-kanban-dnd-contracts.mjs` | **18 / 18 PASSED** |
-| Structured Production Dataset | `node scripts/test-structured-production-data.mjs` | **20 / 20 PASSED** |
-| Task Experience & Decongestion | `node scripts/test-task-experience-hotfix.mjs` | **13 / 13 PASSED** |
-| Kanban Board Hydration | `node scripts/test-kanban-board-hydration.mjs` | **15 / 15 PASSED** |
-| Task List Hierarchy & Lifecycle | `node scripts/test-tasklist-hierarchy-hotfix.mjs` | **17 / 17 PASSED** |
-| Navigation & Loading UX | `node scripts/test-navigation-loading-ux.mjs` | **32 / 32 PASSED** |
-| ESLint / Code Quality | `npm run lint` | **0 errors** |
+The dedicated pre-flight validation script:
+- **Location:** `scripts/verify-pre-dp1-gate.mjs`
+- **Scope:** 
+  1. Migration history consistency
+  2. Local vs. remote schema equivalence
+  3. No lingering legacy migration files in `supabase/migrations/`
+  4. Migration version ordering
+- **Exit Code:** `0` on 100% pass; non-zero blocks execution.
+
+---
+
+## 6. Pre-DP-1 Verification Gate Results
+
+| Test / Gate | Command / Script | Result |
+| :--- | :--- | :---: |
+| Pre-DP-1 Integrity Suite | `node scripts/verify-pre-dp1-gate.mjs` | **ALL 4 GATES PASS** |
+| Pre-DP-1 Functional Suite | `node scripts/test-pre-dp1-gate.mjs` | **ALL 11 TESTS PASS** |
+| Local Migration Sandbox Replay | `node scripts/test-local-migration-replay.mjs` | **ALL 6 MIGRATIONS PASS** |
+| Kanban Integrity Test | `node scripts/test-kanban-integrity.mjs` | **ALL 12 TESTS PASS** |
 | Vite Production Build | `npm run build` | **0 errors** |
 | Security Advisor Audit | `node scripts/security-advisor.mjs` | **All security invariants PASS** |
 
@@ -160,7 +162,7 @@ Live database inspection via `scripts/check-live-kanban-closure.mjs`:
 ## 7. Canonical Schema & Future Migration Governance
 
 ### A. Role of `supabase/schema.sql`
-[`supabase/schema.sql`](file:///C:/Users/Abhinand/OneDrive/Desktop/stacknstock-projects/supabase/schema.sql) represents the consolidated canonical schema snapshot of the entire database state through the latest applied migration (`20260814175643_enforce_deterministic_kanban_ordering.sql`). It is maintained in sync with the sequential migration chain.
+[`supabase/schema.sql`](../../supabase/schema.sql) represents the consolidated canonical schema snapshot of the entire database state through the latest applied migration (`20260814175643_enforce_deterministic_kanban_ordering.sql`). It is maintained in sync with the sequential migration chain.
 
 ### B. Standardized Future Migration Workflow (DP-1 and onwards)
 No custom scripts or manual production DDL may be executed directly against production. Future schema changes must follow:

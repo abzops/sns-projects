@@ -1,9 +1,11 @@
 # SNS Projects — Current-State Technical Audit
 
-**Audit Date:** August 14, 2026  
-**Audited Repository:** `C:\Users\Abhinand\OneDrive\Desktop\stacknstock-projects`  
-**Audit Type:** Read-Only Full Architecture & Workflow Inspection  
-**Target Goal:** Provide a complete technical and functional baseline to guide the design and implementation of **SNS Projects V2** (incorporating RACI matrices, departmental workspaces, executive CEO/CTO dashboards, stage gates, approvals, alerts, and enterprise UX).
+## Document Control
+- **Status**: `HISTORICAL AUDIT` (Point-in-time audit of V1 baseline prior to V2 architecture)
+- **Audit Date**: August 14, 2026  
+- **Audited Repository**: `stacknstock-projects`  
+- **Audit Type**: Read-Only Full Architecture & Workflow Inspection  
+- **Target Goal**: Provide a complete technical and functional baseline to guide the design and implementation of **SNS Projects V2**.
 
 ---
 

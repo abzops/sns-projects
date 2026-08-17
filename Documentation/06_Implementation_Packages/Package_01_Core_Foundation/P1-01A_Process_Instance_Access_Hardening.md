@@ -3,7 +3,7 @@
 ## Document Control
 - **Status**: `VERIFIED`
 - **Package**: Package 1 — Core Foundation
-- **Implementation Commit**: Current working commit
+- **Implementation Commit**: [`64fd803`](https://github.com/abzops/sns-projects/commit/64fd803)
 - **Canonical Migration**: `20260817064609_p1_01_process_instance_access_hardening.sql`
 - **Target Project**: `gqerfixdmgbqahgslzsq` (SNS Projects Production)
 - **Date**: 2026-08-17
@@ -71,7 +71,7 @@ Forward migration `20260817064609_p1_01_process_instance_access_hardening.sql` e
 
 ## 5. Verification & Tests
 
-The automated test suite in [`scripts/test-p1-01-foundation.mjs`](file:///C:/Users/Abhinand/OneDrive/Desktop/stacknstock-projects/scripts/test-p1-01-foundation.mjs) confirms:
+The automated test suite in [`scripts/test-p1-01-foundation.mjs`](../../../scripts/test-p1-01-foundation.mjs) confirms:
 - `process_instances` RLS is enabled.
 - Zero direct table privileges exist for `PUBLIC`, `anon`, and `authenticated`.
 - `process_instances_select_member` policy does not exist.
@@ -80,7 +80,16 @@ The automated test suite in [`scripts/test-p1-01-foundation.mjs`](file:///C:/Use
 
 ---
 
-## 6. Residual Risks & Next Steps
+## 6. Security Advisor Baseline & Residual Risk Analysis
 
-- **Residual Risks**: None. Direct client access is completely blocked until explicit RPC interfaces and participant policies are introduced.
-- **Next Step**: Package 1 / P1-02 will implement the placement-aware runtime RPCs and participant-filtered SELECT policies.
+### Security Advisor Baseline State
+- **New Findings in P1-01A**: **0 new WARN-level findings**.
+- **Intentional Design Info**: The strict fail-closed state on `public.process_instances` produces an expected `RLS Enabled No Policy` INFO finding in Supabase Security Advisor, reflecting that direct client queries are completely blocked until P1-02 introduces placement-aware policies.
+- **Pre-Existing Baseline Warnings**:
+  1. Seven pre-existing `SECURITY DEFINER` workflow RPC WARN findings.
+  2. One `Leaked Password Protection Disabled` configuration WARN finding.
+  *(These pre-existing items belong to prior baseline packages and are not modified in this schema-hardening migration.)*
+
+### Residual Risks & Next Steps
+- **Direct Client Access**: Completely blocked. Normal authenticated users cannot query or mutate `public.process_instances` directly.
+- **Next Step**: Package 1 / P1-02 will implement placement-aware runtime RPCs and participant-filtered SELECT policies.

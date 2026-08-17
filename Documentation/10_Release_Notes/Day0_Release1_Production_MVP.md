@@ -1,10 +1,12 @@
 # SNS Projects V2 — Day-0 Production MVP
 ## Implementation Release 1 Report: Data + Access Foundation
 
-**Date:** August 14, 2026  
-**Status:** **RELEASE 1 SUCCESS**  
-**Repository:** `C:\Users\Abhinand\OneDrive\Desktop\stacknstock-projects`  
-**Target Environment:** Supabase Managed PostgreSQL + React 19 Frontend + GitHub Pages CI/CD  
+## Document Control
+- **Status**: `HISTORICAL RELEASE REPORT` (Point-in-time Day-0 release record)
+- **Date**: August 14, 2026  
+- **Release Status**: **RELEASE 1 SUCCESS**  
+- **Repository**: `stacknstock-projects`  
+- **Target Environment**: Supabase Managed PostgreSQL + React 19 Frontend + GitHub Pages CI/CD  
 
 ---
 

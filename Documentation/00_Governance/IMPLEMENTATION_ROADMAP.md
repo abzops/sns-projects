@@ -8,67 +8,79 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 
 ## Approved Package Sequence & Status
 
-| Package | Code | Scope | Status | Target / Migration |
+| Package | Code | Scope | Status | Canonical Reference |
 | :--- | :--- | :--- | :--- | :--- |
-| **Package 1** | `P1-01` | Core Hierarchy + Process Instance Database Foundation | **VERIFIED** | `20260817063502_core_hierarchy_process_instance_foundation.sql` |
-| **Package 1** | `P1-01A` | Process Instance Access Hardening & Documentation Baseline | **VERIFIED** | `20260817064609_p1_01_process_instance_access_hardening.sql` |
-| **Package 1** | `P1-02` | Placement-Aware Process Runtime + Standalone Execution | **NEXT** | Planned RPC & Runtime Hardening |
-| **Package 2** | `P2-01..` | Process Runtime Refactor & Multi-Instance Engine | **PLANNED** | Dynamic DAG instantiation, Step execution |
-| **Package 3** | `P3-01..` | Hierarchy UI / UX Alignment (Phase, Task List, Child Tasks) | **PLANNED** | Full UI cutover to Phase terminology |
-| **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Cost Centers, POs) | **PLANNED** | Financial schemas, RLS, audit logs |
-| **Package 5** | `P5-01..` | Expense Execution Integration | **PLANNED** | Task/Process Expense attachments & approvals |
-| **Package 6** | `P6-01..` | Finance Frontend & Dashboards | **PLANNED** | Financial management UI, Reports, Analytics |
-| **Package 7** | `P7-01..` | Hierarchy Financial UX (Rollup costs from Task to Project) | **PLANNED** | Recursive financial rollups across hierarchy |
-| **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import/Export | **PLANNED** | End-to-end regression validation, bulk tooling |
+| **Package 1** | `P1-01` | Core Hierarchy + Process Instance Database Foundation | **`VERIFIED`** | `20260817063502_core_hierarchy_process_instance_foundation.sql` |
+| **Package 1** | `P1-01A` | Process Instance Access Hardening & Documentation Baseline | **`VERIFIED`** | `20260817064609_p1_01_process_instance_access_hardening.sql` |
+| **Package 1** | `P1-01B` | Documentation Accuracy & Authoritative Architecture Baseline | **`VERIFIED`** | Commit `64fd803` + Current Baseline |
+| **Package 1** | `P1-02` | Placement-Aware Process Runtime + Standalone Execution | **`NEXT`** | Planned Runtime RPCs & Placement Handlers |
+| **Package 2** | `P2-01..` | Process Runtime Refactor & Multi-Instance Engine | **`PLANNED`** | Dynamic DAG instantiation, Step execution |
+| **Package 3** | `P3-01..` | Hierarchy UI / UX Alignment (Phase, Task List, Child Tasks) | **`PLANNED`** | Full UI cutover to Phase terminology |
+| **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Buffers, Expense Ledger) | **`PLANNED`** | Financial schemas, RLS, audit logs |
+| **Package 5** | `P5-01..` | Expense Execution Integration (Atomic Intercept, Reallocations) | **`PLANNED`** | Task/Process Expense attachments & audit |
+| **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
+| **Package 7** | `P7-01..` | Financial Hierarchy UX (Compact Bars, Hover Cards, Rollups) | **`PLANNED`** | Hierarchical financial visualization |
+| **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import | **`PLANNED`** | Bulk template ingestion & E2E certification |
 
 ---
 
-## Package Details & Dependency Graph
+## Package Dependency Architecture
 
 ```mermaid
 graph TD
-    P1_01[P1-01: Core Foundation & DB Schema] --> P1_01A[P1-01A: Access Hardening & Docs]
-    P1_01A --> P1_02[P1-02: Placement Runtime Engine]
+    P1_01[P1-01: Core Foundation & DB Schema] --> P1_01A[P1-01A: Access Hardening]
+    P1_01A --> P1_01B[P1-01B: Docs & Architecture Baseline]
+    P1_01B --> P1_02[P1-02: Placement Runtime Engine]
     P1_02 --> P2[Package 2: Process Runtime Refactor]
     P1_02 --> P3[Package 3: Hierarchy UI Cutover]
     P2 --> P4[Package 4: Finance DB Foundation]
-    P4 --> P5[Package 5: Expense Execution]
+    P4 --> P5[Package 5: Expense Execution Integration]
     P5 --> P6[Package 6: Finance Frontend]
-    P3 --> P7[Package 7: Hierarchy Financial UX]
+    P3 --> P7[Package 7: Financial Hierarchy UX]
     P6 --> P7
     P7 --> P8[Package 8: Regression & Excel Import]
 ```
 
+---
+
+## Detailed Package Scopes
+
 ### Package 1: Core Foundation & Placement Architecture
 - **P1-01 (`VERIFIED`)**: Established `phase_id` compatibility on `tasks` and `task_lists` with dual-sync triggers, added `parent_task_id`, made `tasks.project_id` nullable, created `public.phases` view, and created `public.process_instances` entity with placement integrity constraints.
-- **P1-01A (`VERIFIED`)**: Hardened `public.process_instances` permissions to strict fail-closed state (zero direct client table privileges, dropped broad workspace SELECT policy) and established the enterprise documentation framework.
+- **P1-01A (`VERIFIED`)**: Hardened `public.process_instances` permissions to strict fail-closed state (zero direct client table privileges, dropped broad workspace SELECT policy).
+- **P1-01B (`VERIFIED`)**: Repaired technical baseline facts, established authoritative Decision Registers (Preserving Decision 32 = PARKED), created Finance Architecture Specification, and eliminated non-portable link patterns.
 - **P1-02 (`NEXT`)**: Implementation of placement-aware Defined Process execution RPCs (`start_defined_process` supporting standalone, project, phase, task_list, and task placements) and granular participant/RACI authorization.
 
 ### Package 2: Process Runtime Refactor
-- Refactoring runtime execution to instantiate steps as full tasks (`process_instance_id` + `parent_task_id`).
-- Lifecycle management (running $\to$ completed / cancelled).
-- Elimination of single-process-per-task-list restriction.
+- Multi-instance process execution per Task and Task List.
+- Step-level task execution with independent RACI, approval cycles, and evidence submission.
+- Complete lifecycle management (`running` $\to$ `completed` / `cancelled`).
 
 ### Package 3: Hierarchy UI / UX Alignment
-- Transition frontend UI terminology and components from Milestone $\to$ Phase.
-- Support for rendering Child Tasks (Process Steps) nested beneath Parent Tasks.
-- Multi-level task hierarchy display in Kanban and List views.
+- Frontend transition from Milestone $\to$ Phase terminology across all components.
+- Chevron-based hierarchical expansion for Parent Tasks and Child Step Tasks.
+- Multi-process visualization under parent tasks.
 
 ### Package 4: Finance Database Foundation
-- Schemas for Cost Centers, GL Accounts, Budgets, and Purchase Orders.
-- Row-level security for financial controllers, auditors, and executive roles.
+- Schemas for Base Budgets, fixed Safety Buffers, and hierarchical allocation tracking on Projects, Phases, and Task Lists.
+- Core Expense Ledger table, financial audit schemas, and deterministic risk band calculations (`GREEN`, `YELLOW`, `ORANGE`, `RED`).
+- RLS policies protecting financial data (Finance Operator vs Admin / Executive roles).
 
 ### Package 5: Expense Execution Integration
-- Direct linking of expenses, invoices, and payment milestones to Tasks, Child Tasks, and Process Instances.
-- Multi-level approval workflows for budget overages.
+- Atomic task completion expense intercept dialog (*Complete without Expense* vs *Add Expense & Complete*).
+- Support for single totals and split amounts.
+- Cumulative rework expense tracking.
+- Expense correction, void, and admin hard-delete with immutable audit tombstones.
 
 ### Package 6: Finance Frontend
-- Organization-wide and project-level financial dashboards.
-- Expense entry modals, budget allocation controls, and audit trails.
+- **Overview Dashboard**: High-level financial summary, burn rates, and project budgets.
+- **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
+- **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 
-### Package 7: Hierarchy Financial UX
-- Automated rollup calculations (Task $\to$ Task List $\to$ Phase $\to$ Project $\to$ Workspace).
-- Real-time variance tracking against allocated baseline budgets.
+### Package 7: Financial Hierarchy UX
+- Compact financial utilization bars and risk indicators in project hierarchy views.
+- Financial hover summary popovers (Base, Buffer, Actual, Remaining, Overruns).
+- Dynamic rollups from leaf work through Tasks, Task Lists, Phases, and Projects.
 
 ### Package 8: Regression & Defined Process Excel Import
 - Bulk spreadsheet parser for Defined Process templates (DAG steps, RACI matrices, durations, evidence requirements).

@@ -117,7 +117,7 @@ Status is strictly constrained to:
 
 ## 8. Verification & Test Coverage
 
-Automated test suite [`scripts/test-p1-01-foundation.mjs`](file:///C:/Users/Abhinand/OneDrive/Desktop/stacknstock-projects/scripts/test-p1-01-foundation.mjs) validates 45 contract assertions:
+Automated test suite [`scripts/test-p1-01-foundation.mjs`](../../../scripts/test-p1-01-foundation.mjs) validates 45 contract assertions:
 - **Canonical Migration**: 100% compliant with Supabase CLI chain.
 - **Phase/Milestone Sync**: All 5 mutation permutations verified.
 - **Placement Logic**: All valid placement combinations accepted; all invalid permutations rejected.

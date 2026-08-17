@@ -8,11 +8,40 @@ This document defines the authoritative standard for all documentation within th
 1. **Never Commit Secrets**: Documentation must **NEVER** contain real credentials, database passwords, temporary/permanent employee passwords, `service_role` keys, JWT/access tokens, refresh tokens, or private environment configurations. Always use redacted placeholders or environment variable references.
 2. **Accurate & Authoritative**: Document facts as implemented and verified in the codebase, never speculative or unapproved designs.
 3. **Traceability**: Every technical specification, decision record, and implementation report must cite relevant commit hashes, migration versions, and verification test scripts.
-4. **Mandatory Completion Gate**: No engineering task or package may be closed without updating the documentation suite.
+4. **Portability of Links**: All repository documentation must use relative Markdown links. Local absolute machine paths (e.g. `file:///C:/...`, `C:\Users\...`) are strictly prohibited.
+5. **Mandatory Completion Gate**: No engineering task or package may be closed without updating the documentation suite.
 
 ---
 
-## 2. Directory Taxonomy & Folder Ownership
+## 2. Master Documentation Authority Precedence Order
+
+When reviewing technical architecture or implementation requirements across multiple documents, the following strict hierarchy of authority applies:
+
+```mermaid
+graph TD
+    A[1. DOCUMENTATION_STANDARD.md] --> B[2. DECISION_REGISTER.md]
+    B --> C[3. Domain Decision Records: PROCESS & FINANCE ADRs]
+    C --> D[4. IMPLEMENTATION_ROADMAP.md]
+    D --> E[5. Current Architecture Specs: Blueprint & Finance Spec]
+    E --> F[6. Verified Implementation Package Documents: P1-01, P1-01A, P1-01B]
+    F --> G[7. Historical Release Notes & Hotfix Reports]
+    G --> H[8. Archive Materials]
+```
+
+1. **`DOCUMENTATION_STANDARD.md`**: Defines governance rules, templates, and procedures.
+2. **`DECISION_REGISTER.md`**: Master index of all approved architectural decisions.
+3. **Domain Decision Records** (`PROCESS_ARCHITECTURE_DECISIONS.md`, `FINANCE_ARCHITECTURE_DECISIONS.md`): Authoritative individual decision logic and operational rules.
+4. **`IMPLEMENTATION_ROADMAP.md`**: Current approved package sequencing and dependencies.
+5. **Current Architecture Specs** (`SNS_Projects_V2_Architecture_Blueprint.md`, `FINANCE_ARCHITECTURE_SPEC.md`): High-level system design.
+6. **Verified Implementation Package Documents** (`06_Implementation_Packages/`): Granular engineering reports of completed packages.
+7. **Historical Release Notes & Reports** (`10_Release_Notes/`): Point-in-time historical records.
+8. **Archive** (`99_Archive/`): Superseded or legacy reference documents.
+
+*Conflict Resolution Rule*: If an older or lower-tier document conflicts with a higher-tier document, the higher authoritative document always prevails.
+
+---
+
+## 3. Directory Taxonomy & Folder Ownership
 
 The `Documentation/` directory is organized into domain-specific, numbered categories:
 
@@ -27,9 +56,9 @@ Documentation/
 │
 ├── 01_Product_Architecture/                 # System blueprints, user journeys, high-level design
 ├── 02_Database_and_Data_Architecture/       # Schema definitions, ERDs, migration standards
-├── 03_Security_and_Authentication/          # RLS models, Auth workflows, audit logs, CVE reports
+├── 03_Security_and_Authentication/          # RLS models, Auth workflows, audit logs
 ├── 04_Defined_Processes/                    # Defined Process Engine, DAGs, RACI specifications
-├── 05_Finance/                              # Financial hierarchy, cost tracking, budgets
+├── 05_Finance/                              # Financial specifications (Planned Packages 4–7)
 │
 ├── 06_Implementation_Packages/              # Discrete execution packages
 │   ├── Package_01_Core_Foundation/
@@ -43,14 +72,14 @@ Documentation/
 │
 ├── 07_Testing_and_QA/                       # Test strategies, contract suites, E2E policies
 ├── 08_Deployment_and_Operations/            # CI/CD, seed datasets, disaster recovery
-├── 09_Decision_Records/                     # Architecture Decision Records (ADRs)
+├── 09_Decision_Records/                     # Authoritative Decision Registers (ADRs)
 ├── 10_Release_Notes/                        # Production changelogs and hotfix summaries
 └── 99_Archive/                              # Historical or superseded reference materials
 ```
 
 ---
 
-## 3. Document Lifecycle Statuses
+## 4. Document Lifecycle Statuses
 
 Every technical and implementation document must declare an authoritative status in its header metadata:
 
@@ -65,55 +94,13 @@ Every technical and implementation document must declare an authoritative status
 
 ---
 
-## 4. File Naming Conventions
+## 5. File Naming Conventions
 
 All Markdown files must follow predictable, descriptive naming patterns:
 - **Implementation Packages**: `<PackageID>_<Descriptive_Title>.md` (e.g. `P1-01_Core_Hierarchy_Process_Instance_Foundation.md`, `P1-01A_Process_Instance_Access_Hardening.md`)
 - **Architecture Blueprints**: `SNS_Projects_<Topic>_Blueprint.md`
-- **Decision Records**: `<DOMAIN>_ARCHITECTURE_DECISIONS.md` (e.g. `ARCHITECTURE_AND_PROCESS_DECISIONS.md`)
-- **Release Notes / Hotfixes**: `<Type>_<Feature_or_Issue>.md` (e.g. `Hotfix_Workspace_Members_Rendering.md`)
-
-*Forbidden Names*: `notes.md`, `temp.md`, `doc.md`, `new.md`, `final.md`, `report2.md`.
-
----
-
-## 5. Standard Implementation Document Template
-
-Every package implementation document in `06_Implementation_Packages/` must follow this structure:
-
-```markdown
-# [Package ID] — [Title]
-
-## Document Control
-- **Status**: VERIFIED / IMPLEMENTED / PLANNED
-- **Package**: [e.g. Package 1: Core Foundation]
-- **Implementation Commit**: [Git commit hash]
-- **Canonical Migration**: [Migration timestamp filename or N/A]
-- **Target Project**: [Supabase Project Reference]
-- **Date**: [YYYY-MM-DD]
-- **Last Verified**: [YYYY-MM-DD]
-
-## 1. Objective & Business Context
-[Why was this change made? What problem does it solve?]
-
-## 2. Architectural Changes
-[Previous vs Target state, structural hierarchy changes]
-
-## 3. Implementation Details
-[Schema changes, RPC contracts, frontend modifications, triggers]
-
-## 4. Security & Access Control
-[RLS policies, role grants, invoker security, fail-closed assertions]
-
-## 5. Verification & Testing
-[Test scripts executed, assertion results, regression suites]
-
-## 6. Known Limitations & Future Dependencies
-[What remains open? What does the next package depend on?]
-
-## 7. Change History
-[Changelog of revisions to this document]
-```
+- **Decision Records**: `<DOMAIN>_ARCHITECTURE_DECISIONS.md`
+- **Release Notes / Hotfixes**: `<Type>_<Feature_or_Issue>.md`
 
 ---
 
@@ -140,5 +127,5 @@ graph TD
 5. **Update Master Index**: Register the new document in `Documentation/README.md`.
 6. **Update Roadmap**: Advance status in `00_Governance/IMPLEMENTATION_ROADMAP.md`.
 7. **Update Decision Records**: Record any architectural decisions made.
-8. **Verify Links**: Ensure all relative Markdown links resolve correctly.
+8. **Verify Links**: Ensure all relative Markdown links resolve correctly via `node scripts/verify-doc-links.mjs`.
 9. **Commit Together**: Commit source code, tests, and documentation in a single unified atomic commit.

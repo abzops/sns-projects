@@ -2,26 +2,47 @@
 
 ## 1. System Overview
 
-**StacknStock Projects (SNS Projects)** is an enterprise-grade project and process execution platform designed for industrial and multi-disciplinary teams. It unifies high-level strategic project milestones, tactical Kanban task boards, full RACI accountability matrixes, and strict sequential/DAG Defined Process Workflows into a single coherent system.
+**StacknStock Projects (SNS Projects)** is an enterprise-grade project and process execution platform designed for industrial, technical, and multi-disciplinary teams. It unifies strategic project milestones, tactical Kanban task boards, full RACI accountability matrices, and strict sequential/DAG Defined Process Workflows into a single coherent system.
 
 ---
 
 ## 2. Current Technical Baseline
 
-- **Frontend Application**: React 18 + Vite SPA, Vanilla CSS Modules, Lucide React icons
-- **Backend Architecture**: Supabase PostgreSQL 15, Row-Level Security (RLS), Edge Functions (Deno / TypeScript)
-- **Production Hosting**: GitHub Pages CDN
+- **Frontend Core**: React 19 (`react` ^19.2.7, `react-dom` ^19.2.7), JavaScript (JSX)
+- **Routing**: React Router DOM 7 (`react-router-dom` ^7.18.1)
+- **Build Tooling**: Vite 8 (`vite` ^8.1.1), Oxlint (`oxlint` ^1.71.0)
+- **UI Architecture**: Vanilla CSS / CSS Modules, Lucide React (`lucide-react` ^1.23.0)
+- **Drag & Drop**: dnd-kit (`@dnd-kit/core` ^6.3.1, `@dnd-kit/sortable` ^10.0.0, `@dnd-kit/utilities` ^3.2.2)
+- **State Management**: React Context + custom domain hooks
+- **Client SDK**: Supabase JS v2 (`@supabase/supabase-js` ^2.110.0)
+- **Backend Database**: Supabase PostgreSQL 17, Row-Level Security (RLS)
+- **Backend Serverless**: Supabase Edge Functions (Deno / TypeScript), PostgreSQL Functions & Triggers
+- **Hosting & CI/CD**: GitHub Pages CDN, GitHub Actions Automated Workflows
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
 - **Current Canonical Migration**: `20260817064609_p1_01_process_instance_access_hardening.sql`
-- **Latest Implementation Commit**: `65efb78` (P1-01 Core Hierarchy Foundation) + current hardening commit
+- **Latest Implementation Commit**: `64fd803`
 
 > [!IMPORTANT]
-> **Zero Secrets Policy**: This repository and all associated documentation strictly prohibit committing secrets, access keys, or production passwords.
+> **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
 
 ---
 
-## 3. Documentation Map
+## 3. Master Documentation Precedence Order
+
+When consulting documentation, the following hierarchy of authority applies:
+1. **[Documentation Standard](00_Governance/DOCUMENTATION_STANDARD.md)**
+2. **[Master Decision Register](09_Decision_Records/DECISION_REGISTER.md)**
+3. **Domain Decision Records** ([Process ADRs](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md) · [Finance ADRs](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md))
+4. **[Implementation Roadmap](00_Governance/IMPLEMENTATION_ROADMAP.md)**
+5. **System Architecture Specs** ([V2 Architecture Blueprint](01_Product_Architecture/SNS_Projects_V2_Architecture_Blueprint.md) · [Finance Architecture Spec](05_Finance/FINANCE_ARCHITECTURE_SPEC.md))
+6. **Implementation Package Reports** (`06_Implementation_Packages/`)
+7. **Historical Release Notes** (`10_Release_Notes/`)
+8. **Archive** (`99_Archive/`)
+
+---
+
+## 4. Documentation Map
 
 | Category | Description | Primary Reference |
 | :--- | :--- | :--- |
@@ -30,63 +51,50 @@
 | **`02_Database_and_Data_Architecture`** | Database schema designs, hierarchy alignment, migration chains | [Hierarchy Alignment](02_Database_and_Data_Architecture/Day0_Release2_5_Hierarchy_Alignment.md) · [Migration History](02_Database_and_Data_Architecture/Migration_History_Reconciliation.md) |
 | **`03_Security_and_Authentication`** | RLS security policies, role hierarchies, user onboarding | [Security Hardening](03_Security_and_Authentication/Day0_Release1_1_Security_Hardening.md) · [Org Admin & Auth](03_Security_and_Authentication/V1_01_Organization_Admin_and_Auth.md) |
 | **`04_Defined_Processes`** | Defined Process Engine, DAG step execution, RACI contracts | [Engine Architecture Plan](04_Defined_Processes/Defined_Process_Engine_Architecture_Plan.md) · [Runtime API Contract](04_Defined_Processes/Defined_Process_Runtime_API_Contract.md) |
-| **`05_Finance`** | Financial tracking, budget allocation, cost centers, expense integration | *Finance planning specifications (Upcoming Packages 4–7)* |
-| **`06_Implementation_Packages`** | Technical specifications for discrete engineering delivery packages | [P1-01 Foundation](06_Implementation_Packages/Package_01_Core_Foundation/P1-01_Core_Hierarchy_Process_Instance_Foundation.md) · [P1-01A Hardening](06_Implementation_Packages/Package_01_Core_Foundation/P1-01A_Process_Instance_Access_Hardening.md) |
+| **`05_Finance`** | Financial tracking, Base Budget + Safety Buffer model, Expense Ledgers | [Finance Architecture Spec](05_Finance/FINANCE_ARCHITECTURE_SPEC.md) · [Finance Decision Register](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
+| **`06_Implementation_Packages`** | Technical specifications for discrete engineering delivery packages | [P1-01 Foundation](06_Implementation_Packages/Package_01_Core_Foundation/P1-01_Core_Hierarchy_Process_Instance_Foundation.md) · [P1-01A Hardening](06_Implementation_Packages/Package_01_Core_Foundation/P1-01A_Process_Instance_Access_Hardening.md) · [P1-01B Accuracy](06_Implementation_Packages/Package_01_Core_Foundation/P1-01B_Documentation_Accuracy_and_Architecture_Baseline.md) |
 | **`07_Testing_and_QA`** | Verification suites, static contract validation, safety harnesses | [Testing Directory](07_Testing_and_QA/) |
 | **`08_Deployment_and_Operations`** | Data seed operations, migrations deployment, backup runs | [Structured Reseed Report](08_Deployment_and_Operations/Structured_Data_Reseed_Report.md) |
-| **`09_Decision_Records`** | Architecture Decision Records (ADRs) | [Architecture Decisions](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md) |
+| **`09_Decision_Records`** | Authoritative Architecture Decision Records (ADRs) | [Master Decision Register](09_Decision_Records/DECISION_REGISTER.md) · [Process Decisions](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md) · [Finance Decisions](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
 | **`10_Release_Notes`** | Production release notes, changelogs, and hotfix reports | [Day-0 Release Notes](10_Release_Notes/Day0_Release1_Production_MVP.md) · [Hotfix Reports](10_Release_Notes/) |
 | **`99_Archive`** | Historical or superseded project documentation | [Archive Directory](99_Archive/) |
 
 ---
 
-## 4. Current Implementation Status
+## 5. Current Implementation Status
 
-```mermaid
-gantt
-    title SNS Projects V2 Implementation Roadmap
-    dateFormat  YYYY-MM-DD
-    section Package 1
-    P1-01 Core Foundation           :done, 2026-08-17, 2026-08-17
-    P1-01A Access Hardening & Docs  :done, 2026-08-17, 2026-08-17
-    P1-02 Placement Runtime Engine  :active, 2026-08-18, 2026-08-19
-    section Upcoming Packages
-    Package 2 Process Runtime       :2026-08-20, 2026-08-22
-    Package 3 Hierarchy UI          :2026-08-23, 2026-08-25
-    Package 4 Finance DB Foundation :2026-08-26, 2026-08-28
-    Package 5 Expense Execution     :2026-08-29, 2026-08-31
-    Package 6 Finance Frontend      :2026-09-01, 2026-09-03
-    Package 7 Financial Hierarchy   :2026-09-04, 2026-09-06
-    Package 8 Regression & Excel    :2026-09-07, 2026-09-09
-```
-
-- **Package 1 — Core Foundation**:
-  - `P1-01`: Core Hierarchy + Process Instance Foundation — **`VERIFIED`**
-  - `P1-01A`: Process Instance Access Hardening & Documentation Baseline — **`VERIFIED`**
-  - `P1-02`: Placement-Aware Process Runtime Engine — **`NEXT`**
-- **Package 2 — Process Runtime Refactor**: **`PLANNED`**
-- **Package 3 — Hierarchy UI / UX Alignment**: **`PLANNED`**
-- **Package 4 — Finance Database Foundation**: **`PLANNED`**
-- **Package 5 — Expense Execution Integration**: **`PLANNED`**
-- **Package 6 — Finance Frontend**: **`PLANNED`**
-- **Package 7 — Financial Hierarchy**: **`PLANNED`**
-- **Package 8 — Regression & Defined Process Excel Import**: **`PLANNED`**
+| Package | Scope | Status | Canonical Reference |
+| :--- | :--- | :---: | :--- |
+| **Package 1: Core Foundation** | `P1-01` Core Hierarchy & Process Instance Foundation | **`VERIFIED`** | Migration `20260817063502` |
+| | `P1-01A` Process Instance Access Hardening | **`VERIFIED`** | Migration `20260817064609` |
+| | `P1-01B` Documentation Accuracy & Authoritative Baseline | **`VERIFIED`** | Commit `64fd803` + Current Baseline |
+| | `P1-02` Placement-Aware Process Runtime Engine | **`NEXT`** | Planned Runtime RPCs & Handlers |
+| **Package 2: Process Runtime** | Multi-instance execution, step RACI, DAG lifecycle | **`PLANNED`** | Upcoming Package 2 |
+| **Package 3: Hierarchy UI** | Milestone $\to$ Phase cutover, nested task UI | **`PLANNED`** | Upcoming Package 3 |
+| **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
+| **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
+| **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
+| **Package 7: Financial Hierarchy**| Compact financial utilization bars, hover summaries | **`PLANNED`** | Upcoming Package 7 |
+| **Package 8: Regression & Excel** | Defined Process Excel import, Day-N certification | **`PLANNED`** | Upcoming Package 8 |
 
 ---
 
-## 5. Key Architecture Decisions & Known Open Items
+## 6. Key Authoritative Decisions & Open Items
 
-- **[ADR-01](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-01-five-level-core-project-hierarchy)**: 5-Level Work Hierarchy (Workspace $\to$ Project $\to$ Phase $\to$ Task List $\to$ Task $\to$ Child Task).
-- **[ADR-02](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-02-phase-terminology-cutover-via-dual-sync-compatibility-layer)**: Non-breaking Phase compatibility layer with bidirectional triggers and `public.phases` view.
-- **[ADR-03](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-03-standalone-task--process-support)**: Standalone tasks & processes enabled by nullable `tasks.project_id`.
-- **[ADR-04](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-04-explicit-process-instance-entity)**: Explicit `process_instances` entity decoupled from task lists.
-- **[ADR-05](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-05-process-instance-fail-closed-access-model-p1-01a)**: Strict fail-closed access on `process_instances` until P1-02.
-- **[ADR-32 (Parked)](09_Decision_Records/ARCHITECTURE_AND_PROCESS_DECISIONS.md#adr-32-overall-process-business-status-model--parked)**: Overall Process Business Status Model is **PARKED** (Technical states `running`, `completed`, `cancelled` only).
+- **[Decision 1–4, 26–44](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: 5-Level Work Hierarchy, Temporary Phase Compatibility, Full Tasks as Process Steps, Single Process Due Date, Intra-Project Movement.
+- **[Decision 32 (PARKED)](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md#decision-32--overall-process-business-status-model--parked)**: Overall Process Business Status Model is **PARKED** (Technical states `running`, `completed`, `cancelled` only).
+- **[Decision 5–25, 45–70](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md)**: Base Budget + Safety Buffer Model, Deterministic Risk Bands (`GREEN`, `YELLOW`, `ORANGE`, `RED`), No Task Budgets, No Financial Double Counting, Finance Operator Role, Sibling Reallocation, Expense Voids/Tombstones.
+- **Explicit Scope Boundaries**: ERP/Accounting modules (Cost Centers, GL accounts, Purchase Orders, AP/AR, Invoice Management) are strictly excluded from V1.
 
 ---
 
-## 6. Latest Verified Production State
+## 7. Latest Verified Production State
 
-- **Database Health**: 19 canonical migrations registered and validated in sequence.
-- **Data Integrity**: Zero task/phase mismatches, zero stray processes, zero unassigned task lists.
-- **Security Posture**: Authenticated client access fail-closed on `process_instances`; all service roles strictly constrained.
+- **Database Migration Chain**: 19 canonical migrations verified in strict sequential order.
+- **Process Instance Security Model**:
+  - `PUBLIC`: Zero direct privileges (`REVOKE ALL`).
+  - `anon`: Zero direct privileges (`REVOKE ALL`).
+  - `authenticated`: Zero direct privileges (`REVOKE ALL`).
+  - `service_role`: Dedicated backend execution role for trusted RPC operations.
+  - `postgres`: Superuser / Administrative Owner.
+  - **RLS State**: Enabled on `public.process_instances` with zero direct client policies (strict fail-closed foundation).
