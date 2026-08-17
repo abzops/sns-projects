@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS public.milestones (
   start_date  date,
   end_date    date,
   position    integer NOT NULL DEFAULT 0,
+  owner_id    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -172,6 +173,7 @@ CREATE TABLE IF NOT EXISTS public.milestones (
 );
 
 CREATE INDEX IF NOT EXISTS idx_milestones_project_pos ON public.milestones(project_id, position);
+CREATE INDEX IF NOT EXISTS idx_milestones_owner_id ON public.milestones(owner_id);
 
 COMMENT ON TABLE public.milestones IS 'Strategic milestones belonging to a project.';
 
@@ -181,10 +183,12 @@ COMMENT ON TABLE public.milestones IS 'Strategic milestones belonging to a proje
 CREATE TABLE IF NOT EXISTS public.task_lists (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   milestone_id uuid NOT NULL,
+  phase_id    uuid REFERENCES public.milestones(id) ON DELETE RESTRICT,
   project_id  uuid NOT NULL,
   name        text NOT NULL,
   description text,
   position    integer NOT NULL DEFAULT 0,
+  owner_id    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -192,11 +196,14 @@ CREATE TABLE IF NOT EXISTS public.task_lists (
     REFERENCES public.milestones(id, project_id) ON DELETE RESTRICT,
   CONSTRAINT fk_task_lists_project FOREIGN KEY (project_id)
     REFERENCES public.projects(id) ON DELETE CASCADE,
-  CONSTRAINT task_lists_id_milestone_project_unique UNIQUE (id, milestone_id, project_id)
+  CONSTRAINT task_lists_id_milestone_project_unique UNIQUE (id, milestone_id, project_id),
+  CONSTRAINT chk_task_lists_phase_milestone_sync CHECK (phase_id IS NOT DISTINCT FROM milestone_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_lists_milestone_pos ON public.task_lists(milestone_id, position);
 CREATE INDEX IF NOT EXISTS idx_task_lists_project ON public.task_lists(project_id);
+CREATE INDEX IF NOT EXISTS idx_task_lists_owner_id ON public.task_lists(owner_id);
+CREATE INDEX IF NOT EXISTS idx_task_lists_phase_id ON public.task_lists(phase_id);
 
 COMMENT ON TABLE public.task_lists IS 'Task lists group related tasks under a milestone.';
 
@@ -221,32 +228,40 @@ COMMENT ON TABLE public.task_statuses IS 'Kanban columns – ordered status buck
 -- ── 11. tasks ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.tasks (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  milestone_id uuid,
-  task_list_id uuid,
-  title       text NOT NULL,
-  description text,
-  status_id   uuid REFERENCES public.task_statuses(id),
-  priority    text CHECK (priority IN ('none', 'low', 'medium', 'high', 'urgent')) DEFAULT 'none',
-  assignee_id uuid REFERENCES public.profiles(id),
-  due_date    date,
-  position    integer NOT NULL DEFAULT 0,
-  created_by  uuid REFERENCES public.profiles(id),
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  updated_at  timestamptz NOT NULL DEFAULT now(),
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id          uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  milestone_id        uuid,
+  phase_id            uuid REFERENCES public.milestones(id) ON DELETE RESTRICT,
+  task_list_id        uuid,
+  parent_task_id      uuid REFERENCES public.tasks(id) ON DELETE CASCADE,
+  process_instance_id uuid,
+  title               text NOT NULL,
+  description         text,
+  status_id           uuid REFERENCES public.task_statuses(id),
+  priority            text CHECK (priority IN ('none', 'low', 'medium', 'high', 'urgent')) DEFAULT 'none',
+  assignee_id         uuid REFERENCES public.profiles(id),
+  due_date            date,
+  position            integer NOT NULL DEFAULT 0,
+  created_by          uuid REFERENCES public.profiles(id),
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tasks_hierarchy_check CHECK (
     (milestone_id IS NULL AND task_list_id IS NULL)
     OR
     (milestone_id IS NOT NULL AND task_list_id IS NOT NULL)
   ),
   CONSTRAINT fk_tasks_task_list FOREIGN KEY (task_list_id, milestone_id, project_id)
-    REFERENCES public.task_lists(id, milestone_id, project_id) ON DELETE RESTRICT
+    REFERENCES public.task_lists(id, milestone_id, project_id) ON DELETE RESTRICT,
+  CONSTRAINT chk_tasks_no_self_parent CHECK (parent_task_id IS NULL OR parent_task_id <> id),
+  CONSTRAINT chk_tasks_phase_milestone_sync CHECK (phase_id IS NOT DISTINCT FROM milestone_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON public.tasks (project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON public.tasks (milestone_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_phase_id ON public.tasks (phase_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_task_list ON public.tasks (task_list_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON public.tasks (parent_task_id) WHERE parent_task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_process_instance ON public.tasks (process_instance_id) WHERE process_instance_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON public.tasks (status_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON public.tasks (assignee_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_status_position ON public.tasks (project_id, status_id, position);
@@ -4745,4 +4760,212 @@ $$;
 -- Security hardening: Invoker-only, revoked from public/anon/authenticated, service_role only
 REVOKE ALL ON FUNCTION public.save_defined_process_draft(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.save_defined_process_draft(uuid, uuid, jsonb) TO service_role, postgres;
+
+
+-- ============================================================================
+-- PACKAGE 1 / P1-01: CORE HIERARCHY + PROCESS INSTANCE FOUNDATION
+-- ============================================================================
+
+-- ── 1. Phase Compatibility Read View ─────────────────────────────────────────
+
+CREATE OR REPLACE VIEW public.phases
+WITH (security_invoker = true)
+AS
+SELECT
+  id,
+  project_id,
+  name,
+  description,
+  start_date,
+  end_date,
+  position,
+  created_by,
+  created_at,
+  updated_at,
+  owner_id
+FROM public.milestones;
+
+COMMENT ON VIEW public.phases IS 'Compatibility view over public.milestones presenting Phase terminology under security_invoker.';
+
+GRANT SELECT ON public.phases TO authenticated;
+GRANT SELECT ON public.phases TO service_role, postgres;
+REVOKE ALL ON public.phases FROM anon;
+REVOKE INSERT, UPDATE, DELETE ON public.phases FROM authenticated, anon;
+
+
+-- ── 2. Phase / Milestone Dual-Sync Trigger Function & Triggers ──────────────
+
+CREATE OR REPLACE FUNCTION public.sync_milestone_phase_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+BEGIN
+  -- 1. If phase_id is provided and milestone_id is null, copy phase_id to milestone_id
+  IF NEW.phase_id IS NOT NULL AND NEW.milestone_id IS NULL THEN
+    NEW.milestone_id := NEW.phase_id;
+  -- 2. If milestone_id is provided and phase_id is null, copy milestone_id to phase_id
+  ELSIF NEW.milestone_id IS NOT NULL AND NEW.phase_id IS NULL THEN
+    NEW.phase_id := NEW.milestone_id;
+  -- 3. If both are provided and they do not match, synchronize or raise exception
+  ELSIF NEW.phase_id IS NOT NULL AND NEW.milestone_id IS NOT NULL THEN
+    IF NEW.phase_id <> NEW.milestone_id THEN
+      IF TG_OP = 'UPDATE' THEN
+        IF NEW.phase_id <> OLD.phase_id AND NEW.milestone_id = OLD.milestone_id THEN
+          NEW.milestone_id := NEW.phase_id;
+        ELSIF NEW.milestone_id <> OLD.milestone_id AND NEW.phase_id = OLD.phase_id THEN
+          NEW.phase_id := NEW.milestone_id;
+        ELSE
+          RAISE EXCEPTION 'Contradictory phase_id (%) and milestone_id (%) supplied', NEW.phase_id, NEW.milestone_id;
+        END IF;
+      ELSE
+        RAISE EXCEPTION 'Contradictory phase_id (%) and milestone_id (%) supplied', NEW.phase_id, NEW.milestone_id;
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.sync_milestone_phase_id() IS 'Ensures bidirectional synchronization between milestone_id and phase_id during compatibility period.';
+
+DROP TRIGGER IF EXISTS trg_tasks_sync_milestone_phase ON public.tasks;
+CREATE TRIGGER trg_tasks_sync_milestone_phase
+  BEFORE INSERT OR UPDATE OF phase_id, milestone_id ON public.tasks
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_milestone_phase_id();
+
+DROP TRIGGER IF EXISTS trg_task_lists_sync_milestone_phase ON public.task_lists;
+CREATE TRIGGER trg_task_lists_sync_milestone_phase
+  BEFORE INSERT OR UPDATE OF phase_id, milestone_id ON public.task_lists
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_milestone_phase_id();
+
+
+-- ── 3. Process Instance Entity ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.process_instances (
+  id                         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id               uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  defined_process_id         uuid NOT NULL REFERENCES public.defined_processes(id) ON DELETE RESTRICT,
+  defined_process_version_id uuid NOT NULL REFERENCES public.defined_process_versions(id) ON DELETE RESTRICT,
+  instance_name              text NOT NULL,
+  started_by                 uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  owner_id                   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  started_at                 timestamptz NOT NULL DEFAULT now(),
+  due_date                   timestamptz NULL,
+  placement_type             text NOT NULL CHECK (placement_type IN ('standalone', 'project', 'phase', 'task_list', 'task')),
+  project_id                 uuid NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  phase_id                   uuid NULL REFERENCES public.milestones(id) ON DELETE SET NULL,
+  task_list_id               uuid NULL REFERENCES public.task_lists(id) ON DELETE SET NULL,
+  parent_task_id             uuid NULL REFERENCES public.tasks(id) ON DELETE SET NULL,
+  status                     text NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'cancelled')),
+  completed_at               timestamptz NULL,
+  cancelled_at               timestamptz NULL,
+  cancelled_by               uuid NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  cancel_reason              text NULL,
+  created_at                 timestamptz NOT NULL DEFAULT now(),
+  updated_at                 timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_process_instance_placement CHECK (
+    (
+      placement_type = 'standalone'
+      AND project_id IS NULL
+      AND phase_id IS NULL
+      AND task_list_id IS NULL
+    )
+    OR
+    (
+      placement_type = 'project'
+      AND project_id IS NOT NULL
+      AND phase_id IS NULL
+      AND task_list_id IS NULL
+      AND parent_task_id IS NULL
+    )
+    OR
+    (
+      placement_type = 'phase'
+      AND project_id IS NOT NULL
+      AND phase_id IS NOT NULL
+      AND task_list_id IS NULL
+      AND parent_task_id IS NULL
+    )
+    OR
+    (
+      placement_type = 'task_list'
+      AND project_id IS NOT NULL
+      AND phase_id IS NOT NULL
+      AND task_list_id IS NOT NULL
+      AND parent_task_id IS NULL
+    )
+    OR
+    (
+      placement_type = 'task'
+      AND project_id IS NOT NULL
+      AND parent_task_id IS NOT NULL
+    )
+  ),
+  CONSTRAINT chk_process_instance_status_lifecycle CHECK (
+    (
+      status = 'running'
+      AND completed_at IS NULL
+      AND cancelled_at IS NULL
+      AND cancelled_by IS NULL
+      AND cancel_reason IS NULL
+    )
+    OR
+    (
+      status = 'completed'
+      AND completed_at IS NOT NULL
+      AND cancelled_at IS NULL
+      AND cancelled_by IS NULL
+      AND cancel_reason IS NULL
+    )
+    OR
+    (
+      status = 'cancelled'
+      AND completed_at IS NULL
+      AND cancelled_at IS NOT NULL
+      AND cancelled_by IS NOT NULL
+      AND cancel_reason IS NOT NULL
+      AND btrim(cancel_reason) <> ''
+    )
+  )
+);
+
+COMMENT ON TABLE public.process_instances IS 'Explicit runtime container for an executed Defined Process.';
+
+-- Process Instance Indexes
+CREATE INDEX IF NOT EXISTS idx_process_instances_workspace ON public.process_instances(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_process_instances_defined_process ON public.process_instances(defined_process_id, defined_process_version_id);
+CREATE INDEX IF NOT EXISTS idx_process_instances_project ON public.process_instances(project_id) WHERE project_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_process_instances_phase ON public.process_instances(phase_id) WHERE phase_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_process_instances_task_list ON public.process_instances(task_list_id) WHERE task_list_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_process_instances_parent_task ON public.process_instances(parent_task_id) WHERE parent_task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_process_instances_owner ON public.process_instances(owner_id);
+CREATE INDEX IF NOT EXISTS idx_process_instances_started_by ON public.process_instances(started_by);
+CREATE INDEX IF NOT EXISTS idx_process_instances_placement_type ON public.process_instances(placement_type);
+CREATE INDEX IF NOT EXISTS idx_process_instances_status ON public.process_instances(status);
+
+-- Process Instance Updated_at Trigger
+DROP TRIGGER IF EXISTS trg_process_instances_updated_at ON public.process_instances;
+CREATE TRIGGER trg_process_instances_updated_at
+  BEFORE UPDATE ON public.process_instances
+  FOR EACH ROW
+  EXECUTE FUNCTION private.trg_fn_set_updated_at();
+
+-- Process Instance RLS
+ALTER TABLE public.process_instances ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "process_instances_select_member" ON public.process_instances;
+CREATE POLICY "process_instances_select_member" ON public.process_instances
+  FOR SELECT TO authenticated
+  USING (private.is_workspace_active_member(workspace_id));
+
+-- Direct client DML (INSERT, UPDATE, DELETE) is intentionally not permitted to authenticated users;
+-- Process Instance lifecycle and placement will be managed by controlled Package 2 RPCs.
+GRANT SELECT ON TABLE public.process_instances TO authenticated;
+GRANT ALL ON TABLE public.process_instances TO service_role, postgres;
+REVOKE ALL ON TABLE public.process_instances FROM PUBLIC, anon;
+
 
