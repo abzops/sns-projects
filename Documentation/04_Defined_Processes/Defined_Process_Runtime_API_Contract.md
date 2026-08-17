@@ -453,3 +453,75 @@ const { data: definedTasks } = await supabase
   .eq('task_list_id', taskListId)
   .order('position', { ascending: true });
 ```
+
+---
+
+### 9. `start_process_instance` (Placement-Aware & Idempotent)
+
+Instantiates a published Defined Process version into any of five valid placement targets (`standalone`, `project`, `phase`, `task_list`, `task`) with atomic task materialization, server-enforced idempotency, and dynamic RACI resolution.
+
+#### RPC Signature
+```sql
+public.start_process_instance(
+  p_version_id       uuid,
+  p_instance_name    text,
+  p_start_request_id uuid,
+  p_overall_due_date date DEFAULT NULL,
+  p_placement_type   text DEFAULT 'standalone',
+  p_project_id       uuid DEFAULT NULL,
+  p_phase_id         uuid DEFAULT NULL,
+  p_task_list_id     uuid DEFAULT NULL,
+  p_parent_task_id   uuid DEFAULT NULL
+) RETURNS jsonb
+```
+
+#### Parameters Table
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `p_version_id` | `uuid` | Yes | UUID of published `defined_process_versions` row. |
+| `p_instance_name` | `text` | Yes | Non-empty display name for this instance. |
+| `p_start_request_id` | `uuid` | Yes | Client-generated idempotency key. |
+| `p_overall_due_date` | `date` | No | Overall process target due date (`due_date` on `process_instances`). Constituent steps receive `due_date = NULL`. |
+| `p_placement_type` | `text` | No | Placement target: `'standalone'` (default), `'project'`, `'phase'`, `'task_list'`, or `'task'`. |
+| `p_project_id` | `uuid` | Conditional | Required for `project`, `phase`, `task_list` placements. Prohibited for `standalone`. |
+| `p_phase_id` | `uuid` | Conditional | Required for `phase`, `task_list` placements. |
+| `p_task_list_id` | `uuid` | Conditional | Required for `task_list` placement. |
+| `p_parent_task_id` | `uuid` | Conditional | Required for `task` placement. Prohibited for `project`, `phase`, `task_list`. |
+
+#### Idempotency Behavior
+- If `(workspace_id, started_by, start_request_id)` already exists with matching parameters $\to$ returns existing response with `"is_replay": true`.
+- If `(workspace_id, started_by, start_request_id)` exists with different parameters $\to$ raises exception `'Idempotency conflict: start_request_id was previously used with different parameters.'`.
+
+#### Success Response
+```json
+{
+  "process_instance_id": "8a8b8390-1c09-4d69-8bc4-9d58a5d7c3b2",
+  "placement_type": "standalone",
+  "root_task_id": "9b8b8390-1c09-4d69-8bc4-9d58a5d7c3b2",
+  "parent_task_id": "7c8b8390-1c09-4d69-8bc4-9d58a5d7c3b2",
+  "task_count": 4,
+  "is_replay": false
+}
+```
+
+---
+
+### 10. `get_process_instance_progress`
+
+Calculates equal-weight completion percentage for any Process Instance. Enforces caller authorization via `private.can_read_process_instance`.
+
+#### RPC Signature
+```sql
+public.get_process_instance_progress(p_instance_id uuid) RETURNS numeric
+```
+
+#### Client Call (Supabase JS)
+```javascript
+const { data: progressPct, error } = await supabase.rpc('get_process_instance_progress', {
+  p_instance_id: '8a8b8390-1c09-4d69-8bc4-9d58a5d7c3b2'
+});
+```
+
+#### Authorization
+- Caller must satisfy `private.can_read_process_instance`: starter, owner, assigned RACI participant, or workspace executive (Admin/CEO/CTO). Non-authorized callers are rejected with `42501` exception.
+

@@ -23,6 +23,9 @@ P1-02 implements the new canonical process runtime:
 8. **Granular Security & RLS Model (Decision 38)**: `public.process_instances` SELECT access is restricted to Starter, Owner, RACI participants, and Workspace Executives (Admin/Owner/CEO/CTO). Standalone tasks in `public.tasks` are accessible only to authorized process viewers via `private.can_read_process_instance`.
 9. **Zero-Regression Legacy Compatibility**: The existing `public.start_defined_process` RPC and all legacy frontend contracts remain 100% untouched and functional.
 
+> [!NOTE]
+> **P1-02A Execution & Security Closure**: Follow-up package [P1-02A](./P1-02A_Process_Runtime_Execution_and_Security_Closure.md) completed the execution engine branching (`complete_task_and_advance` scoped by `process_instance_id`), multiple instance isolation in shared Task Lists, server-enforced start idempotency via `start_request_id`, and converted public RPCs to `SECURITY INVOKER` eliminating all Supabase Security Advisor warnings.
+
 ---
 
 ## 2. Placement Type Specification

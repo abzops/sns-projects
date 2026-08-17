@@ -3012,9 +3012,11 @@ SET search_path = ''
 AS $$
 DECLARE
   v_task           RECORD;
+  v_instance       RECORD;
   v_task_list      RECORD;
-  v_workspace_id   uuid;
   v_project        RECORD;
+  v_workspace_id   uuid;
+  v_process_name   text;
   v_done_status_id uuid;
   v_todo_status_id uuid;
   v_recipient      RECORD;
@@ -3031,177 +3033,367 @@ BEGIN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
   END IF;
 
-  SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
-  SELECT * INTO v_project FROM public.projects WHERE id = v_task.project_id;
-  v_workspace_id := v_project.workspace_id;
+  -- =========================================================================
+  -- BRANCH 1: NEW PROCESS INSTANCE RUNTIME
+  -- =========================================================================
+  IF v_task.process_instance_id IS NOT NULL THEN
+    SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Process instance not found.';
+    END IF;
 
-  -- Resolve project Done status
-  SELECT id INTO v_done_status_id
-  FROM public.task_statuses
-  WHERE project_id = v_task.project_id AND (system_code = 'done' OR lower(name) = 'done')
-  ORDER BY position DESC LIMIT 1;
+    v_workspace_id := v_instance.workspace_id;
+    v_process_name := v_instance.instance_name;
 
-  IF v_done_status_id IS NULL THEN
-    SELECT id INTO v_done_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position DESC LIMIT 1;
-  END IF;
+    -- Resolve project Done status if project-attached
+    IF v_task.project_id IS NOT NULL THEN
+      SELECT id INTO v_done_status_id
+      FROM public.task_statuses
+      WHERE project_id = v_task.project_id AND (system_code = 'done' OR lower(name) = 'done')
+      ORDER BY position DESC LIMIT 1;
 
-  -- Resolve project To Do status
-  SELECT id INTO v_todo_status_id
-  FROM public.task_statuses
-  WHERE project_id = v_task.project_id AND (system_code = 'todo' OR lower(name) = 'to do')
-  ORDER BY position ASC LIMIT 1;
+      IF v_done_status_id IS NULL THEN
+        SELECT id INTO v_done_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position DESC LIMIT 1;
+      END IF;
 
-  IF v_todo_status_id IS NULL THEN
-    SELECT id INTO v_todo_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position ASC LIMIT 1;
-  END IF;
+      SELECT id INTO v_todo_status_id
+      FROM public.task_statuses
+      WHERE project_id = v_task.project_id AND (system_code = 'todo' OR lower(name) = 'to do')
+      ORDER BY position ASC LIMIT 1;
 
-  -- 1. Complete the current task
-  UPDATE public.tasks
-  SET workflow_state = 'completed',
-      workflow_completed_at = now(),
-      status_id = COALESCE(v_done_status_id, status_id)
-  WHERE id = p_task_id;
+      IF v_todo_status_id IS NULL THEN
+        SELECT id INTO v_todo_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position ASC LIMIT 1;
+      END IF;
+    END IF;
 
-  -- Record audit event
-  INSERT INTO public.process_audit_events (
-    workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
-  ) VALUES (
-    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_COMPLETED', p_actor_id,
-    jsonb_build_object('step_id', v_task.process_step_id, 'cycle_number', v_task.current_cycle_number)
-  );
+    -- 1. Complete the current task
+    UPDATE public.tasks
+    SET workflow_state = 'completed',
+        workflow_completed_at = now(),
+        status_id = COALESCE(v_done_status_id, status_id)
+    WHERE id = p_task_id;
 
-  -- Notify completed Task R/A/C/I
-  FOR v_recipient IN
-    SELECT DISTINCT u_id FROM (
-      SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.user_id IS NOT NULL
-      UNION
-      SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-      JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-      WHERE ra.task_id = p_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
-    ) sub WHERE u_id IS NOT NULL AND (p_actor_id IS NULL OR u_id <> p_actor_id)
-  LOOP
-    PERFORM private.emit_notification(
-      v_workspace_id,
-      v_recipient.u_id,
-      'process_task_completed',
-      'Task completed: ' || v_task.title,
-      'Step has been completed in process "' || v_task_list.name || '".',
-      'task',
-      p_task_id,
-      v_task.project_id,
-      p_task_id
+    -- Record audit event
+    INSERT INTO public.process_audit_events (
+      workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+    ) VALUES (
+      v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_COMPLETED', p_actor_id,
+      jsonb_build_object(
+        'instance_id', v_instance.id,
+        'step_id', v_task.process_step_id,
+        'cycle_number', v_task.current_cycle_number
+      )
     );
-  END LOOP;
 
-  -- 2. Evaluate all downstream tasks in the process instance
-  FOR v_downstream IN
-    SELECT
-      t.id AS downstream_task_id,
-      t.title AS downstream_title,
-      s.id AS step_id,
-      s.expected_duration_days
-    FROM public.defined_process_step_dependencies d
-    JOIN public.defined_process_steps s ON s.id = d.step_id
-    JOIN public.tasks t ON t.process_step_id = s.id AND t.task_list_id = v_task.task_list_id
-    WHERE d.depends_on_step_id = v_task.process_step_id
-      AND t.workflow_state = 'waiting'
-  LOOP
-    -- Check if ALL predecessor tasks are completed
-    SELECT NOT EXISTS (
-      SELECT 1
-      FROM public.defined_process_step_dependencies pred_dep
-      JOIN public.tasks pred_task ON pred_task.process_step_id = pred_dep.depends_on_step_id
-        AND pred_task.task_list_id = v_task.task_list_id
-      WHERE pred_dep.step_id = v_downstream.step_id
-        AND pred_task.workflow_state <> 'completed'
-    ) INTO v_all_preds_done;
+    -- Notify completed Task RACI
+    FOR v_recipient IN
+      SELECT DISTINCT u_id FROM (
+        SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.user_id IS NOT NULL
+        UNION
+        SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
+        JOIN public.department_memberships dm ON dm.department_id = ra.department_id
+        WHERE ra.task_id = p_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
+      ) sub WHERE u_id IS NOT NULL AND (p_actor_id IS NULL OR u_id <> p_actor_id)
+    LOOP
+      PERFORM private.emit_notification(
+        v_workspace_id,
+        v_recipient.u_id,
+        'process_task_completed',
+        'Task completed: ' || v_task.title,
+        'Step has been completed in process "' || v_process_name || '".',
+        'task',
+        p_task_id,
+        v_task.project_id,
+        p_task_id
+      );
+    END LOOP;
 
-    IF v_all_preds_done THEN
-      v_due_date := private.add_working_days(v_workspace_id, CURRENT_DATE, v_downstream.expected_duration_days);
+    -- 2. Evaluate all downstream tasks in the process instance (ISOLATED BY process_instance_id)
+    FOR v_downstream IN
+      SELECT
+        t.id AS downstream_task_id,
+        t.title AS downstream_title,
+        s.id AS step_id
+      FROM public.defined_process_step_dependencies d
+      JOIN public.defined_process_steps s ON s.id = d.step_id
+      JOIN public.tasks t ON t.process_step_id = s.id AND t.process_instance_id = v_instance.id
+      WHERE d.depends_on_step_id = v_task.process_step_id
+        AND t.workflow_state = 'waiting'
+    LOOP
+      -- Check if ALL predecessor tasks are completed in THIS process instance
+      SELECT NOT EXISTS (
+        SELECT 1
+        FROM public.defined_process_step_dependencies pred_dep
+        JOIN public.tasks pred_task ON pred_task.process_step_id = pred_dep.depends_on_step_id
+          AND pred_task.process_instance_id = v_instance.id
+        WHERE pred_dep.step_id = v_downstream.step_id
+          AND pred_task.workflow_state <> 'completed'
+      ) INTO v_all_preds_done;
 
-      UPDATE public.tasks
-      SET workflow_state = 'ready',
-          ready_at = now(),
-          due_date = v_due_date,
-          status_id = COALESCE(v_todo_status_id, status_id)
-      WHERE id = v_downstream.downstream_task_id;
+      IF v_all_preds_done THEN
+        -- Decisions 33 & 42: No per-step contractual due dates
+        UPDATE public.tasks
+        SET workflow_state = 'ready',
+            ready_at = now(),
+            due_date = NULL,
+            status_id = COALESCE(v_todo_status_id, status_id)
+        WHERE id = v_downstream.downstream_task_id;
 
-      -- Audit TASK_READY
+        -- Audit TASK_READY
+        INSERT INTO public.process_audit_events (
+          workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+        ) VALUES (
+          v_workspace_id, v_task.project_id, v_task.task_list_id, v_downstream.downstream_task_id, 'TASK_READY', p_actor_id,
+          jsonb_build_object('instance_id', v_instance.id, 'step_id', v_downstream.step_id)
+        );
+
+        -- Notify activated task RACI
+        FOR v_recipient IN
+          SELECT DISTINCT u_id FROM (
+            SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = v_downstream.downstream_task_id AND ra.user_id IS NOT NULL
+            UNION
+            SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
+            JOIN public.department_memberships dm ON dm.department_id = ra.department_id
+            WHERE ra.task_id = v_downstream.downstream_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
+          ) sub WHERE u_id IS NOT NULL
+        LOOP
+          PERFORM private.emit_notification(
+            v_workspace_id,
+            v_recipient.u_id,
+            'process_task_ready',
+            'Task ready: ' || v_downstream.downstream_title,
+            'Dependencies cleared. Task is now ready in process "' || v_process_name || '".',
+            'task',
+            v_downstream.downstream_task_id,
+            v_task.project_id,
+            v_downstream.downstream_task_id
+          );
+        END LOOP;
+      END IF;
+    END LOOP;
+
+    -- 3. Automatic Process Instance Completion Check
+    SELECT count(*) INTO v_pending_tasks
+    FROM public.tasks
+    WHERE process_instance_id = v_instance.id
+      AND process_step_id IS NOT NULL
+      AND workflow_state NOT IN ('completed', 'cancelled');
+
+    IF v_pending_tasks = 0 THEN
+      UPDATE public.process_instances
+      SET status = 'completed',
+          completed_at = now()
+      WHERE id = v_instance.id;
+
       INSERT INTO public.process_audit_events (
-        workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+        workspace_id, project_id, task_list_id, event_type, actor_id, payload
       ) VALUES (
-        v_workspace_id, v_task.project_id, v_task.task_list_id, v_downstream.downstream_task_id, 'TASK_READY', p_actor_id,
-        jsonb_build_object('step_id', v_downstream.step_id, 'due_date', v_due_date)
+        v_workspace_id, v_task.project_id, v_task.task_list_id, 'PROCESS_COMPLETED', p_actor_id,
+        jsonb_build_object('instance_id', v_instance.id, 'instance_name', v_instance.instance_name)
       );
 
-      -- Notify activated task RACI
+      -- Notify process starter and all participants
       FOR v_recipient IN
         SELECT DISTINCT u_id FROM (
-          SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = v_downstream.downstream_task_id AND ra.user_id IS NOT NULL
+          SELECT v_instance.started_by AS u_id WHERE v_instance.started_by IS NOT NULL
           UNION
-          SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-          JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-          WHERE ra.task_id = v_downstream.downstream_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
+          SELECT v_instance.owner_id AS u_id WHERE v_instance.owner_id IS NOT NULL
+          UNION
+          SELECT ra.user_id AS u_id
+          FROM public.tasks t
+          JOIN public.task_raci_assignments ra ON ra.task_id = t.id
+          WHERE t.process_instance_id = v_instance.id AND ra.user_id IS NOT NULL
         ) sub WHERE u_id IS NOT NULL
       LOOP
         PERFORM private.emit_notification(
           v_workspace_id,
           v_recipient.u_id,
-          'process_task_ready',
-          'Task ready: ' || v_downstream.downstream_title,
-          'Dependencies cleared. Task is now ready in process "' || v_task_list.name || '".',
-          'task',
-          v_downstream.downstream_task_id,
+          'process_completed',
+          'Process completed: ' || v_process_name,
+          'All tasks in process "' || v_process_name || '" have been completed.',
+          'process_instance',
+          v_instance.id,
           v_task.project_id,
-          v_downstream.downstream_task_id
+          NULL
         );
       END LOOP;
     END IF;
-  END LOOP;
 
-  -- 3. Automatic Process Completion Check
-  SELECT count(*) INTO v_pending_tasks
-  FROM public.tasks
-  WHERE task_list_id = v_task.task_list_id
-    AND process_step_id IS NOT NULL
-    AND workflow_state NOT IN ('completed', 'cancelled');
+  -- =========================================================================
+  -- BRANCH 2: LEGACY TASK LIST DEFINED PROCESS RUNTIME
+  -- =========================================================================
+  ELSE
+    SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
+    SELECT * INTO v_project FROM public.projects WHERE id = v_task.project_id;
+    v_workspace_id := v_project.workspace_id;
 
-  IF v_pending_tasks = 0 THEN
-    UPDATE public.task_lists
-    SET process_state = 'completed',
-        completed_at = now()
-    WHERE id = v_task.task_list_id;
+    -- Resolve project Done status
+    SELECT id INTO v_done_status_id
+    FROM public.task_statuses
+    WHERE project_id = v_task.project_id AND (system_code = 'done' OR lower(name) = 'done')
+    ORDER BY position DESC LIMIT 1;
 
+    IF v_done_status_id IS NULL THEN
+      SELECT id INTO v_done_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position DESC LIMIT 1;
+    END IF;
+
+    SELECT id INTO v_todo_status_id
+    FROM public.task_statuses
+    WHERE project_id = v_task.project_id AND (system_code = 'todo' OR lower(name) = 'to do')
+    ORDER BY position ASC LIMIT 1;
+
+    IF v_todo_status_id IS NULL THEN
+      SELECT id INTO v_todo_status_id FROM public.task_statuses WHERE project_id = v_task.project_id ORDER BY position ASC LIMIT 1;
+    END IF;
+
+    -- 1. Complete the current task
+    UPDATE public.tasks
+    SET workflow_state = 'completed',
+        workflow_completed_at = now(),
+        status_id = COALESCE(v_done_status_id, status_id)
+    WHERE id = p_task_id;
+
+    -- Record audit event
     INSERT INTO public.process_audit_events (
-      workspace_id, project_id, task_list_id, event_type, actor_id, payload
+      workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
     ) VALUES (
-      v_workspace_id, v_task.project_id, v_task.task_list_id, 'PROCESS_COMPLETED', p_actor_id,
-      jsonb_build_object('task_list_id', v_task.task_list_id)
+      v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_COMPLETED', p_actor_id,
+      jsonb_build_object('step_id', v_task.process_step_id, 'cycle_number', v_task.current_cycle_number)
     );
 
-    -- Notify process starter and all participants
+    -- Notify completed Task R/A/C/I
     FOR v_recipient IN
       SELECT DISTINCT u_id FROM (
-        SELECT v_task_list.started_by AS u_id WHERE v_task_list.started_by IS NOT NULL
+        SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.user_id IS NOT NULL
         UNION
-        SELECT ra.user_id AS u_id
-        FROM public.tasks t
-        JOIN public.task_raci_assignments ra ON ra.task_id = t.id
-        WHERE t.task_list_id = v_task.task_list_id AND ra.user_id IS NOT NULL
-      ) sub WHERE u_id IS NOT NULL
+        SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
+        JOIN public.department_memberships dm ON dm.department_id = ra.department_id
+        WHERE ra.task_id = p_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
+      ) sub WHERE u_id IS NOT NULL AND (p_actor_id IS NULL OR u_id <> p_actor_id)
     LOOP
       PERFORM private.emit_notification(
         v_workspace_id,
         v_recipient.u_id,
-        'process_completed',
-        'Process completed: ' || v_task_list.name,
-        'All tasks in process "' || v_task_list.name || '" have been completed.',
-        'task_list',
-        v_task.task_list_id,
+        'process_task_completed',
+        'Task completed: ' || v_task.title,
+        'Step has been completed in process "' || v_task_list.name || '".',
+        'task',
+        p_task_id,
         v_task.project_id,
-        NULL
+        p_task_id
       );
     END LOOP;
+
+    -- 2. Evaluate all downstream tasks in the task list
+    FOR v_downstream IN
+      SELECT
+        t.id AS downstream_task_id,
+        t.title AS downstream_title,
+        s.id AS step_id,
+        s.expected_duration_days
+      FROM public.defined_process_step_dependencies d
+      JOIN public.defined_process_steps s ON s.id = d.step_id
+      JOIN public.tasks t ON t.process_step_id = s.id AND t.task_list_id = v_task.task_list_id
+      WHERE d.depends_on_step_id = v_task.process_step_id
+        AND t.workflow_state = 'waiting'
+    LOOP
+      -- Check if ALL predecessor tasks are completed
+      SELECT NOT EXISTS (
+        SELECT 1
+        FROM public.defined_process_step_dependencies pred_dep
+        JOIN public.tasks pred_task ON pred_task.process_step_id = pred_dep.depends_on_step_id
+          AND pred_task.task_list_id = v_task.task_list_id
+        WHERE pred_dep.step_id = v_downstream.step_id
+          AND pred_task.workflow_state <> 'completed'
+      ) INTO v_all_preds_done;
+
+      IF v_all_preds_done THEN
+        v_due_date := private.add_working_days(v_workspace_id, CURRENT_DATE, v_downstream.expected_duration_days);
+
+        UPDATE public.tasks
+        SET workflow_state = 'ready',
+            ready_at = now(),
+            due_date = v_due_date,
+            status_id = COALESCE(v_todo_status_id, status_id)
+        WHERE id = v_downstream.downstream_task_id;
+
+        -- Audit TASK_READY
+        INSERT INTO public.process_audit_events (
+          workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+        ) VALUES (
+          v_workspace_id, v_task.project_id, v_task.task_list_id, v_downstream.downstream_task_id, 'TASK_READY', p_actor_id,
+          jsonb_build_object('step_id', v_downstream.step_id, 'due_date', v_due_date)
+        );
+
+        -- Notify activated task RACI
+        FOR v_recipient IN
+          SELECT DISTINCT u_id FROM (
+            SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = v_downstream.downstream_task_id AND ra.user_id IS NOT NULL
+            UNION
+            SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
+            JOIN public.department_memberships dm ON dm.department_id = ra.department_id
+            WHERE ra.task_id = v_downstream.downstream_task_id AND ra.department_id IS NOT NULL AND dm.is_active = true
+          ) sub WHERE u_id IS NOT NULL
+        LOOP
+          PERFORM private.emit_notification(
+            v_workspace_id,
+            v_recipient.u_id,
+            'process_task_ready',
+            'Task ready: ' || v_downstream.downstream_title,
+            'Dependencies cleared. Task is now ready in process "' || v_task_list.name || '".',
+            'task',
+            v_downstream.downstream_task_id,
+            v_task.project_id,
+            v_downstream.downstream_task_id
+          );
+        END LOOP;
+      END IF;
+    END LOOP;
+
+    -- 3. Automatic Process Completion Check
+    SELECT count(*) INTO v_pending_tasks
+    FROM public.tasks
+    WHERE task_list_id = v_task.task_list_id
+      AND process_step_id IS NOT NULL
+      AND workflow_state NOT IN ('completed', 'cancelled');
+
+    IF v_pending_tasks = 0 THEN
+      UPDATE public.task_lists
+      SET process_state = 'completed',
+          completed_at = now()
+      WHERE id = v_task.task_list_id;
+
+      INSERT INTO public.process_audit_events (
+        workspace_id, project_id, task_list_id, event_type, actor_id, payload
+      ) VALUES (
+        v_workspace_id, v_task.project_id, v_task.task_list_id, 'PROCESS_COMPLETED', p_actor_id,
+        jsonb_build_object('task_list_id', v_task.task_list_id)
+      );
+
+      -- Notify process starter and all participants
+      FOR v_recipient IN
+        SELECT DISTINCT u_id FROM (
+          SELECT v_task_list.started_by AS u_id WHERE v_task_list.started_by IS NOT NULL
+          UNION
+          SELECT ra.user_id AS u_id
+          FROM public.tasks t
+          JOIN public.task_raci_assignments ra ON ra.task_id = t.id
+          WHERE t.task_list_id = v_task.task_list_id AND ra.user_id IS NOT NULL
+        ) sub WHERE u_id IS NOT NULL
+      LOOP
+        PERFORM private.emit_notification(
+          v_workspace_id,
+          v_recipient.u_id,
+          'process_completed',
+          'Process completed: ' || v_task_list.name,
+          'All tasks in process "' || v_task_list.name || '" have been completed.',
+          'task_list',
+          v_task.task_list_id,
+          v_task.project_id,
+          NULL
+        );
+      END LOOP;
+    END IF;
   END IF;
 END;
 $$;
@@ -3535,8 +3727,6 @@ $$;
 
 REVOKE ALL ON FUNCTION public.start_defined_process(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.start_defined_process(uuid, uuid, uuid, text, jsonb) TO authenticated;
-
-
 -- ============================================================================
 -- 7. RESPONSIBLE COMPLETION RPC
 -- ============================================================================
@@ -3551,18 +3741,20 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_caller_id       uuid;
-  v_task            RECORD;
-  v_step            RECORD;
-  v_task_list       RECORD;
-  v_workspace_id    uuid;
-  v_is_responsible  boolean := false;
-  v_total_r_count   integer;
-  v_done_r_count    integer;
+  v_caller_id        uuid;
+  v_task             RECORD;
+  v_step             RECORD;
+  v_instance         RECORD;
+  v_task_list        RECORD;
+  v_workspace_id     uuid;
+  v_process_name     text;
+  v_is_responsible   boolean := false;
+  v_total_r_count    integer;
+  v_done_r_count     integer;
   v_pending_subtasks integer;
   v_missing_evidence integer;
-  v_pending_c_count integer;
-  v_recipient       RECORD;
+  v_pending_c_count  integer;
+  v_recipient        RECORD;
 BEGIN
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN
@@ -3579,10 +3771,20 @@ BEGIN
   END IF;
 
   SELECT * INTO v_step FROM public.defined_process_steps WHERE id = v_task.process_step_id;
-  SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
 
-  SELECT p.workspace_id INTO v_workspace_id
-  FROM public.projects p WHERE p.id = v_task.project_id;
+  -- Context resolution
+  IF v_task.process_instance_id IS NOT NULL THEN
+    SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Process instance not found.';
+    END IF;
+    v_workspace_id := v_instance.workspace_id;
+    v_process_name := v_instance.instance_name;
+  ELSE
+    SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
+    SELECT p.workspace_id INTO v_workspace_id FROM public.projects p WHERE p.id = v_task.project_id;
+    v_process_name := v_task_list.name;
+  END IF;
 
   -- Verify caller has R assignment
   SELECT EXISTS (
@@ -3701,7 +3903,7 @@ BEGIN
           v_recipient.u_id,
           'consultation_required',
           'Consultation required: ' || v_task.title,
-          'Your input is required for task "' || v_task.title || '" in process "' || v_task_list.name || '".',
+          'Your input is required for task "' || v_task.title || '" in process "' || v_process_name || '".',
           'task',
           p_task_id,
           v_task.project_id,
@@ -3789,8 +3991,10 @@ DECLARE
   v_caller_id        uuid;
   v_task             RECORD;
   v_step             RECORD;
+  v_instance         RECORD;
   v_task_list        RECORD;
   v_workspace_id     uuid;
+  v_process_name     text;
   v_is_consulted     boolean := false;
   v_pending_c_count  integer;
   v_recipient        RECORD;
@@ -3814,10 +4018,20 @@ BEGIN
   END IF;
 
   SELECT * INTO v_step FROM public.defined_process_steps WHERE id = v_task.process_step_id;
-  SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
 
-  SELECT p.workspace_id INTO v_workspace_id
-  FROM public.projects p WHERE p.id = v_task.project_id;
+  -- Context resolution
+  IF v_task.process_instance_id IS NOT NULL THEN
+    SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Process instance not found.';
+    END IF;
+    v_workspace_id := v_instance.workspace_id;
+    v_process_name := v_instance.instance_name;
+  ELSE
+    SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
+    SELECT p.workspace_id INTO v_workspace_id FROM public.projects p WHERE p.id = v_task.project_id;
+    v_process_name := v_task_list.name;
+  END IF;
 
   -- Verify caller has C assignment
   SELECT EXISTS (
@@ -3891,7 +4105,7 @@ BEGIN
         v_recipient.u_id,
         'approval_required',
         'Approval required: ' || v_task.title,
-        'Consultations finished. Task "' || v_task.title || '" is awaiting your approval.',
+        'Consultations finished. Task "' || v_task.title || '" has completed consultations and is awaiting your approval.',
         'task',
         p_task_id,
         v_task.project_id,
@@ -3924,9 +4138,9 @@ GRANT EXECUTE ON FUNCTION public.submit_task_consultation(uuid, text) TO authent
 
 CREATE OR REPLACE FUNCTION public.submit_task_evidence(
   p_task_id         uuid,
-  p_evidence_def_id uuid DEFAULT NULL,
-  p_evidence_type   text DEFAULT 'text',
-  p_payload         jsonb DEFAULT '{}'::jsonb
+  p_evidence_def_id uuid,
+  p_file_url        text DEFAULT NULL,
+  p_notes           text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -3936,6 +4150,7 @@ AS $$
 DECLARE
   v_caller_id      uuid;
   v_task           RECORD;
+  v_step           RECORD;
   v_is_responsible boolean := false;
   v_submission_id  uuid;
 BEGIN
@@ -3944,16 +4159,16 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.';
   END IF;
 
-  IF p_evidence_type NOT IN ('text', 'link') THEN
-    RAISE EXCEPTION 'Only text and link evidence types are supported in MVP.';
-  END IF;
-
   SELECT * INTO v_task FROM public.tasks WHERE id = p_task_id;
   IF NOT FOUND OR v_task.process_step_id IS NULL THEN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
   END IF;
 
-  -- Verify caller is Responsible (R)
+  IF v_task.workflow_state NOT IN ('ready', 'active', 'rework_required') THEN
+    RAISE EXCEPTION 'Task is not in an actionable state (current state: %).', v_task.workflow_state;
+  END IF;
+
+  -- Verify caller has R assignment
   SELECT EXISTS (
     SELECT 1 FROM public.task_raci_assignments ra
     WHERE ra.task_id = p_task_id AND ra.raci_role = 'R'
@@ -3972,31 +4187,33 @@ BEGIN
     RAISE EXCEPTION 'Caller is not an assigned Responsible user for this task.';
   END IF;
 
-  -- If evidence_def_id supplied, ensure it belongs to this step
-  IF p_evidence_def_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM public.defined_process_step_evidence_defs ed
-      WHERE ed.id = p_evidence_def_id AND ed.step_id = v_task.process_step_id
-    ) THEN
-      RAISE EXCEPTION 'Evidence definition does not belong to this process step.';
-    END IF;
+  -- Verify evidence def belongs to step
+  IF NOT EXISTS (
+    SELECT 1 FROM public.defined_process_step_evidence_defs ed
+    WHERE ed.id = p_evidence_def_id AND ed.step_id = v_task.process_step_id
+  ) THEN
+    RAISE EXCEPTION 'Evidence definition does not belong to this task step.';
   END IF;
 
+  -- Insert/update evidence submission
   INSERT INTO public.task_evidence_submissions (
-    task_id, cycle_number, evidence_def_id, evidence_type, payload, submitted_by
+    task_id, cycle_number, evidence_def_id, submitted_by, file_url, notes
   ) VALUES (
-    p_task_id, v_task.current_cycle_number, p_evidence_def_id, p_evidence_type, p_payload, v_caller_id
-  ) RETURNING id INTO v_submission_id;
+    p_task_id, v_task.current_cycle_number, p_evidence_def_id, v_caller_id, p_file_url, p_notes
+  ) ON CONFLICT (task_id, cycle_number, evidence_def_id)
+  DO UPDATE SET file_url = EXCLUDED.file_url, notes = EXCLUDED.notes, submitted_by = v_caller_id, submitted_at = now()
+  RETURNING id INTO v_submission_id;
 
   RETURN jsonb_build_object(
     'success', true,
-    'submission_id', v_submission_id
+    'submission_id', v_submission_id,
+    'cycle_number', v_task.current_cycle_number
   );
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.submit_task_evidence(uuid, uuid, text, jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.submit_task_evidence(uuid, uuid, text, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.submit_task_evidence(uuid, uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.submit_task_evidence(uuid, uuid, text, text) TO authenticated;
 
 
 -- ============================================================================
@@ -4077,7 +4294,7 @@ GRANT EXECUTE ON FUNCTION public.approve_process_task(uuid) TO authenticated;
 CREATE OR REPLACE FUNCTION public.reject_process_task(
   p_task_id      uuid,
   p_reason       text,
-  p_new_due_date date
+  p_new_due_date date DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -4085,13 +4302,16 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_caller_id      uuid;
-  v_task           RECORD;
-  v_task_list      RECORD;
-  v_workspace_id   uuid;
-  v_is_accountable boolean := false;
-  v_new_cycle      integer;
-  v_recipient      RECORD;
+  v_caller_id       uuid;
+  v_task            RECORD;
+  v_instance        RECORD;
+  v_task_list       RECORD;
+  v_workspace_id    uuid;
+  v_process_name    text;
+  v_is_accountable  boolean := false;
+  v_new_cycle       integer;
+  v_recipient       RECORD;
+  v_target_due_date date;
 BEGIN
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN
@@ -4102,17 +4322,6 @@ BEGIN
     RAISE EXCEPTION 'Rejection reason is required.';
   END IF;
 
-  IF p_new_due_date IS NULL OR p_new_due_date < CURRENT_DATE THEN
-    RAISE EXCEPTION 'New due date must be today or a future date.';
-  END IF;
-
-  SELECT * INTO v_task FROM public.tasks WHERE id = p_task_id;
-  IF NOT FOUND OR v_task.process_step_id IS NULL THEN
-    RAISE EXCEPTION 'Task not found or not a Defined Process task.';
-  END IF;
-
-  IF v_task.workflow_state <> 'awaiting_approval' THEN
-    RAISE EXCEPTION 'Task is not awaiting approval (current state: %).', v_task.workflow_state;
   END IF;
 
   SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
@@ -4850,11 +5059,12 @@ CREATE TABLE IF NOT EXISTS public.process_instances (
   workspace_id               uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
   defined_process_id         uuid NOT NULL REFERENCES public.defined_processes(id) ON DELETE RESTRICT,
   defined_process_version_id uuid NOT NULL REFERENCES public.defined_process_versions(id) ON DELETE RESTRICT,
+  start_request_id           uuid NOT NULL DEFAULT gen_random_uuid(),
   instance_name              text NOT NULL,
   started_by                 uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   owner_id                   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   started_at                 timestamptz NOT NULL DEFAULT now(),
-  due_date                   timestamptz NULL,
+  due_date                   date NULL,
   placement_type             text NOT NULL CHECK (placement_type IN ('standalone', 'project', 'phase', 'task_list', 'task')),
   project_id                 uuid NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   phase_id                   uuid NULL REFERENCES public.milestones(id) ON DELETE SET NULL,
@@ -4938,6 +5148,7 @@ COMMENT ON TABLE public.process_instances IS 'Explicit runtime container for an 
 -- Process Instance Indexes
 CREATE INDEX IF NOT EXISTS idx_process_instances_workspace ON public.process_instances(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_process_instances_defined_process ON public.process_instances(defined_process_id, defined_process_version_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_start_request_unique ON public.process_instances(workspace_id, started_by, start_request_id);
 CREATE INDEX IF NOT EXISTS idx_process_instances_project ON public.process_instances(project_id) WHERE project_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_process_instances_phase ON public.process_instances(phase_id) WHERE phase_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_process_instances_task_list ON public.process_instances(task_list_id) WHERE task_list_id IS NOT NULL;
@@ -5144,19 +5355,28 @@ $$;
 REVOKE ALL ON FUNCTION private.can_start_process_version(uuid, uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION private.can_start_process_version(uuid, uuid, uuid) TO authenticated, service_role, postgres;
 
--- 3. Equal-Weight Process Progress Calculation RPC (Decision 31)
+-- 3. Equal-Weight Process Progress Calculation RPC (Decision 31) - SECURITY INVOKER
 CREATE OR REPLACE FUNCTION public.get_process_instance_progress(p_instance_id uuid)
 RETURNS numeric
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
+SECURITY INVOKER
 AS $$
 DECLARE
+  v_caller_id uuid := auth.uid();
   v_total     integer;
   v_completed integer;
 BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.';
+  END IF;
+
   IF p_instance_id IS NULL THEN
     RETURN 0.00;
+  END IF;
+
+  -- Explicit Process Instance visibility check
+  IF NOT private.can_read_process_instance(p_instance_id, v_caller_id) THEN
+    RAISE EXCEPTION 'Access denied to process instance.';
   END IF;
 
   SELECT
@@ -5176,20 +5396,19 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_process_instance_progress(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_process_instance_progress(uuid) TO authenticated, service_role, postgres;
+GRANT EXECUTE ON FUNCTION public.get_process_instance_progress(uuid) TO authenticated;
 
--- 4. Placement-Aware Process Runtime Engine (start_process_instance)
-CREATE OR REPLACE FUNCTION public.start_process_instance(
+-- 4. Private Placement-Aware Process Runtime Engine (start_process_instance_internal)
+CREATE OR REPLACE FUNCTION private.start_process_instance_internal(
   p_version_id       uuid,
   p_instance_name    text,
+  p_start_request_id uuid,
   p_overall_due_date date DEFAULT NULL,
   p_placement_type   text DEFAULT 'standalone',
   p_project_id       uuid DEFAULT NULL,
   p_phase_id         uuid DEFAULT NULL,
   p_task_list_id     uuid DEFAULT NULL,
-  p_parent_task_id   uuid DEFAULT NULL,
-  p_raci_overrides   jsonb DEFAULT NULL,
-  p_owner_id         uuid DEFAULT NULL
+  p_parent_task_id   uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -5202,9 +5421,11 @@ DECLARE
   v_process               RECORD;
   v_project               RECORD;
   v_parent_task           RECORD;
+  v_existing_instance     RECORD;
+  v_existing_root_task_id uuid;
+  v_existing_task_count   integer;
   v_workspace_id          uuid;
   v_instance_id           uuid;
-  v_owner_id              uuid;
   v_root_step             RECORD;
   v_step                  RECORD;
   v_standalone_parent_id  uuid := NULL;
@@ -5227,17 +5448,20 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.';
   END IF;
 
-  -- 2. Instance Name Check
+  -- 2. Parameter Validation
   IF p_instance_name IS NULL OR btrim(p_instance_name) = '' THEN
     RAISE EXCEPTION 'Process instance name is required.';
   END IF;
 
-  -- 3. Placement Type Domain Check
+  IF p_start_request_id IS NULL THEN
+    RAISE EXCEPTION 'start_request_id is required for process instance creation.';
+  END IF;
+
   IF p_placement_type NOT IN ('standalone', 'project', 'phase', 'task_list', 'task') THEN
     RAISE EXCEPTION 'Invalid placement type: %. Must be standalone, project, phase, task_list, or task.', p_placement_type;
   END IF;
 
-  -- 4. Validate Version & Fetch Process
+  -- 3. Validate Version & Fetch Process
   SELECT * INTO v_version FROM public.defined_process_versions WHERE id = p_version_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Defined process version not found.';
@@ -5253,7 +5477,7 @@ BEGIN
   END IF;
   v_workspace_id := v_process.workspace_id;
 
-  -- 5. Server-Side Placement Validation & Hierarchy Resolution
+  -- 4. Server-Side Placement Validation & Hierarchy Resolution
   IF p_placement_type = 'standalone' THEN
     IF p_project_id IS NOT NULL OR p_phase_id IS NOT NULL OR p_task_list_id IS NOT NULL OR p_parent_task_id IS NOT NULL THEN
       RAISE EXCEPTION 'Standalone process cannot have project_id, phase_id, task_list_id, or parent_task_id.';
@@ -5349,18 +5573,12 @@ BEGIN
     v_step_parent_task_id := p_parent_task_id;
   END IF;
 
-  -- 6. Starter Authorization Check
+  -- 5. Starter Authorization Check
   IF NOT private.can_start_process_version(p_version_id, v_caller_id, v_workspace_id) THEN
     RAISE EXCEPTION 'Caller is not authorized to start this process version.';
   END IF;
 
-  -- 7. Owner Resolution
-  v_owner_id := COALESCE(p_owner_id, v_caller_id);
-  IF NOT private.is_workspace_active_member(v_workspace_id) THEN
-    RAISE EXCEPTION 'Caller is not an active member of this workspace.';
-  END IF;
-
-  -- 8. Find Root Step
+  -- 6. Find Root Step
   SELECT s.* INTO v_root_step
   FROM public.defined_process_steps s
   WHERE s.version_id = p_version_id
@@ -5373,7 +5591,49 @@ BEGIN
     RAISE EXCEPTION 'Root step not found for process version.';
   END IF;
 
-  -- 9. Resolve default Todo status if project-attached
+  -- 7. IDEMPOTENCY CHECK & DETERMINISTIC REPLAY
+  SELECT * INTO v_existing_instance
+  FROM public.process_instances
+  WHERE workspace_id = v_workspace_id
+    AND started_by = v_caller_id
+    AND start_request_id = p_start_request_id;
+
+  IF FOUND THEN
+    -- Verify payload consistency
+    IF v_existing_instance.defined_process_version_id <> p_version_id
+       OR v_existing_instance.instance_name <> p_instance_name
+       OR v_existing_instance.placement_type <> p_placement_type
+       OR v_existing_instance.project_id IS DISTINCT FROM v_project_id
+       OR v_existing_instance.phase_id IS DISTINCT FROM v_phase_id
+       OR v_existing_instance.task_list_id IS DISTINCT FROM v_task_list_id
+       OR v_existing_instance.parent_task_id IS DISTINCT FROM v_parent_task_id
+       OR v_existing_instance.due_date IS DISTINCT FROM p_overall_due_date THEN
+      RAISE EXCEPTION 'Idempotency conflict: start_request_id was previously used with different parameters.';
+    END IF;
+
+    -- Fetch existing root task and task count
+    SELECT id INTO v_existing_root_task_id
+    FROM public.tasks
+    WHERE process_instance_id = v_existing_instance.id
+      AND process_step_id = v_root_step.id
+    LIMIT 1;
+
+    SELECT count(*) INTO v_existing_task_count
+    FROM public.tasks
+    WHERE process_instance_id = v_existing_instance.id
+      AND process_step_id IS NOT NULL;
+
+    RETURN jsonb_build_object(
+      'process_instance_id', v_existing_instance.id,
+      'placement_type', v_existing_instance.placement_type,
+      'root_task_id', v_existing_root_task_id,
+      'parent_task_id', v_existing_instance.parent_task_id,
+      'task_count', v_existing_task_count,
+      'is_replay', true
+    );
+  END IF;
+
+  -- 8. Resolve default Todo status if project-attached
   IF v_project_id IS NOT NULL THEN
     SELECT id INTO v_todo_status_id
     FROM public.task_statuses
@@ -5385,14 +5645,15 @@ BEGIN
     END IF;
   END IF;
 
-  -- 10. Enable bypass marker for trusted process creation
+  -- 9. Enable bypass marker for trusted process creation
   PERFORM set_config('sns.process_engine_write', 'on', true);
 
-  -- 11. Insert Process Instance Row (Single atomic container)
+  -- 10. Insert Process Instance Row (Owner = Starter strictly, start_request_id enforced)
   INSERT INTO public.process_instances (
     workspace_id,
     defined_process_id,
     defined_process_version_id,
+    start_request_id,
     instance_name,
     started_by,
     owner_id,
@@ -5408,9 +5669,10 @@ BEGIN
     v_workspace_id,
     v_process.id,
     p_version_id,
+    p_start_request_id,
     p_instance_name,
     v_caller_id,
-    v_owner_id,
+    v_caller_id, -- owner_id = starter strictly
     now(),
     p_overall_due_date,
     p_placement_type,
@@ -5421,7 +5683,7 @@ BEGIN
     'running'
   ) RETURNING id INTO v_instance_id;
 
-  -- 12. If Standalone, Create Standalone Parent Task (Decision 1 & 8)
+  -- 11. If Standalone, Create Standalone Parent Task (Decision 1 & 8)
   IF p_placement_type = 'standalone' THEN
     INSERT INTO public.tasks (
       project_id,
@@ -5464,7 +5726,7 @@ BEGIN
     v_step_parent_task_id := v_standalone_parent_id;
   END IF;
 
-  -- 13. Materialize Step Tasks
+  -- 12. Materialize Step Tasks
   FOR v_step IN
     SELECT * FROM public.defined_process_steps
     WHERE version_id = p_version_id
@@ -5552,7 +5814,7 @@ BEGIN
     ORDER BY raci_role, resolved_user_id, department_id, response_required DESC;
   END LOOP;
 
-  -- 14. Audit Events & Notifications
+  -- 13. Audit Events & Notifications
   INSERT INTO public.process_audit_events (
     workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
   ) VALUES (
@@ -5563,7 +5825,8 @@ BEGIN
       'version_id', p_version_id,
       'placement_type', p_placement_type,
       'task_count', v_task_count,
-      'overall_due_date', p_overall_due_date
+      'overall_due_date', p_overall_due_date,
+      'start_request_id', p_start_request_id
     )
   );
 
@@ -5590,19 +5853,54 @@ BEGIN
     );
   END LOOP;
 
-  -- 15. Return JSON Contract
+  -- 14. Return JSON Contract
   RETURN jsonb_build_object(
     'process_instance_id', v_instance_id,
     'placement_type', p_placement_type,
     'root_task_id', v_root_task_id,
     'parent_task_id', v_step_parent_task_id,
-    'task_count', v_task_count
+    'task_count', v_task_count,
+    'is_replay', false
   );
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.start_process_instance(uuid, text, date, text, uuid, uuid, uuid, uuid, jsonb, uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.start_process_instance(uuid, text, date, text, uuid, uuid, uuid, uuid, jsonb, uuid) TO authenticated, service_role, postgres;
+REVOKE ALL ON FUNCTION private.start_process_instance_internal(uuid, text, uuid, date, text, uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.start_process_instance_internal(uuid, text, uuid, date, text, uuid, uuid, uuid, uuid) TO authenticated, service_role, postgres;
+
+-- 5. Placement-Aware Process Runtime Engine (start_process_instance) - SECURITY INVOKER
+CREATE OR REPLACE FUNCTION public.start_process_instance(
+  p_version_id       uuid,
+  p_instance_name    text,
+  p_start_request_id uuid,
+  p_overall_due_date date DEFAULT NULL,
+  p_placement_type   text DEFAULT 'standalone',
+  p_project_id       uuid DEFAULT NULL,
+  p_phase_id         uuid DEFAULT NULL,
+  p_task_list_id     uuid DEFAULT NULL,
+  p_parent_task_id   uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $$
+BEGIN
+  RETURN private.start_process_instance_internal(
+    p_version_id,
+    p_instance_name,
+    p_start_request_id,
+    p_overall_due_date,
+    p_placement_type,
+    p_project_id,
+    p_phase_id,
+    p_task_list_id,
+    p_parent_task_id
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.start_process_instance(uuid, text, uuid, date, text, uuid, uuid, uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.start_process_instance(uuid, text, uuid, date, text, uuid, uuid, uuid, uuid) TO authenticated;
 
 -- 5. RLS Policies & Grants for Process Instances & Standalone Tasks
 GRANT SELECT ON TABLE public.process_instances TO authenticated;
