@@ -525,3 +525,65 @@ const { data: progressPct, error } = await supabase.rpc('get_process_instance_pr
 #### Authorization
 - Caller must satisfy `private.can_read_process_instance`: starter, owner, assigned RACI participant, or workspace executive (Admin/CEO/CTO). Non-authorized callers are rejected with `42501` exception.
 
+---
+
+### 11. `complete_responsible_part` (Process Instance & Legacy Overloads)
+
+Transitions a task out of `ready` state upon completion by an assigned Responsible (`R`) participant.
+
+#### Signatures
+- **New Process-Instance Contract** (Public `SECURITY INVOKER` $\to$ Private `SECURITY DEFINER`):
+  ```sql
+  public.complete_responsible_part(
+    p_task_id      uuid,
+    p_cycle_number integer,
+    p_notes        text DEFAULT NULL
+  ) RETURNS jsonb
+  ```
+- **Legacy Compatibility Overload**:
+  ```sql
+  public.complete_responsible_part(
+    p_task_id uuid,
+    p_note    text DEFAULT NULL
+  ) RETURNS jsonb
+  ```
+
+#### Authorization & Security
+- `SECURITY INVOKER` with `SET search_path = ''`.
+- Revoked from `PUBLIC` and `anon`.
+- Granted exclusively to `authenticated`.
+- Internal transactional execution delegated to `private.complete_responsible_part_internal`.
+
+---
+
+### 12. `reject_process_task` (Process Instance & Legacy Overloads)
+
+Rejects a task in `in_review` state, incrementing cycle number and transitioning state to `rework_required`.
+
+#### Signatures
+- **New Process-Instance Contract** (Public `SECURITY INVOKER` $\to$ Private `SECURITY DEFINER`):
+  ```sql
+  public.reject_process_task(
+    p_task_id              uuid,
+    p_cycle_number         integer,
+    p_rejection_reason     text,
+    p_rework_instructions  text DEFAULT NULL,
+    p_new_due_date         date DEFAULT NULL
+  ) RETURNS jsonb
+  ```
+- **Legacy Compatibility Overload**:
+  ```sql
+  public.reject_process_task(
+    p_task_id      uuid,
+    p_reason       text,
+    p_new_due_date date DEFAULT NULL
+  ) RETURNS jsonb
+  ```
+
+#### Authorization & Security
+- `SECURITY INVOKER` with `SET search_path = ''`.
+- Revoked from `PUBLIC` and `anon`.
+- Granted exclusively to `authenticated`.
+- Internal transactional execution delegated to `private.reject_process_task_internal`.
+
+

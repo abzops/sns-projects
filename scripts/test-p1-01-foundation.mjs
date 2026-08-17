@@ -30,16 +30,15 @@ async function runFoundationTests() {
   console.log('--- Section 1: Canonical Migration File Verification ---');
 
   const migrationFiles = (await readdir(migrationDir)).filter(f => f.endsWith('.sql')).sort();
-  const latestMigration = migrationFiles[migrationFiles.length - 1];
-
-  assert(latestMigration.includes('p1_01_process_instance_access_hardening'),
-    `Test 1: Latest canonical migration is p1_01_process_instance_access_hardening (${latestMigration}).`);
+  const hardeningMigration = migrationFiles.find(f => f.includes('p1_01_process_instance_access_hardening'));
+  assert(!!hardeningMigration,
+    `Test 1: Canonical hardening migration p1_01_process_instance_access_hardening exists in chain (${hardeningMigration}).`);
 
   const foundationMigration = migrationFiles.find(f => f.includes('core_hierarchy_process_instance_foundation'));
   assert(!!foundationMigration, 'Test 2: Foundation migration core_hierarchy_process_instance_foundation exists in chain.');
 
   const foundationSql = await readFile(path.join(migrationDir, foundationMigration), 'utf8');
-  const hardeningSql = await readFile(path.join(migrationDir, latestMigration), 'utf8');
+  const hardeningSql = await readFile(path.join(migrationDir, hardeningMigration), 'utf8');
   const schemaSql = await readFile(schemaPath, 'utf8');
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -230,10 +229,10 @@ async function runFoundationTests() {
     'Test 40: P1-01A migration confirms RLS remains enabled on process_instances.');
 
   // Schema.sql state checks
-  assert(schemaSql.includes('REVOKE ALL ON TABLE public.process_instances FROM PUBLIC, anon, authenticated;'),
-    'Test 41: Master schema.sql revokes all table privileges from authenticated and anon.');
-  assert(!schemaSql.includes('GRANT SELECT ON TABLE public.process_instances TO authenticated;'),
-    'Test 42: Master schema.sql does not grant direct SELECT to authenticated.');
+  assert(schemaSql.includes('REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.process_instances FROM authenticated;'),
+    'Test 41: Master schema.sql revokes direct mutations from authenticated.');
+  assert(schemaSql.includes('CREATE POLICY "process_instances_select_policy" ON public.process_instances\n  FOR SELECT TO authenticated\n  USING (private.can_read_process_instance(id, auth.uid()));'),
+    'Test 42: Master schema.sql enforces granular can_read_process_instance RLS policy.');
   assert(!schemaSql.includes('CREATE POLICY "process_instances_select_member"'),
     'Test 43: Master schema.sql does not contain broad workspace member SELECT policy.');
 

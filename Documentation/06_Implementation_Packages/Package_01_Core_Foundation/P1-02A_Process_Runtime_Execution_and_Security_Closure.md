@@ -109,5 +109,6 @@ RETURNS numeric
 
 - [Implementation Roadmap](../../00_Governance/IMPLEMENTATION_ROADMAP.md)
 - [Defined Process Runtime API Contract](../../04_Defined_Processes/Defined_Process_Runtime_API_Contract.md)
+- [P1-02C Workflow RPC Security & Real E2E Closure](./P1-02C_Workflow_RPC_Security_and_Real_E2E_Closure.md)
 - [P1-02 Placement-Aware Process Runtime Engine](./P1-02_Placement_Aware_Process_Runtime_Engine.md)
 - [Core Architecture Decisions Index](../../09_Decision_Records/DECISION_REGISTER.md)

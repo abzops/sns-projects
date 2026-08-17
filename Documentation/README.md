@@ -71,6 +71,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P1-02` Placement-Aware Process Runtime Engine | **`VERIFIED`** | Migration `20260817070924` · [P1-02 Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02_Placement_Aware_Process_Runtime_Engine.md) |
 | | `P1-02A` Process Runtime Execution, Security & Idempotency Closure | **`VERIFIED`** | Migration `20260817072340` · [P1-02A Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02A_Process_Runtime_Execution_and_Security_Closure.md) |
 | | `P1-02B` Production Deployment & Real Database E2E Verification | **`VERIFIED`** | [P1-02B Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02B_Production_Deployment_and_E2E_Verification.md) |
+| | `P1-02C` Workflow RPC Security, Search Path & Real E2E Closure | **`VERIFIED`** | Migration `20260817091154` · [P1-02C Spec](06_Implementation_Packages/Package_01_Core_Foundation/P1-02C_Workflow_RPC_Security_and_Real_E2E_Closure.md) |
 | **Package 2: Process Runtime** | Multi-instance execution, step RACI, DAG lifecycle | **`PLANNED`** | Upcoming Package 2 |
 | **Package 3: Hierarchy UI** | Milestone $\to$ Phase cutover, nested task UI | **`PLANNED`** | Upcoming Package 3 |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |

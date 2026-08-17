@@ -356,6 +356,93 @@ async function runRealDatabaseLifecycleE2E() {
     `, [resA.res.process_instance_id]);
     assert(Number(progress.pct) > 0, 'Test 13: get_process_instance_progress computes live progress percentage');
 
+    // =======================================================================
+    // SUITE 6: RPC SECURITY, PRIVILEGES & SEARCH_PATH POSTURE
+    // =======================================================================
+    console.log('\n--- Suite 6: RPC Security, Privileges & Search Path ---');
+
+    // 1. Verify anon EXECUTE is FALSE on all privileged public workflow RPCs
+    const { rows: anonPrivs } = await client.query(`
+      SELECT
+        p.proname,
+        n.nspname,
+        has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can_execute,
+        p.prosecdef AS is_security_definer,
+        p.proconfig AS search_path_config
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname IN ('public', 'private')
+        AND p.proname IN (
+          'start_process_instance',
+          'get_process_instance_progress',
+          'complete_responsible_part',
+          'reject_process_task',
+          'submit_task_consultation',
+          'start_process_instance_internal',
+          'complete_responsible_part_internal',
+          'reject_process_task_internal'
+        )
+      ORDER BY n.nspname, p.proname;
+    `);
+
+    // Check anon access revoked
+    const anonAllowed = anonPrivs.filter(p => p.anon_can_execute);
+    assert(anonAllowed.length === 0, `Test 14: anon EXECUTE is false for all privileged workflow RPCs (found ${anonAllowed.length} exposed)`);
+
+    // Check public wrappers are SECURITY INVOKER with fixed search_path
+    const publicStart = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'start_process_instance');
+    const publicProgress = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'get_process_instance_progress');
+    const publicComplete = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'complete_responsible_part');
+    const publicReject = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'reject_process_task');
+
+    assert(publicStart && !publicStart.is_security_definer && (publicStart.search_path_config || []).includes('search_path='),
+      'Test 15: public.start_process_instance is SECURITY INVOKER with fixed search_path');
+    assert(publicProgress && !publicProgress.is_security_definer && (publicProgress.search_path_config || []).includes('search_path='),
+      'Test 16: public.get_process_instance_progress is SECURITY INVOKER with fixed search_path');
+    assert(publicComplete && !publicComplete.is_security_definer && (publicComplete.search_path_config || []).includes('search_path='),
+      'Test 17: public.complete_responsible_part is SECURITY INVOKER with fixed search_path');
+    assert(publicReject && !publicReject.is_security_definer && (publicReject.search_path_config || []).includes('search_path='),
+      'Test 18: public.reject_process_task is SECURITY INVOKER with fixed search_path');
+
+    // Check private engines are SECURITY DEFINER in private schema
+    const privateStart = anonPrivs.find(p => p.nspname === 'private' && p.proname === 'start_process_instance_internal');
+    const privateComplete = anonPrivs.find(p => p.nspname === 'private' && p.proname === 'complete_responsible_part_internal');
+    const privateReject = anonPrivs.find(p => p.nspname === 'private' && p.proname === 'reject_process_task_internal');
+
+    assert(privateStart && privateStart.is_security_definer && (privateStart.search_path_config || []).includes('search_path='),
+      'Test 19: private.start_process_instance_internal is SECURITY DEFINER with fixed search_path');
+    assert(privateComplete && privateComplete.is_security_definer && (privateComplete.search_path_config || []).includes('search_path='),
+      'Test 20: private.complete_responsible_part_internal is SECURITY DEFINER with fixed search_path');
+    assert(privateReject && privateReject.is_security_definer && (privateReject.search_path_config || []).includes('search_path='),
+      'Test 21: private.reject_process_task_internal is SECURITY DEFINER with fixed search_path');
+
+    // =======================================================================
+    // SUITE 7: CONSULTATION & APPROVAL LIFECYCLE EXECUTION
+    // =======================================================================
+    console.log('\n--- Suite 7: Consultation & Approval Lifecycle Execution ---');
+
+    // Create a new instance for consultation & approval testing
+    const startReqId3 = `66666666-6666-6666-6666-${Date.now().toString().slice(-12)}`;
+    const { rows: [startRes3] } = await client.query(`
+      SELECT public.start_process_instance(
+        p_version_id => $1,
+        p_instance_name => 'Lifecycle Workflow Test',
+        p_start_request_id => $2::uuid,
+        p_placement_type => 'standalone'
+      ) AS res;
+    `, [version.id, startReqId3]);
+
+    const instance3 = startRes3.res;
+    const { rows: tasks3 } = await client.query(`
+      SELECT id, workflow_state FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;
+    `, [instance3.process_instance_id]);
+
+    // Test public.complete_responsible_part wrapper
+    const { rows: [compRes] } = await client.query(`
+      SELECT public.complete_responsible_part($1::uuid, 1, 'Initial completion note') AS res;
+    `, [tasks3[0].id]);
+    assert(compRes.res && (compRes.res.status === 'completed' || compRes.res.status === 'in_review'), 'Test 22: public.complete_responsible_part executes cleanly via SECURITY INVOKER wrapper');
+
     // Always rollback isolated test transaction
     await client.query('ROLLBACK;');
     console.log('\nAll test database transactions rolled back cleanly.');
