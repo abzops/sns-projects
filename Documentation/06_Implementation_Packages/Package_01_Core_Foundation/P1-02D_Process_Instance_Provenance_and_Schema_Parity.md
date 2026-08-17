@@ -149,8 +149,6 @@ Result: **34 PASSED, 0 FAILED**
 
 ---
 
-## 4. Verification & Audit Results
-
 - `scripts/verify-p1-02d-schema-parity.mjs`: **19/19 PASSED, 0 FAILED**
 - `scripts/test-p1-02-process-runtime.mjs`: **45/45 PASSED, 0 FAILED**
 - `scripts/test-p1-01-foundation.mjs`: **45/45 PASSED, 0 FAILED**
@@ -160,3 +158,6 @@ Result: **34 PASSED, 0 FAILED**
 - `scripts/verify-doc-links.mjs`: **159/159 Links Verified (0 errors)**
 - `npm run lint`: **0 errors**
 - `npm run build`: **Built successfully with 0 errors (846ms)**
+
+> [!NOTE]
+> **Security Advisor Baseline Clarification**: In P1-02D, `public.sync_validate_legacy_task_list_version` was initially created in the `public` schema as a `SECURITY DEFINER` function, which introduced an `authenticated_security_definer_function_executable` warning. This was cleanly resolved in [P1-02E](./P1-02E_Legacy_Version_Trigger_Security_Closure.md) by moving the trigger function to `private.sync_validate_legacy_task_list_version()`, preserving the expected baseline of 6 warnings (5 historical workflow functions + 1 auth leaked-password warning).

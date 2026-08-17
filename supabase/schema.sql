@@ -2110,7 +2110,7 @@ BEGIN
 END $$;
 
 -- Conditional validation trigger for legacy task list version coherence
-CREATE OR REPLACE FUNCTION public.sync_validate_legacy_task_list_version()
+CREATE OR REPLACE FUNCTION private.sync_validate_legacy_task_list_version()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -2138,15 +2138,15 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.sync_validate_legacy_task_list_version() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.sync_validate_legacy_task_list_version() TO authenticated, service_role, postgres;
+REVOKE ALL ON FUNCTION private.sync_validate_legacy_task_list_version() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.sync_validate_legacy_task_list_version() TO service_role, postgres;
 
 DROP TRIGGER IF EXISTS trg_validate_legacy_task_list_version ON public.tasks;
 CREATE TRIGGER trg_validate_legacy_task_list_version
   BEFORE INSERT OR UPDATE OF task_list_id, process_step_id, defined_process_version_id, process_instance_id
   ON public.tasks
   FOR EACH ROW
-  EXECUTE FUNCTION public.sync_validate_legacy_task_list_version();
+  EXECUTE FUNCTION private.sync_validate_legacy_task_list_version();
 
 -- Partial unique indexes: Legacy vs Process Instance
 CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_legacy_task_list_step

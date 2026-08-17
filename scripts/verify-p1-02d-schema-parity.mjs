@@ -94,17 +94,43 @@ async function verifyP102DSchemaParity() {
     `);
     assert(fkRows.length === 0, 'fk_tasks_task_list_version is dropped (replaced by conditional validation trigger)');
 
-    // 4. Verify trigger trg_validate_legacy_task_list_version
-    console.log('\n--- 4. Legacy Validation Trigger ---');
+    // 4. Verify trigger trg_validate_legacy_task_list_version & private trigger helper
+    console.log('\n--- 4. Legacy Validation Trigger & Helper Security ---');
+    const { rows: pubTrgFn } = await client.query(`
+      SELECT p.proname
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = 'sync_validate_legacy_task_list_version';
+    `);
+    assert(pubTrgFn.length === 0, 'public.sync_validate_legacy_task_list_version does NOT exist (removed from public RPC surface)');
+
+    const { rows: privTrgFn } = await client.query(`
+      SELECT
+        p.proname,
+        p.prosecdef as is_sec_definer,
+        p.proconfig as config,
+        has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can_execute,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_can_execute
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'private' AND p.proname = 'sync_validate_legacy_task_list_version';
+    `);
+    assert(privTrgFn.length === 1, 'private.sync_validate_legacy_task_list_version exists in private schema');
+    assert(privTrgFn[0]?.is_sec_definer === true, 'private.sync_validate_legacy_task_list_version is SECURITY DEFINER');
+    assert((privTrgFn[0]?.config || []).some(c => c.includes('search_path')), 'private.sync_validate_legacy_task_list_version has fixed search_path');
+    assert(privTrgFn[0]?.anon_can_execute === false, 'anon CANNOT execute private.sync_validate_legacy_task_list_version');
+    assert(privTrgFn[0]?.authenticated_can_execute === false, 'authenticated CANNOT directly execute private.sync_validate_legacy_task_list_version');
+
     const { rows: trgRows } = await client.query(`
-      SELECT tgname, proname
+      SELECT t.tgname, p.proname, n.nspname
       FROM pg_trigger t
       JOIN pg_proc p ON p.oid = t.tgfoid
+      JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE tgrelid = 'public.tasks'::regclass
         AND tgname = 'trg_validate_legacy_task_list_version';
     `);
-    assert(trgRows.length === 1 && trgRows[0]?.proname === 'sync_validate_legacy_task_list_version',
-      'trg_validate_legacy_task_list_version trigger is installed on public.tasks calling sync_validate_legacy_task_list_version');
+    assert(trgRows.length === 1 && trgRows[0]?.nspname === 'private' && trgRows[0]?.proname === 'sync_validate_legacy_task_list_version',
+      'trg_validate_legacy_task_list_version trigger is installed on public.tasks calling private.sync_validate_legacy_task_list_version');
 
     // 5. Verify Dual Partial Indexes
     console.log('\n--- 5. Dual Partial Unique Indexes ---');
