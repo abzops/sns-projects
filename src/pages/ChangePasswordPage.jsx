@@ -20,7 +20,7 @@ import styles from './ChangePasswordPage.module.css';
 const DEFAULT_WORKSPACE_ID = 'dbcaddf1-cf02-4bad-8af1-974301cdfbea';
 
 export default function ChangePasswordPage() {
-  const { user, loading: authLoading, refreshSession, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -32,13 +32,16 @@ export default function ChangePasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [passwordChangeInProgress, setPasswordChangeInProgress] = useState(false);
 
-  // Fetch authoritative onboarding status from Edge Function
+  // Fetch authoritative onboarding status from Edge Function.
+  // SKIP this entirely when passwordChangeInProgress — the old session token
+  // is invalidated and any Edge Function call would produce a false 401.
   useEffect(() => {
     let active = true;
 
     async function fetchStatus() {
-      if (!user) {
+      if (!user || passwordChangeInProgress) {
         setStatusLoading(false);
         return;
       }
@@ -94,7 +97,7 @@ export default function ChangePasswordPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, passwordChangeInProgress]);
 
   // Password requirement checks (min 12 chars, uppercase, lowercase, number, symbol)
   const checks = useMemo(() => {
@@ -176,15 +179,25 @@ export default function ChangePasswordPage() {
   }
 
   // Submit new password directly to server-side Edge Function (complete_first_login)
+  //
+  // IMPORTANT: After the Edge Function succeeds, the user's OLD auth session is
+  // invalidated because the server changed the password. We must NOT attempt to
+  // refreshSession() or call get_onboarding_status with the old token. Instead
+  // we sign in fresh with the new credentials.
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!checks.allRequirementsMet || submitting) return;
 
     setError('');
     setSubmitting(true);
+    setPasswordChangeInProgress(true);
+
+    // Capture email from current session BEFORE invoking the Edge Function,
+    // because the session will become invalid after password change.
+    const authenticatedEmail = user?.email;
 
     try {
-      // Direct server-enforced submission to complete_first_login
+      // Direct server-enforced submission to complete_first_login (invoked EXACTLY ONCE)
       const { data: edgeData, error: edgeErr } =
         await supabase.functions.invoke('admin-manage-workspace-user', {
           body: {
@@ -195,25 +208,61 @@ export default function ChangePasswordPage() {
         });
 
       if (edgeErr || !edgeData?.success) {
+        // CASE 1: complete_first_login itself failed BEFORE password update
         const errMsg =
           edgeData?.error ||
           edgeErr?.message ||
-          'Password updated, but account activation could not be completed. Please retry.';
+          'Password change could not be completed. Please retry.';
         throw new Error(errMsg);
       }
 
-      // Refresh auth session so that updated app_metadata propagates immediately to client
-      await refreshSession();
-      showToast(
-        'Password updated and account activated! Welcome to SNS Projects.',
-        'success'
-      );
-      navigate('/', { replace: true });
+      // ═══════════════════════════════════════════════════════════════════
+      // Server confirmed success: password changed, membership activated,
+      // must_change_password cleared. The OLD session is now INVALID.
+      //
+      // DO NOT call refreshSession() — the old refresh token is revoked.
+      // DO NOT call get_onboarding_status — the old access token is invalid.
+      // ═══════════════════════════════════════════════════════════════════
+
+      // Attempt to obtain a completely NEW auth session with new credentials
+      try {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: authenticatedEmail,
+          password: newPassword,
+        });
+
+        if (signInErr) {
+          throw signInErr;
+        }
+
+        // Fresh session obtained — AuthContext onAuthStateChange will pick it up
+        showToast(
+          'Password updated and account activated! Welcome to SNS Projects.',
+          'success'
+        );
+        navigate('/', { replace: true });
+      } catch {
+        // CASE 2: Password change SUCCEEDED on server, but automatic re-login failed.
+        // This is NOT a failure — the user's password IS changed.
+        // Clear stale auth state and redirect to login with success message.
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // Ignore signOut errors — session is already invalid
+        }
+        showToast(
+          'Password changed successfully. Please sign in with your new password.',
+          'success'
+        );
+        navigate('/login', { replace: true });
+      }
     } catch (err) {
+      // CASE 1 only: The Edge Function itself failed
       console.error('First login password change error:', err);
       const msg = err.message || 'An error occurred during password change';
       setError(msg);
       showToast(msg, 'error');
+      setPasswordChangeInProgress(false);
     } finally {
       setSubmitting(false);
     }
