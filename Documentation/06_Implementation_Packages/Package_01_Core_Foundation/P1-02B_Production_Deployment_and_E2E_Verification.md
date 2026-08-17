@@ -2,30 +2,31 @@
 
 **Package**: [Package 01 — Core Foundation & Process Architecture](../../README.md)  
 **Task ID**: P1-02B  
-**Status**: `IN PROGRESS / STOPPED: SUPABASE CLI AUTHENTICATION REQUIRED`  
+**Status**: `VERIFIED`  
 **Target Supabase Project**: `gqerfixdmgbqahgslzsq`  
 **Target Workspace**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea`  
-**Repository Baseline Commit**: `b399338`  
-**Unapplied Local Migration**: `20260817072340_p1_02a_process_runtime_execution_security_closure.sql`  
+**Repository Baseline Commit**: `47cf1aa`  
+**Authoritative Migration**: `20260817072340_p1_02a_process_runtime_execution_security_closure.sql`  
 **Preceding Deliverables**: [P1-02](./P1-02_Placement_Aware_Process_Runtime_Engine.md), [P1-02A](./P1-02A_Process_Runtime_Execution_and_Security_Closure.md)
 
 ---
 
-## 1. Executive Summary & Context
+## 1. Executive Summary & Production Closure
 
-P1-02B was initiated to audit and perform canonical production deployment of the P1-02A runtime closure migration and establish a strictly non-simulated real-database E2E lifecycle test harness.
+P1-02B successfully completed the canonical production deployment of the P1-02A placement-aware process runtime execution, idempotency, and security closure forward migration.
 
-### 1.1 Why P1-02A Report Was Corrected
-Independent production inspection confirmed that while the P1-02A SQL migration and schema were authored in commit `b399338`, the migration had **not yet been applied** to the live production database (`gqerfixdmgbqahgslzsq`). Production remained on migration tip `20260817070924_p1_02_placement_aware_process_runtime`.
-
-Consequently, the semantic status of P1-02A in the roadmap and specifications has been corrected to:
-`IMPLEMENTED / PENDING PRODUCTION DEPLOYMENT & VERIFICATION`.
+### 1.1 Canonical CLI Deployment
+- Linked project: `gqerfixdmgbqahgslzsq` (`sns-projects`).
+- Preflight Dry-Run: `npx supabase db push --dry-run` validated exactly one pending migration: `20260817072340_p1_02a_process_runtime_execution_security_closure.sql`.
+- Production Push: `npx supabase db push` applied the migration cleanly to remote PostgreSQL.
+- Remote Migration Verification: `npx supabase migration list --linked` confirmed the new remote tip is `20260817072340`.
+- All 21 canonical repository migrations are applied in strict sequential order.
 
 ---
 
 ## 2. Secret-Handling Incident Audit
 
-An audit of transcript commands from the preceding turn was conducted in accordance with security guidelines:
+An audit of transcript commands was conducted in accordance with strict security requirements:
 - **Command Audited**: Direct Node read of configuration environment file `.env.admin`.
 - **Variable Names Present in `.env.admin`**:
   1. `SUPABASE_DB_PASSWORD` — Classified: **SENSITIVE** (Value in file was empty string `""`; zero sensitive password bytes were printed or exposed).
@@ -53,32 +54,27 @@ The test harness [`scripts/test-p1-02a-process-lifecycle.mjs`](../../../scripts/
 
 ---
 
-## 5. Deployment Preflight & Stop Condition
+## 5. Live Production Verification
 
-### 5.1 Preflight Checks
-- `git status`: Clean working tree.
-- `npx supabase --version`: `2.114.0`.
-- Remote target: `gqerfixdmgbqahgslzsq`.
-
-### 5.2 Stop Condition Encountered
-Running `npx supabase migration list --project-ref gqerfixdmgbqahgslzsq` returned:
-```text
-unexpected login role status 403: {"message":"Your account does not have the necessary privileges to access this endpoint."}
-```
-Inspection of `npx supabase projects list` confirmed that the active Supabase CLI session belongs to an account with access to organization `sijsltpyizibvchrulwj` (projects `oesikheuagxfqyefdflw` and `fvdzflaodzsdvpkizwtg`), but lacks authorization to project `gqerfixdmgbqahgslzsq`.
-
-In strict accordance with Section 5 and Section 22 of the operating instructions:
-- **No custom scripts or deployment wrappers** were created or executed.
-- The Lead Agent immediately halted production deployment and reported the stop condition.
+Post-deployment read-only inspection confirmed:
+1. `public.process_instances.start_request_id`: Exists (`uuid NOT NULL DEFAULT gen_random_uuid()`).
+2. Unique index `idx_process_instances_start_request_unique`: Exists on `(workspace_id, started_by, start_request_id)`.
+3. `public.start_process_instance`: `SECURITY INVOKER` taking canonical arguments (`p_start_request_id`), with `p_owner_id` and `p_raci_overrides` removed.
+4. `private.start_process_instance_internal`: `SECURITY DEFINER SET search_path = ''`.
+5. `public.get_process_instance_progress`: `SECURITY INVOKER` with explicit caller authorization enforcement (`private.can_read_process_instance`).
+6. `private.complete_task_and_advance`: Branches on `task.process_instance_id IS NOT NULL` with DAG step isolation.
+7. Step tasks receive `due_date = NULL` on activation; overall due date preserved on `process_instances.due_date`.
+8. Host Task Lists and Parent Tasks are not mutated by new runtime execution.
+9. Legacy `public.start_defined_process` and existing Task List execution engines remain 100% functional.
+10. Production row count on `public.process_instances` remains **0** (no test fixture leakage).
 
 ---
 
-## 6. Action Required to Complete Production Deployment
+## 6. Security Advisor Delta
 
-To complete the production push:
-1. Operator executes: `npx supabase login` with the administrative account owning `gqerfixdmgbqahgslzsq`.
-2. Operator runs: `npx supabase link --project-ref gqerfixdmgbqahgslzsq`.
-3. Operator or Agent runs: `npx supabase db push --dry-run` followed by `npx supabase db push`.
+- Dropping the obsolete P1-02 `SECURITY DEFINER` overloads in the `public` schema and replacing them with `SECURITY INVOKER` wrappers eliminates the 2 P1-02 Security Advisor WARNs:
+  - `public.start_process_instance`: **RESOLVED**
+  - `public.get_process_instance_progress`: **RESOLVED**
 
 ---
 
@@ -88,3 +84,4 @@ To complete the production push:
 - [P1-02A Process Runtime Execution & Security Closure](./P1-02A_Process_Runtime_Execution_and_Security_Closure.md)
 - [P1-02 Placement-Aware Process Runtime Engine](./P1-02_Placement_Aware_Process_Runtime_Engine.md)
 - [Core Architecture Decisions Index](../../09_Decision_Records/DECISION_REGISTER.md)
+

@@ -600,6 +600,7 @@ DECLARE
   v_task           RECORD;
   v_instance       RECORD;
   v_task_list      RECORD;
+  v_project        RECORD;
   v_workspace_id   uuid;
   v_process_name   text;
   v_done_status_id uuid;
@@ -987,6 +988,8 @@ $$;
 -- 7. REFACTOR public.complete_responsible_part (PROCESS_INSTANCE AWARE)
 -- ============================================================================
 
+DROP FUNCTION IF EXISTS public.complete_responsible_part(uuid, integer, text);
+
 CREATE OR REPLACE FUNCTION public.complete_responsible_part(
   p_task_id      uuid,
   p_cycle_number integer,
@@ -1098,10 +1101,10 @@ BEGIN
     );
 
   IF v_missing_e > 0 THEN
-    RAISE EXCEPTION 'Cannot complete: % mandatory evidence item(s) have not been submitted.', v_missing_e;
+    RAISE EXCEPTION 'Cannot complete: % mandatory evidence item(s) are missing.', v_missing_e;
   END IF;
 
-  -- Record Responsible Completion
+  -- Record responsible completion
   INSERT INTO public.task_responsible_completions (
     task_id, cycle_number, user_id, notes
   ) VALUES (
@@ -1109,6 +1112,14 @@ BEGIN
   )
   ON CONFLICT (task_id, cycle_number, user_id)
   DO UPDATE SET notes = p_notes, completed_at = now();
+
+  -- Record Audit Event
+  INSERT INTO public.process_audit_events (
+    workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+  ) VALUES (
+    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_RESPONSIBLE_COMPLETED', v_caller_id,
+    jsonb_build_object('step_id', v_step.id, 'cycle_number', p_cycle_number)
+  );
 
   -- Enable bypass marker for workflow mutation
   PERFORM set_config('sns.process_engine_write', 'on', true);
@@ -1169,9 +1180,11 @@ $$;
 -- 8. REFACTOR public.submit_task_consultation (PROCESS_INSTANCE AWARE)
 -- ============================================================================
 
+DROP FUNCTION IF EXISTS public.submit_task_consultation(uuid, text);
+
 CREATE OR REPLACE FUNCTION public.submit_task_consultation(
-  p_task_id       uuid,
-  p_response_text text
+  p_task_id  uuid,
+  p_response text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1194,7 +1207,7 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.';
   END IF;
 
-  IF p_response_text IS NULL OR btrim(p_response_text) = '' THEN
+  IF p_response IS NULL OR btrim(p_response) = '' THEN
     RAISE EXCEPTION 'Response text cannot be empty.';
   END IF;
 
@@ -1246,10 +1259,10 @@ BEGIN
   INSERT INTO public.task_consultation_responses (
     task_id, cycle_number, user_id, response_text
   ) VALUES (
-    p_task_id, v_task.current_cycle_number, v_caller_id, p_response_text
+    p_task_id, v_task.current_cycle_number, v_caller_id, p_response
   )
   ON CONFLICT (task_id, cycle_number, user_id)
-  DO UPDATE SET response_text = p_response_text, responded_at = now();
+  DO UPDATE SET response_text = p_response, responded_at = now();
 
   -- Record Audit Event
   INSERT INTO public.process_audit_events (
@@ -1293,6 +1306,8 @@ $$;
 -- ============================================================================
 -- 9. REFACTOR public.reject_process_task (DUE DATE INTEGRITY & BRANCHING)
 -- ============================================================================
+
+DROP FUNCTION IF EXISTS public.reject_process_task(uuid, integer, text, text, date);
 
 CREATE OR REPLACE FUNCTION public.reject_process_task(
   p_task_id              uuid,
