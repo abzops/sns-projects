@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ngbsBgkMeyhno3f3jlCIxmgWb4yr84G4pLnXv8kAT3gs4iO6xfIIKzDogDE8qb7
+\restrict O7NcthliEe49N9rGJwxGJp6xE9ebtjhg5JbTEtDu1cqt7aUDOkF3apfhrlMiSCB
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -609,6 +609,125 @@ $$;
 
 
 --
+-- Name: can_cancel_process_instance(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.can_cancel_process_instance(p_instance_id uuid, p_actor_id uuid DEFAULT auth.uid()) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_inst record;
+BEGIN
+  IF p_actor_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT id, workspace_id, started_by, owner_id, status
+  INTO v_inst
+  FROM public.process_instances
+  WHERE id = p_instance_id;
+
+  IF NOT FOUND OR v_inst.status <> 'running' THEN
+    RETURN false;
+  END IF;
+
+  -- Active workspace membership required
+  IF NOT EXISTS (
+    SELECT 1 FROM public.workspace_members wm
+    WHERE wm.workspace_id = v_inst.workspace_id AND wm.user_id = p_actor_id AND wm.status = 'active'
+  ) THEN
+    RETURN false;
+  END IF;
+
+  -- 1. Process Starter
+  IF v_inst.started_by = p_actor_id THEN
+    RETURN true;
+  END IF;
+
+  -- 2. Process Owner
+  IF v_inst.owner_id = p_actor_id THEN
+    RETURN true;
+  END IF;
+
+  -- 3. Executive / Admin Override
+  IF private.is_process_override_actor(v_inst.workspace_id, p_actor_id) THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+
+--
+-- Name: can_move_process_instance(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.can_move_process_instance(p_instance_id uuid, p_actor_id uuid DEFAULT auth.uid()) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_inst record;
+BEGIN
+  IF p_actor_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT id, workspace_id, owner_id, placement_type, project_id, phase_id, task_list_id, parent_task_id, status
+  INTO v_inst
+  FROM public.process_instances
+  WHERE id = p_instance_id;
+
+  IF NOT FOUND OR v_inst.status <> 'running' THEN
+    RETURN false;
+  END IF;
+
+  -- Active workspace membership required
+  IF NOT private.is_workspace_active_member(v_inst.workspace_id) THEN
+    -- Check if explicitly active member
+    IF NOT EXISTS (
+      SELECT 1 FROM public.workspace_members wm
+      WHERE wm.workspace_id = v_inst.workspace_id AND wm.user_id = p_actor_id AND wm.status = 'active'
+    ) THEN
+      RETURN false;
+    END IF;
+  END IF;
+
+  -- 1. Process Instance Owner
+  IF v_inst.owner_id = p_actor_id THEN
+    RETURN true;
+  END IF;
+
+  -- 2. Nearest Current Placement Owner / Responsible
+  IF p_actor_id = private.get_nearest_placement_owner(
+    v_inst.placement_type, v_inst.project_id, v_inst.phase_id, v_inst.task_list_id, v_inst.parent_task_id
+  ) THEN
+    RETURN true;
+  END IF;
+
+  -- If placement is task, check if actor is assigned Responsible on parent task
+  IF v_inst.placement_type = 'task' AND v_inst.parent_task_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.task_raci_assignments ra
+      WHERE ra.task_id = v_inst.parent_task_id AND ra.raci_role = 'R' AND ra.user_id = p_actor_id
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  -- 3. Executive / Admin Override
+  IF private.is_process_override_actor(v_inst.workspace_id, p_actor_id) THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+
+--
 -- Name: can_read_process_instance(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -695,9 +814,8 @@ CREATE FUNCTION private.can_start_process_version(p_version_id uuid, p_caller_id
     SET search_path TO ''
     AS $$
 DECLARE
-  v_version          RECORD;
-  v_root_step        RECORD;
-  v_caller_is_root_r boolean := false;
+  v_version   RECORD;
+  v_root_step RECORD;
 BEGIN
   IF p_caller_id IS NULL OR p_workspace_id IS NULL OR p_version_id IS NULL THEN
     RETURN false;
@@ -734,54 +852,218 @@ BEGIN
     RETURN false;
   END IF;
 
-  SELECT EXISTS (
+  RETURN EXISTS (
     SELECT 1 FROM public.defined_process_step_raci r
     WHERE r.step_id = v_root_step.id
       AND r.raci_role = 'R'
       AND (
         (r.actor_type = 'user' AND r.user_id = p_caller_id)
         OR (r.actor_type = 'process_starter')
-        OR (
-          r.actor_type = 'department' AND EXISTS (
-            SELECT 1 FROM public.department_memberships dm
-            WHERE dm.department_id = r.department_id
-              AND dm.user_id = p_caller_id
-              AND dm.is_active = true
-          )
-        )
       )
-  ) INTO v_caller_is_root_r;
+  );
+END;
+$$;
 
-  IF NOT v_caller_is_root_r THEN
+
+--
+-- Name: can_view_process_instance(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.can_view_process_instance(p_instance_id uuid, p_actor_id uuid DEFAULT auth.uid()) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_inst record;
+BEGIN
+  IF p_actor_id IS NULL THEN
     RETURN false;
   END IF;
 
-  -- 5. Dynamic R/A Separation on Approval-Required Steps
-  IF EXISTS (
-    SELECT 1
-    FROM public.defined_process_steps s
-    JOIN public.defined_process_step_raci r_ps
-      ON r_ps.step_id = s.id AND r_ps.actor_type = 'process_starter' AND r_ps.raci_role = 'R'
-    JOIN public.defined_process_step_raci a_usr
-      ON a_usr.step_id = s.id AND a_usr.raci_role = 'A'
-    WHERE s.version_id = p_version_id
-      AND s.approval_required = true
-      AND (
-        a_usr.user_id = p_caller_id
-        OR (
-          a_usr.actor_type = 'department' AND EXISTS (
-            SELECT 1 FROM public.department_memberships dm
-            WHERE dm.department_id = a_usr.department_id
-              AND dm.user_id = p_caller_id
-              AND dm.is_active = true
-          )
-        )
-      )
+  SELECT id, workspace_id, started_by, owner_id, placement_type, project_id
+  INTO v_inst
+  FROM public.process_instances
+  WHERE id = p_instance_id;
+
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  -- Must be an active member of the workspace
+  IF NOT EXISTS (
+    SELECT 1 FROM public.workspace_members wm
+    WHERE wm.workspace_id = v_inst.workspace_id AND wm.user_id = p_actor_id AND wm.status = 'active'
   ) THEN
     RETURN false;
   END IF;
 
-  RETURN true;
+  -- 1. Executive / Admin Override
+  IF private.is_process_override_actor(v_inst.workspace_id, p_actor_id) THEN
+    RETURN true;
+  END IF;
+
+  -- 2. Process Starter or Owner
+  IF v_inst.started_by = p_actor_id OR v_inst.owner_id = p_actor_id THEN
+    RETURN true;
+  END IF;
+
+  -- 3. Explicit Process Step RACI participant (R, A, C, I)
+  IF EXISTS (
+    SELECT 1 FROM public.tasks t
+    JOIN public.task_raci_assignments ra ON ra.task_id = t.id
+    WHERE t.process_instance_id = v_inst.id
+      AND ra.user_id = p_actor_id
+  ) THEN
+    RETURN true;
+  END IF;
+
+  -- 4. Attached Process Instance: visible to active workspace members who can view the host project
+  IF v_inst.placement_type <> 'standalone' AND v_inst.project_id IS NOT NULL THEN
+    RETURN true;
+  END IF;
+
+  -- Standalone instance not matching starter/owner/RACI/admin is hidden
+  RETURN false;
+END;
+$$;
+
+
+--
+-- Name: cancel_process_instance_internal(uuid, text); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.cancel_process_instance_internal(p_instance_id uuid, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_caller_id            uuid;
+  v_instance             RECORD;
+  v_cancelled_step_count integer := 0;
+  v_completed_step_count integer := 0;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.';
+  END IF;
+
+  IF p_reason IS NULL OR trim(p_reason) = '' THEN
+    RAISE EXCEPTION 'Cancel reason is required and cannot be empty.';
+  END IF;
+
+  SELECT * INTO v_instance FROM public.process_instances WHERE id = p_instance_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Process instance not found.';
+  END IF;
+
+  -- Idempotency: Replay if already cancelled
+  IF v_instance.status = 'cancelled' THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'is_replay', true,
+      'process_instance_id', p_instance_id,
+      'status', 'cancelled',
+      'cancelled_by', v_instance.cancelled_by,
+      'cancelled_at', v_instance.cancelled_at,
+      'cancel_reason', v_instance.cancel_reason
+    );
+  END IF;
+
+  IF v_instance.status = 'completed' THEN
+    RAISE EXCEPTION 'Cannot cancel completed process instance.';
+  END IF;
+
+  -- Authorization check
+  IF NOT private.can_cancel_process_instance(p_instance_id, v_caller_id) THEN
+    RAISE EXCEPTION 'Caller not authorized to cancel process instance.';
+  END IF;
+
+  PERFORM set_config('sns.process_engine_write', 'on', true);
+
+  -- 1. Update Process Instance status
+  UPDATE public.process_instances
+  SET status        = 'cancelled',
+      cancelled_by  = v_caller_id,
+      cancelled_at  = now(),
+      cancel_reason = trim(p_reason),
+      updated_at    = now()
+  WHERE id = p_instance_id;
+
+  -- 2. Materialized Step Tasks: Unfinished step tasks become 'cancelled'
+  WITH updated_tasks AS (
+    UPDATE public.tasks
+    SET workflow_state = 'cancelled',
+        updated_at     = now()
+    WHERE process_instance_id = p_instance_id
+      AND process_step_id IS NOT NULL
+      AND workflow_state NOT IN ('completed', 'cancelled')
+    RETURNING id
+  )
+  SELECT count(*) INTO v_cancelled_step_count FROM updated_tasks;
+
+  -- Count completed step tasks preserved
+  SELECT count(*) INTO v_completed_step_count
+  FROM public.tasks
+  WHERE process_instance_id = p_instance_id
+    AND process_step_id IS NOT NULL
+    AND workflow_state = 'completed';
+
+  -- If standalone parent container task exists and not completed, cancel it
+  IF v_instance.placement_type = 'standalone' THEN
+    UPDATE public.tasks
+    SET workflow_state = 'cancelled',
+        updated_at     = now()
+    WHERE process_instance_id = p_instance_id
+      AND process_step_id IS NULL
+      AND workflow_state NOT IN ('completed', 'cancelled');
+  END IF;
+
+  -- 3. Write immutable PROCESS_CANCELLED audit event
+  INSERT INTO public.process_audit_events (
+    workspace_id,
+    project_id,
+    task_list_id,
+    process_instance_id,
+    event_type,
+    actor_id,
+    payload,
+    created_at
+  ) VALUES (
+    v_instance.workspace_id,
+    v_instance.project_id,
+    v_instance.task_list_id,
+    p_instance_id,
+    'PROCESS_CANCELLED',
+    v_caller_id,
+    jsonb_build_object(
+      'process_instance_id', p_instance_id,
+      'actor_id', v_caller_id,
+      'reason', trim(p_reason),
+      'completed_step_count', v_completed_step_count,
+      'cancelled_step_count', v_cancelled_step_count,
+      'timestamp', now(),
+      'placement', jsonb_build_object(
+        'placement_type', v_instance.placement_type,
+        'project_id', v_instance.project_id,
+        'phase_id', v_instance.phase_id,
+        'task_list_id', v_instance.task_list_id,
+        'parent_task_id', v_instance.parent_task_id
+      )
+    ),
+    now()
+  );
+
+  PERFORM set_config('sns.process_engine_write', '', true);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'is_replay', false,
+    'process_instance_id', p_instance_id,
+    'status', 'cancelled',
+    'completed_step_count', v_completed_step_count,
+    'cancelled_step_count', v_cancelled_step_count,
+    'cancelled_at', now()
+  );
 END;
 $$;
 
@@ -818,6 +1100,11 @@ BEGIN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
   END IF;
 
+  -- Post-cancellation task state guard
+  IF v_task.workflow_state = 'cancelled' THEN
+    RAISE EXCEPTION 'Cannot modify task: task belongs to a cancelled process instance.';
+  END IF;
+
   IF v_task.workflow_state NOT IN ('ready', 'active', 'rework_required') THEN
     RAISE EXCEPTION 'Task is not in an actionable state (current state: %).', v_task.workflow_state;
   END IF;
@@ -826,11 +1113,14 @@ BEGIN
     RAISE EXCEPTION 'Cycle number mismatch. Expected % but got %.', v_task.current_cycle_number, p_cycle_number;
   END IF;
 
-  -- Context resolution
+  -- Context resolution & parent process instance status guard
   IF v_task.process_instance_id IS NOT NULL THEN
     SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Process instance not found.';
+    END IF;
+    IF v_instance.status <> 'running' THEN
+      RAISE EXCEPTION 'Process instance is % (must be running to perform workflow actions).', v_instance.status;
     END IF;
     v_workspace_id := v_instance.workspace_id;
     v_process_name := v_instance.instance_name;
@@ -909,9 +1199,10 @@ BEGIN
 
   -- Record Audit Event
   INSERT INTO public.process_audit_events (
-    workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+    workspace_id, project_id, task_list_id, task_id, process_instance_id, event_type, actor_id, payload
   ) VALUES (
-    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_RESPONSIBLE_COMPLETED', v_caller_id,
+    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, v_task.process_instance_id,
+    'TASK_RESPONSIBLE_COMPLETED', v_caller_id,
     jsonb_build_object('step_id', v_step.id, 'cycle_number', p_cycle_number)
   );
 
@@ -1424,6 +1715,77 @@ $$;
 
 
 --
+-- Name: get_nearest_placement_owner(text, uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.get_nearest_placement_owner(p_placement_type text, p_project_id uuid DEFAULT NULL::uuid, p_phase_id uuid DEFAULT NULL::uuid, p_task_list_id uuid DEFAULT NULL::uuid, p_parent_task_id uuid DEFAULT NULL::uuid) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_owner_id      uuid;
+  v_task_list_id  uuid := p_task_list_id;
+  v_phase_id      uuid := p_phase_id;
+  v_project_id    uuid := p_project_id;
+BEGIN
+  -- Task Placement: Check Task Owner -> Task Responsible (R) -> ascend
+  IF p_placement_type = 'task' AND p_parent_task_id IS NOT NULL THEN
+    SELECT COALESCE(t.owner_id, (
+      SELECT ra.user_id FROM public.task_raci_assignments ra
+      WHERE ra.task_id = p_parent_task_id AND ra.raci_role = 'R'
+      LIMIT 1
+    )), t.task_list_id, t.phase_id, t.project_id
+    INTO v_owner_id, v_task_list_id, v_phase_id, v_project_id
+    FROM public.tasks t
+    WHERE t.id = p_parent_task_id;
+
+    IF v_owner_id IS NOT NULL THEN
+      RETURN v_owner_id;
+    END IF;
+  END IF;
+
+  -- Task List Level
+  IF v_task_list_id IS NOT NULL THEN
+    SELECT tl.owner_id, tl.phase_id, tl.project_id
+    INTO v_owner_id, v_phase_id, v_project_id
+    FROM public.task_lists tl
+    WHERE tl.id = v_task_list_id;
+
+    IF v_owner_id IS NOT NULL THEN
+      RETURN v_owner_id;
+    END IF;
+  END IF;
+
+  -- Phase Level
+  IF v_phase_id IS NOT NULL THEN
+    SELECT ph.owner_id, ph.project_id
+    INTO v_owner_id, v_project_id
+    FROM public.phases ph
+    WHERE ph.id = v_phase_id;
+
+    IF v_owner_id IS NOT NULL THEN
+      RETURN v_owner_id;
+    END IF;
+  END IF;
+
+  -- Project Level
+  IF v_project_id IS NOT NULL THEN
+    SELECT p.owner_id
+    INTO v_owner_id
+    FROM public.projects p
+    WHERE p.id = v_project_id;
+
+    IF v_owner_id IS NOT NULL THEN
+      RETURN v_owner_id;
+    END IF;
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: get_user_workspace_role(uuid); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -1459,6 +1821,29 @@ $$;
 
 
 --
+-- Name: is_process_override_actor(uuid, uuid); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.is_process_override_actor(p_workspace_id uuid, p_actor_id uuid DEFAULT auth.uid()) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.workspace_members wm
+    WHERE wm.workspace_id = p_workspace_id
+      AND wm.user_id = p_actor_id
+      AND wm.status = 'active'
+      AND wm.role IN ('owner', 'admin')
+  ) OR EXISTS (
+    SELECT 1 FROM public.user_system_roles usr
+    WHERE usr.workspace_id = p_workspace_id
+      AND usr.user_id = p_actor_id
+      AND usr.role IN ('system_admin', 'project_admin', 'ceo', 'cto')
+  );
+$$;
+
+
+--
 -- Name: is_workspace_active_member(uuid); Type: FUNCTION; Schema: private; Owner: -
 --
 
@@ -1473,6 +1858,249 @@ CREATE FUNCTION private.is_workspace_active_member(p_workspace_id uuid) RETURNS 
       AND user_id = auth.uid()
       AND status = 'active'
   );
+$$;
+
+
+--
+-- Name: move_process_instance_internal(uuid, text, uuid, uuid, uuid, text); Type: FUNCTION; Schema: private; Owner: -
+--
+
+CREATE FUNCTION private.move_process_instance_internal(p_instance_id uuid, p_target_placement_type text, p_target_phase_id uuid DEFAULT NULL::uuid, p_target_task_list_id uuid DEFAULT NULL::uuid, p_target_parent_task_id uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_caller_id             uuid;
+  v_instance              RECORD;
+  v_target_phase_id       uuid := p_target_phase_id;
+  v_target_task_list_id   uuid := p_target_task_list_id;
+  v_target_parent_task_id uuid := p_target_parent_task_id;
+  v_target_phase          RECORD;
+  v_target_task_list      RECORD;
+  v_target_task           RECORD;
+  v_old_placement         jsonb;
+  v_new_placement         jsonb;
+  v_moved_tasks_count     integer := 0;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.';
+  END IF;
+
+  IF p_reason IS NULL OR trim(p_reason) = '' THEN
+    RAISE EXCEPTION 'Move reason is required and cannot be empty.';
+  END IF;
+
+  SELECT * INTO v_instance FROM public.process_instances WHERE id = p_instance_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Process instance not found.';
+  END IF;
+
+  IF v_instance.status = 'completed' THEN
+    RAISE EXCEPTION 'Cannot move completed process instance.';
+  END IF;
+
+  IF v_instance.status = 'cancelled' THEN
+    RAISE EXCEPTION 'Cannot move cancelled process instance.';
+  END IF;
+
+  IF v_instance.status <> 'running' THEN
+    RAISE EXCEPTION 'Process instance is not running (current status: %).', v_instance.status;
+  END IF;
+
+  IF v_instance.placement_type = 'standalone' THEN
+    RAISE EXCEPTION 'Standalone instance cannot be moved.';
+  END IF;
+
+  IF p_target_placement_type = 'standalone' THEN
+    RAISE EXCEPTION 'Attached instance cannot be converted to standalone.';
+  END IF;
+
+  IF p_target_placement_type NOT IN ('project', 'phase', 'task_list', 'task') THEN
+    RAISE EXCEPTION 'Invalid target placement type: %.', p_target_placement_type;
+  END IF;
+
+  -- Authorization check
+  IF NOT private.can_move_process_instance(p_instance_id, v_caller_id) THEN
+    RAISE EXCEPTION 'Caller not authorized to move process instance.';
+  END IF;
+
+  -- Validate target placement within SAME project
+  IF p_target_placement_type = 'project' THEN
+    v_target_phase_id := NULL;
+    v_target_task_list_id := NULL;
+    v_target_parent_task_id := NULL;
+
+  ELSIF p_target_placement_type = 'phase' THEN
+    IF v_target_phase_id IS NULL THEN
+      RAISE EXCEPTION 'Target phase ID required for phase placement.';
+    END IF;
+    SELECT * INTO v_target_phase FROM public.phases WHERE id = v_target_phase_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Invalid placement target hierarchy: phase not found.';
+    END IF;
+    IF v_target_phase.project_id <> v_instance.project_id THEN
+      RAISE EXCEPTION 'Cross-project movement is prohibited: target phase belongs to a different project.';
+    END IF;
+    v_target_task_list_id := NULL;
+    v_target_parent_task_id := NULL;
+
+  ELSIF p_target_placement_type = 'task_list' THEN
+    IF v_target_task_list_id IS NULL THEN
+      RAISE EXCEPTION 'Target task list ID required for task_list placement.';
+    END IF;
+    SELECT * INTO v_target_task_list FROM public.task_lists WHERE id = v_target_task_list_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Invalid placement target hierarchy: task list not found.';
+    END IF;
+    IF v_target_task_list.project_id <> v_instance.project_id THEN
+      RAISE EXCEPTION 'Cross-project movement is prohibited: target task list belongs to a different project.';
+    END IF;
+    -- Authoritative phase from task list
+    v_target_phase_id := v_target_task_list.phase_id;
+    v_target_parent_task_id := NULL;
+
+  ELSIF p_target_placement_type = 'task' THEN
+    IF v_target_parent_task_id IS NULL THEN
+      RAISE EXCEPTION 'Target parent task ID required for task placement.';
+    END IF;
+
+    -- Cycle Prevention: target task cannot be a step task of this process instance
+    IF EXISTS (
+      SELECT 1 FROM public.tasks WHERE id = v_target_parent_task_id AND process_instance_id = p_instance_id
+    ) THEN
+      RAISE EXCEPTION 'Circular hierarchy detected: cannot move process instance under its own step task.';
+    END IF;
+
+    -- Descendant check: target task cannot be any descendant of this instance's step tasks
+    IF EXISTS (
+      WITH RECURSIVE task_tree AS (
+        SELECT id FROM public.tasks WHERE process_instance_id = p_instance_id
+        UNION ALL
+        SELECT t.id FROM public.tasks t
+        JOIN task_tree tt ON t.parent_task_id = tt.id
+      )
+      SELECT 1 FROM task_tree WHERE id = v_target_parent_task_id
+    ) THEN
+      RAISE EXCEPTION 'Circular hierarchy detected: cannot move process instance under a descendant of its step tasks.';
+    END IF;
+
+    SELECT * INTO v_target_task FROM public.tasks WHERE id = v_target_parent_task_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Invalid placement target hierarchy: target parent task not found.';
+    END IF;
+    IF v_target_task.project_id IS DISTINCT FROM v_instance.project_id THEN
+      RAISE EXCEPTION 'Cross-project movement is prohibited: target task belongs to a different project.';
+    END IF;
+
+    -- Authoritative hierarchy from target parent task
+    v_target_phase_id := v_target_task.phase_id;
+    v_target_task_list_id := v_target_task.task_list_id;
+  END IF;
+
+  -- Detect No-op
+  IF v_instance.placement_type = p_target_placement_type
+     AND v_instance.phase_id IS NOT DISTINCT FROM v_target_phase_id
+     AND v_instance.task_list_id IS NOT DISTINCT FROM v_target_task_list_id
+     AND v_instance.parent_task_id IS NOT DISTINCT FROM v_target_parent_task_id THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'is_noop', true,
+      'process_instance_id', p_instance_id,
+      'placement_type', v_instance.placement_type,
+      'project_id', v_instance.project_id,
+      'phase_id', v_instance.phase_id,
+      'task_list_id', v_instance.task_list_id,
+      'parent_task_id', v_instance.parent_task_id
+    );
+  END IF;
+
+  v_old_placement := jsonb_build_object(
+    'placement_type', v_instance.placement_type,
+    'project_id', v_instance.project_id,
+    'phase_id', v_instance.phase_id,
+    'task_list_id', v_instance.task_list_id,
+    'parent_task_id', v_instance.parent_task_id
+  );
+
+  v_new_placement := jsonb_build_object(
+    'placement_type', p_target_placement_type,
+    'project_id', v_instance.project_id,
+    'phase_id', v_target_phase_id,
+    'task_list_id', v_target_task_list_id,
+    'parent_task_id', v_target_parent_task_id
+  );
+
+  -- Set engine write context
+  PERFORM set_config('sns.process_engine_write', 'on', true);
+
+  -- Update Process Instance row
+  UPDATE public.process_instances
+  SET placement_type = p_target_placement_type,
+      phase_id       = v_target_phase_id,
+      task_list_id   = v_target_task_list_id,
+      parent_task_id = v_target_parent_task_id,
+      updated_at     = now()
+  WHERE id = p_instance_id;
+
+  -- Update materialized step tasks
+  -- Root step tasks get parent_task_id = v_target_parent_task_id
+  -- (NULL for project/phase/task_list, host task ID for task placement)
+  WITH updated AS (
+    UPDATE public.tasks
+    SET phase_id       = v_target_phase_id,
+        task_list_id   = v_target_task_list_id,
+        parent_task_id = v_target_parent_task_id,
+        updated_at     = now()
+    WHERE process_instance_id = p_instance_id
+      AND process_step_id IS NOT NULL
+    RETURNING id
+  )
+  SELECT count(*) INTO v_moved_tasks_count FROM updated;
+
+  -- Write immutable PROCESS_MOVED audit event
+  INSERT INTO public.process_audit_events (
+    workspace_id,
+    project_id,
+    task_list_id,
+    process_instance_id,
+    event_type,
+    actor_id,
+    payload,
+    created_at
+  ) VALUES (
+    v_instance.workspace_id,
+    v_instance.project_id,
+    v_target_task_list_id,
+    p_instance_id,
+    'PROCESS_MOVED',
+    v_caller_id,
+    jsonb_build_object(
+      'process_instance_id', p_instance_id,
+      'actor_id', v_caller_id,
+      'reason', trim(p_reason),
+      'old_placement', v_old_placement,
+      'new_placement', v_new_placement,
+      'moved_tasks_count', v_moved_tasks_count,
+      'timestamp', now()
+    ),
+    now()
+  );
+
+  PERFORM set_config('sns.process_engine_write', '', true);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'is_noop', false,
+    'process_instance_id', p_instance_id,
+    'placement_type', p_target_placement_type,
+    'project_id', v_instance.project_id,
+    'phase_id', v_target_phase_id,
+    'task_list_id', v_target_task_list_id,
+    'parent_task_id', v_target_parent_task_id,
+    'moved_tasks_count', v_moved_tasks_count
+  );
+END;
 $$;
 
 
@@ -1511,19 +2139,27 @@ BEGIN
     RAISE EXCEPTION 'Task not found or not a Defined Process task.';
   END IF;
 
-  IF v_task.workflow_state <> 'in_review' THEN
-    RAISE EXCEPTION 'Task must be in review state to be rejected.';
+  -- Post-cancellation task state guard
+  IF v_task.workflow_state = 'cancelled' THEN
+    RAISE EXCEPTION 'Cannot modify task: task belongs to a cancelled process instance.';
+  END IF;
+
+  IF v_task.workflow_state NOT IN ('awaiting_approval', 'in_review') THEN
+    RAISE EXCEPTION 'Task must be in review state to be rejected (current state: %).', v_task.workflow_state;
   END IF;
 
   IF v_task.current_cycle_number <> p_cycle_number THEN
     RAISE EXCEPTION 'Cycle number mismatch. Expected % but got %.', v_task.current_cycle_number, p_cycle_number;
   END IF;
 
-  -- Context resolution
+  -- Context resolution & parent process instance status guard
   IF v_task.process_instance_id IS NOT NULL THEN
     SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Process instance not found.';
+    END IF;
+    IF v_instance.status <> 'running' THEN
+      RAISE EXCEPTION 'Process instance is % (must be running to perform workflow actions).', v_instance.status;
     END IF;
     v_workspace_id := v_instance.workspace_id;
     v_process_name := v_instance.instance_name;
@@ -1595,28 +2231,31 @@ BEGIN
   -- Enable bypass marker for workflow mutation
   PERFORM set_config('sns.process_engine_write', 'on', true);
 
-  -- Increment cycle number and transition state to rework_required
+  -- Transition task back to ready for rework
   UPDATE public.tasks
-  SET workflow_state = 'rework_required',
-      current_cycle_number = current_cycle_number + 1,
-      due_date = v_target_due_date,
-      status_id = COALESCE(v_todo_status_id, status_id)
+  SET workflow_state = 'ready',
+      current_cycle_number = v_task.current_cycle_number + 1,
+      status_id = COALESCE(v_todo_status_id, status_id),
+      due_date = COALESCE(v_target_due_date, due_date),
+      ready_at = now(),
+      updated_at = now()
   WHERE id = p_task_id;
 
   -- Record Audit Event
   INSERT INTO public.process_audit_events (
-    workspace_id, project_id, task_list_id, task_id, event_type, actor_id, payload
+    workspace_id, project_id, task_list_id, task_id, process_instance_id, event_type, actor_id, payload
   ) VALUES (
-    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, 'TASK_REJECTED', v_caller_id,
+    v_workspace_id, v_task.project_id, v_task.task_list_id, p_task_id, v_task.process_instance_id,
+    'TASK_REJECTED', v_caller_id,
     jsonb_build_object(
       'step_id', v_task.process_step_id,
       'cycle_number', p_cycle_number,
-      'reason', p_rejection_reason,
-      'new_due_date', v_target_due_date
+      'new_cycle_number', v_task.current_cycle_number + 1,
+      'reason', p_rejection_reason
     )
   );
 
-  -- Notify Responsible (R) users of rework requirement
+  -- Notify Responsible users of rework requirement
   FOR v_recipient IN
     SELECT DISTINCT u_id FROM (
       SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.raci_role = 'R' AND ra.user_id IS NOT NULL
@@ -1629,9 +2268,9 @@ BEGIN
     PERFORM private.emit_notification(
       v_workspace_id,
       v_recipient.u_id,
-      'process_task_rejected',
-      'Rework Required: ' || v_task.title,
-      'Task was rejected during review in process "' || v_process_name || '". Reason: ' || p_rejection_reason,
+      'rework_required',
+      'Rework required: ' || v_task.title,
+      'Task "' || v_task.title || '" was rejected and requires rework. Reason: ' || p_rejection_reason,
       'task',
       p_task_id,
       v_task.project_id,
@@ -1640,7 +2279,7 @@ BEGIN
   END LOOP;
 
   RETURN jsonb_build_object(
-    'status', 'rework_required',
+    'status', 'ready',
     'task_id', p_task_id,
     'new_cycle_number', v_task.current_cycle_number + 1
   );
@@ -2666,6 +3305,20 @@ $$;
 
 
 --
+-- Name: cancel_process_instance(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cancel_process_instance(p_instance_id uuid, p_reason text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RETURN private.cancel_process_instance_internal(p_instance_id, p_reason);
+END;
+$$;
+
+
+--
 -- Name: complete_responsible_part(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2710,6 +3363,68 @@ BEGIN
     p_task_id,
     p_cycle_number,
     p_notes
+  );
+END;
+$$;
+
+
+--
+-- Name: get_process_instance_permissions(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_process_instance_permissions(p_instance_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_caller_id    uuid;
+  v_inst         RECORD;
+  v_can_view     boolean;
+  v_can_move     boolean;
+  v_can_cancel   boolean;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'can_view', false,
+      'can_move', false,
+      'can_cancel', false,
+      'error', 'Authentication required'
+    );
+  END IF;
+
+  SELECT * INTO v_inst FROM public.process_instances WHERE id = p_instance_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'can_view', false,
+      'can_move', false,
+      'can_cancel', false,
+      'error', 'Process instance not found'
+    );
+  END IF;
+
+  v_can_view := private.can_view_process_instance(p_instance_id, v_caller_id);
+  IF NOT v_can_view THEN
+    RETURN jsonb_build_object(
+      'can_view', false,
+      'can_move', false,
+      'can_cancel', false
+    );
+  END IF;
+
+  v_can_move := private.can_move_process_instance(p_instance_id, v_caller_id);
+  v_can_cancel := private.can_cancel_process_instance(p_instance_id, v_caller_id);
+
+  RETURN jsonb_build_object(
+    'can_view', true,
+    'can_move', v_can_move,
+    'can_cancel', v_can_cancel,
+    'placement_type', v_inst.placement_type,
+    'status', v_inst.status,
+    'project_id', v_inst.project_id,
+    'phase_id', v_inst.phase_id,
+    'task_list_id', v_inst.task_list_id,
+    'parent_task_id', v_inst.parent_task_id
   );
 END;
 $$;
@@ -2776,6 +3491,27 @@ CREATE FUNCTION public.handle_new_user() RETURNS trigger
         RETURN NEW;
       END;
       $$;
+
+
+--
+-- Name: move_process_instance(uuid, text, uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.move_process_instance(p_instance_id uuid, p_target_placement_type text, p_target_phase_id uuid DEFAULT NULL::uuid, p_target_task_list_id uuid DEFAULT NULL::uuid, p_target_parent_task_id uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RETURN private.move_process_instance_internal(
+    p_instance_id,
+    p_target_placement_type,
+    p_target_phase_id,
+    p_target_task_list_id,
+    p_target_parent_task_id,
+    p_reason
+  );
+END;
+$$;
 
 
 --
@@ -4692,7 +5428,8 @@ CREATE TABLE public.process_audit_events (
     event_type text NOT NULL,
     actor_id uuid,
     payload jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    process_instance_id uuid
 );
 
 
@@ -4959,6 +5696,7 @@ CREATE TABLE public.tasks (
     phase_id uuid,
     parent_task_id uuid,
     process_instance_id uuid,
+    owner_id uuid,
     CONSTRAINT chk_tasks_defined_provenance_coherence CHECK ((((process_step_id IS NULL) AND (defined_process_version_id IS NULL) AND (process_instance_id IS NULL) AND (workflow_state IS NULL) AND (current_cycle_number IS NULL) AND (ready_at IS NULL) AND (activated_at IS NULL) AND (workflow_completed_at IS NULL) AND (overdue_cycle_notified IS NULL)) OR ((process_instance_id IS NOT NULL) AND (process_step_id IS NULL) AND (defined_process_version_id IS NULL) AND (parent_task_id IS NULL) AND (project_id IS NULL) AND (phase_id IS NULL) AND (task_list_id IS NULL)) OR ((process_instance_id IS NULL) AND (process_step_id IS NOT NULL) AND (defined_process_version_id IS NOT NULL) AND (task_list_id IS NOT NULL) AND (phase_id IS NOT NULL) AND (workflow_state IS NOT NULL) AND (current_cycle_number IS NOT NULL) AND (current_cycle_number >= 1) AND (overdue_cycle_notified IS NOT NULL) AND (assignee_id IS NULL)) OR ((process_instance_id IS NOT NULL) AND (process_step_id IS NOT NULL) AND (defined_process_version_id IS NOT NULL) AND (workflow_state IS NOT NULL) AND (current_cycle_number IS NOT NULL) AND (current_cycle_number >= 1) AND (assignee_id IS NULL)))),
     CONSTRAINT chk_tasks_no_self_parent CHECK (((parent_task_id IS NULL) OR (parent_task_id <> id))),
     CONSTRAINT chk_tasks_workflow_state CHECK (((workflow_state IS NULL) OR (workflow_state = ANY (ARRAY['waiting'::text, 'ready'::text, 'active'::text, 'awaiting_consultation'::text, 'awaiting_approval'::text, 'rework_required'::text, 'completed'::text, 'cancelled'::text])))),
@@ -5666,6 +6404,13 @@ CREATE INDEX idx_process_audit_actor ON public.process_audit_events USING btree 
 
 
 --
+-- Name: idx_process_audit_events_instance; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_process_audit_events_instance ON public.process_audit_events USING btree (process_instance_id);
+
+
+--
 -- Name: idx_process_audit_project; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5691,6 +6436,13 @@ CREATE INDEX idx_process_audit_task_list ON public.process_audit_events USING bt
 --
 
 CREATE INDEX idx_process_audit_ws_created ON public.process_audit_events USING btree (workspace_id, created_at DESC);
+
+
+--
+-- Name: idx_process_instances_cancelled_by; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_process_instances_cancelled_by ON public.process_instances USING btree (cancelled_by);
 
 
 --
@@ -5999,6 +6751,13 @@ CREATE INDEX idx_tasks_hierarchy_covering ON public.tasks USING btree (task_list
 --
 
 CREATE INDEX idx_tasks_overdue_scan ON public.tasks USING btree (due_date, workflow_state) WHERE ((process_step_id IS NOT NULL) AND (due_date IS NOT NULL));
+
+
+--
+-- Name: idx_tasks_owner_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_owner_id ON public.tasks USING btree (owner_id);
 
 
 --
@@ -6564,6 +7323,14 @@ ALTER TABLE ONLY public.process_audit_events
 
 
 --
+-- Name: process_audit_events process_audit_events_process_instance_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.process_audit_events
+    ADD CONSTRAINT process_audit_events_process_instance_id_fkey FOREIGN KEY (process_instance_id) REFERENCES public.process_instances(id) ON DELETE SET NULL;
+
+
+--
 -- Name: process_audit_events process_audit_events_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6881,6 +7648,14 @@ ALTER TABLE ONLY public.tasks
 
 ALTER TABLE ONLY public.tasks
     ADD CONSTRAINT tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+
+
+--
+-- Name: tasks tasks_owner_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
 
 
 --
@@ -7239,7 +8014,7 @@ ALTER TABLE public.process_instances ENABLE ROW LEVEL SECURITY;
 -- Name: process_instances process_instances_select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY process_instances_select_policy ON public.process_instances FOR SELECT TO authenticated USING (private.can_read_process_instance(id, auth.uid()));
+CREATE POLICY process_instances_select_policy ON public.process_instances FOR SELECT TO authenticated USING (private.can_view_process_instance(id, auth.uid()));
 
 
 --
@@ -7730,5 +8505,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ngbsBgkMeyhno3f3jlCIxmgWb4yr84G4pLnXv8kAT3gs4iO6xfIIKzDogDE8qb7
+\unrestrict O7NcthliEe49N9rGJwxGJp6xE9ebtjhg5JbTEtDu1cqt7aUDOkF3apfhrlMiSCB
 

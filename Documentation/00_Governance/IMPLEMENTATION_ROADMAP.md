@@ -14,7 +14,9 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Package 1** | `P1-01A` | Process Instance Access Hardening & Documentation Baseline | **`VERIFIED`** | `20260817064609_p1_01_process_instance_access_hardening.sql` |
 | **Package 1** | `P1-01B` | Documentation Accuracy & Authoritative Architecture Baseline | **`VERIFIED`** | Commit `64fd803` + Current Baseline |
 | **Package 1** | `P1-02` | Placement-Aware Process Runtime + Standalone Execution | **`NEXT`** | Planned Runtime RPCs & Placement Handlers |
-| **Package 2** | `P2-01..` | Process Runtime Refactor & Multi-Instance Engine | **`PLANNED`** | Dynamic DAG instantiation, Step execution |
+| **Package 2** | `P2-01` | Controlled Milestone → Phase Rename | **`VERIFIED`** | `20260817115837_p2_01_controlled_milestone_phase_rename.sql` |
+| **Package 2** | `P2-01A` | Phase Grant Hardening & Browser Acceptance | **`VERIFIED`** | `20260817122020_p2_01a_phase_grant_hardening.sql` |
+| **Package 2** | `P2-02` | Process Instance Movement, Cancellation, Authorization & Audit | **`VERIFIED`** | `20260817123556_p2_02_process_instance_movement_cancellation.sql` |
 | **Package 3** | `P3-01..` | Hierarchy UI / UX Alignment (Phase, Task List, Child Tasks) | **`PLANNED`** | Full UI cutover to Phase terminology |
 | **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Buffers, Expense Ledger) | **`PLANNED`** | Financial schemas, RLS, audit logs |
 | **Package 5** | `P5-01..` | Expense Execution Integration (Atomic Intercept, Reallocations) | **`PLANNED`** | Task/Process Expense attachments & audit |
@@ -62,7 +64,7 @@ graph TD
 ### Package 2: Process Runtime Refactor
 - **P2-01 (`VERIFIED`)**: Controlled Milestone $\to$ Phase Physical Rename. Physical table rename `milestones` $\to$ `phases`, column normalization (`phase_id` canonical, `milestone_id` dropped), composite hierarchy integrity (`phases_id_project_unique`, `task_lists_id_phase_project_unique`, composite RESTRICT foreign keys), elimination of dual sync triggers, RLS policy renames, explicit table grants, and full frontend Phase-only migration (`usePhases.js`, zero active milestone symbols). [P2-01 Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md).
 - **P2-01A (`VERIFIED`)**: Phase Grant Hardening and Browser Acceptance Closure. Revocation of administrative DDL table privileges (`TRUNCATE, REFERENCES, TRIGGER`) from `authenticated` on `public.phases`, verification of exact Package-1 RLS policy semantics, and comprehensive browser acceptance across Project $\to$ Phase $\to$ Task List $\to$ Task hierarchy. [P2-01A Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md).
-- Multi-instance process execution per Task and Task List.
+- **P2-02 (`VERIFIED`)**: Process Instance Movement, Cancellation, Authorization & Audit. Placement movement across project/phase/task_list/task within same project with cycle prevention, idempotent permanent cancellation with state partitioning and post-cancellation mutation guards, multi-tier placement ownership resolution, visibility isolation, and `public.get_process_instance_permissions` RPC. [P2-02 Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md).
 - Step-level task execution with independent RACI, approval cycles, and evidence submission.
 - Complete lifecycle management (`running` $\to$ `completed` / `cancelled`).
 

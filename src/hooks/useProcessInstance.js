@@ -459,6 +459,74 @@ export function useProcessInstance(taskListId) {
     }
   };
 
+  const getPermissions = async (targetInstanceId) => {
+    const id = targetInstanceId || instance?.process_instance_id || instance?.id;
+    if (!id) return null;
+    try {
+      const { data, error: permErr } = await supabase.rpc('get_process_instance_permissions', {
+        p_instance_id: id,
+      });
+      if (permErr) throw permErr;
+      return data;
+    } catch (err) {
+      console.error('[useProcessInstance] getPermissions error:', err);
+      return null;
+    }
+  };
+
+  const moveProcessInstance = async (params = {}) => {
+    const {
+      instanceId,
+      targetPlacementType,
+      targetPhaseId = null,
+      targetTaskListId = null,
+      targetParentTaskId = null,
+      reason = '',
+    } = params;
+
+    const id = instanceId || instance?.process_instance_id || instance?.id;
+    if (!id) {
+      return { success: false, error: 'Instance ID required for movement.' };
+    }
+
+    try {
+      const { data, error: moveErr } = await supabase.rpc('move_process_instance', {
+        p_instance_id: id,
+        p_target_placement_type: targetPlacementType,
+        p_target_phase_id: targetPhaseId,
+        p_target_task_list_id: targetTaskListId,
+        p_target_parent_task_id: targetParentTaskId,
+        p_reason: reason,
+      });
+      if (moveErr) throw moveErr;
+      await fetchInstance({ silent: true });
+      return { success: true, data };
+    } catch (err) {
+      console.error('[useProcessInstance] moveProcessInstance error:', err);
+      return { success: false, error: err.message || 'Failed to move process instance.' };
+    }
+  };
+
+  const cancelProcessInstance = async (reason, targetInstanceId = null) => {
+    const id = targetInstanceId || instance?.process_instance_id || instance?.id;
+    if (!id) {
+      return { success: false, error: 'Instance ID required for cancellation.' };
+    }
+
+    try {
+      const { data, error: cancelErr } = await supabase.rpc('cancel_process_instance', {
+        p_instance_id: id,
+        p_reason: reason,
+      });
+      if (cancelErr) throw cancelErr;
+      await fetchInstance({ silent: true });
+      return { success: true, data };
+    } catch (err) {
+      console.error('[useProcessInstance] cancelProcessInstance error:', err);
+      return { success: false, error: err.message || 'Failed to cancel process instance.' };
+    }
+  };
+
   return {
     instance,
     tasks: instance?.tasks || [],
@@ -472,5 +540,8 @@ export function useProcessInstance(taskListId) {
     submitConsultation,
     approveTask,
     rejectTask,
+    getPermissions,
+    moveProcessInstance,
+    cancelProcessInstance,
   };
 }

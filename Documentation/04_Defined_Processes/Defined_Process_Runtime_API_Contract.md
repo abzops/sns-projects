@@ -586,4 +586,93 @@ Rejects a task in `in_review` state, incrementing cycle number and transitioning
 - Granted exclusively to `authenticated`.
 - Internal transactional execution delegated to `private.reject_process_task_internal`.
 
+---
+
+### 13. `move_process_instance`
+
+Moves an active Process Instance to a new placement target (`project`, `phase`, `task_list`, `task`) within the same project. Standalone instances cannot be moved to attached; attached instances cannot be moved to standalone. Completed/cancelled instances cannot be moved.
+
+#### RPC Signature
+```sql
+public.move_process_instance(
+  p_instance_id           uuid,
+  p_target_placement_type text,
+  p_target_phase_id       uuid DEFAULT NULL,
+  p_target_task_list_id   uuid DEFAULT NULL,
+  p_target_parent_task_id uuid DEFAULT NULL,
+  p_reason                text DEFAULT NULL
+) RETURNS jsonb
+```
+
+#### Client Call (Supabase JS)
+```javascript
+const { data, error } = await supabase.rpc('move_process_instance', {
+  p_instance_id: '8a8b8390-1c09-4d69-8bc4-9d58a5d7c3b2',
+  p_target_placement_type: 'phase',
+  p_target_phase_id: 'bf76e93e-2fca-443b-a5d6-d0ea321d497c',
+  p_reason: 'Realigning to Q3 Phase'
+});
+```
+
+#### Authorization
+- Process Owner (`process_instances.owner_id`), OR
+- Nearest Current Placement Owner / Task Responsible (`R`), OR
+- Workspace Executive Override (Admin, CEO, CTO, Workspace Owner/Admin).
+
+---
+
+### 14. `cancel_process_instance`
+
+Permanently cancels a running Process Instance. Preserves completed tasks, marks unfinished tasks as cancelled, preserves all history/RACI/evidence, and logs `PROCESS_CANCELLED` audit event.
+
+#### RPC Signature
+```sql
+public.cancel_process_instance(
+  p_instance_id uuid,
+  p_reason      text
+) RETURNS jsonb
+```
+
+#### Client Call (Supabase JS)
+```javascript
+const { data, error } = await supabase.rpc('cancel_process_instance', {
+  p_instance_id: '8a8b8390-1c09-4d69-8bc4-9d58a5d7c3b2',
+  p_reason: 'Project scope discontinued'
+});
+```
+
+#### Authorization
+- Process Starter (`process_instances.started_by`), OR
+- Process Owner (`process_instances.owner_id`), OR
+- Workspace Executive Override (Admin, CEO, CTO, Workspace Owner/Admin).
+
+---
+
+### 15. `get_process_instance_permissions`
+
+Returns effective permissions for the current user against a specified Process Instance.
+
+#### RPC Signature
+```sql
+public.get_process_instance_permissions(
+  p_instance_id uuid
+) RETURNS jsonb
+```
+
+#### Return Structure
+```json
+{
+  "can_view": true,
+  "can_move": true,
+  "can_cancel": true,
+  "placement_type": "phase",
+  "status": "running",
+  "project_id": "4c431b9d-5bc9-4fe5-a4f6-ef775a28b0f1",
+  "phase_id": "bf76e93e-2fca-443b-a5d6-d0ea321d497c",
+  "task_list_id": null,
+  "parent_task_id": null
+}
+```
+
+
 

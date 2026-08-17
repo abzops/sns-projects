@@ -234,9 +234,11 @@ async function runFoundationTests() {
     'Test 41: Master schema.sql revokes direct mutations from authenticated.'
   );
   assert(
+    schemaSql.includes('CREATE POLICY process_instances_select_policy ON public.process_instances FOR SELECT TO authenticated USING (private.can_view_process_instance(id, auth.uid()));') ||
     schemaSql.includes('CREATE POLICY process_instances_select_policy ON public.process_instances FOR SELECT TO authenticated USING (private.can_read_process_instance(id, auth.uid()));') ||
+    schemaSql.includes('CREATE POLICY "process_instances_select_policy" ON public.process_instances\n  FOR SELECT TO authenticated\n  USING (private.can_view_process_instance(id, auth.uid()));') ||
     schemaSql.includes('CREATE POLICY "process_instances_select_policy" ON public.process_instances\n  FOR SELECT TO authenticated\n  USING (private.can_read_process_instance(id, auth.uid()));'),
-    'Test 42: Master schema.sql enforces granular can_read_process_instance RLS policy.'
+    'Test 42: Master schema.sql enforces granular can_view_process_instance RLS policy.'
   );
   assert(!schemaSql.includes('CREATE POLICY "process_instances_select_member"'),
     'Test 43: Master schema.sql does not contain broad workspace member SELECT policy.');
