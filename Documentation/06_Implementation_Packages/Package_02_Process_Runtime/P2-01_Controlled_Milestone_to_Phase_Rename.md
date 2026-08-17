@@ -91,8 +91,7 @@ All milestone terminology has been eliminated from active production architectur
    - `ALTER TABLE public.phases RENAME CONSTRAINT milestones_created_by_fkey TO phases_created_by_fkey;`
    - `ALTER TABLE public.phases RENAME CONSTRAINT milestones_id_project_unique TO phases_id_project_unique;`
    - `ALTER INDEX IF EXISTS public.idx_milestones_project_pos RENAME TO idx_phases_project_pos;`
-   - `ALTER INDEX IF EXISTS public.idx_milestones_status RENAME TO idx_phases_status;`
-   - `ALTER INDEX IF EXISTS public.idx_milestones_owner RENAME TO idx_phases_owner;`
+   - `ALTER INDEX IF EXISTS public.idx_milestones_owner_id RENAME TO idx_phases_owner_id;`
 7. Recreated composite unique constraints:
    - `ALTER TABLE public.task_lists ADD CONSTRAINT task_lists_id_phase_project_unique UNIQUE (id, phase_id, project_id);`
 8. Recreated composite RESTRICT foreign keys:
@@ -106,15 +105,15 @@ All milestone terminology has been eliminated from active production architectur
    - `idx_tasks_phase_proj ON public.tasks(phase_id, project_id)`
    - `idx_tasks_hierarchy_covering ON public.tasks(project_id, phase_id, task_list_id)`
 10. Recreated `tasks_hierarchy_check` and `chk_tasks_defined_provenance_coherence`.
-11. Renamed RLS policies on `public.phases`:
-    - `milestones_select_member` $\to$ `phases_select_member`
-    - `milestones_insert_member` $\to$ `phases_insert_member`
-    - `milestones_update_member` $\to$ `phases_update_member`
-    - `milestones_delete_member` $\to$ `phases_delete_member`
+11. Renamed RLS policies on `public.phases` (preserving exact Package-1 authorization semantics):
+    - `phases_select_member`: `FOR SELECT USING (EXISTS (SELECT 1 FROM projects p WHERE p.id = phases.project_id AND private.is_workspace_active_member(p.workspace_id)))` (active workspace membership)
+    - `phases_insert_member`: `FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM projects p WHERE p.id = phases.project_id AND (private.get_user_workspace_role(p.workspace_id) = ANY (ARRAY['owner'::text, 'admin'::text, 'member'::text]) OR private.has_system_role(p.workspace_id, 'system_admin'::text) OR private.has_system_role(p.workspace_id, 'project_admin'::text))))`
+    - `phases_update_member`: `FOR UPDATE USING (EXISTS (SELECT 1 FROM projects p WHERE p.id = phases.project_id AND (private.get_user_workspace_role(p.workspace_id) = ANY (ARRAY['owner'::text, 'admin'::text, 'member'::text]) OR private.has_system_role(p.workspace_id, 'system_admin'::text) OR private.has_system_role(p.workspace_id, 'project_admin'::text))))`
+    - `phases_delete_member`: `FOR DELETE USING (EXISTS (SELECT 1 FROM projects p WHERE p.id = phases.project_id AND (private.get_user_workspace_role(p.workspace_id) = ANY (ARRAY['owner'::text, 'admin'::text]) OR private.has_system_role(p.workspace_id, 'system_admin'::text) OR private.has_system_role(p.workspace_id, 'project_admin'::text))))`
 12. Explicit Table Grants on `public.phases`:
-    - `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.phases TO authenticated;`
-    - `GRANT ALL ON TABLE public.phases TO service_role, postgres;`
-    - `REVOKE ALL ON TABLE public.phases FROM anon, PUBLIC;`
+    - `authenticated`: `SELECT, INSERT, UPDATE, DELETE` (hardened in P2-01A: `TRUNCATE, REFERENCES, TRIGGER` revoked)
+    - `service_role`, `postgres`: `ALL`
+    - `anon`, `PUBLIC`: `NONE` (0 table privileges)
 
 ---
 

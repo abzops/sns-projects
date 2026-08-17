@@ -211,8 +211,8 @@ async function verifyP201PhaseRename() {
       assert(!!p, `Policy ${pName} exists on public.phases`);
     }
 
-    // 8. Grant Governance on public.phases
-    console.log('\n--- 8. Grant Governance ---');
+    // 8. Grant Governance & RLS on public.phases
+    console.log('\n--- 8. Grant Governance & RLS ---');
     const { rows: grantRows } = await client.query(`
       SELECT grantee, privilege_type
       FROM information_schema.role_table_grants
@@ -221,13 +221,26 @@ async function verifyP201PhaseRename() {
 
     const anonGrants = grantRows.filter(r => r.grantee === 'anon');
     const publicGrants = grantRows.filter(r => r.grantee === 'PUBLIC');
-    const authGrants = grantRows.filter(r => r.grantee === 'authenticated');
+    const authGrants = new Set(grantRows.filter(r => r.grantee === 'authenticated').map(r => r.privilege_type));
     const serviceGrants = grantRows.filter(r => r.grantee === 'service_role');
 
-    assert(anonGrants.length === 0, 'anon role has 0 direct table grants on public.phases');
-    assert(publicGrants.length === 0, 'PUBLIC pseudo-role has 0 direct table grants on public.phases');
-    assert(authGrants.length > 0, 'authenticated role has explicit table grants on public.phases');
-    assert(serviceGrants.length > 0, 'service_role has explicit table grants on public.phases');
+    assert(anonGrants.length === 0, 'anon all Phase table privileges = false (found 0)');
+    assert(publicGrants.length === 0, 'PUBLIC all Phase table privileges = false (found 0)');
+    assert(authGrants.has('SELECT'), 'authenticated SELECT = true');
+    assert(authGrants.has('INSERT'), 'authenticated INSERT = true');
+    assert(authGrants.has('UPDATE'), 'authenticated UPDATE = true');
+    assert(authGrants.has('DELETE'), 'authenticated DELETE = true');
+    assert(!authGrants.has('TRUNCATE'), 'authenticated TRUNCATE = false (Hardened)');
+    assert(!authGrants.has('REFERENCES'), 'authenticated REFERENCES = false (Hardened)');
+    assert(!authGrants.has('TRIGGER'), 'authenticated TRIGGER = false (Hardened)');
+    assert(serviceGrants.length > 0, 'service_role retains administrative table grants on public.phases');
+
+    const { rows: rlsCheck } = await client.query(`
+      SELECT relrowsecurity, relforcerowsecurity
+      FROM pg_class
+      WHERE relnamespace = 'public'::regnamespace AND relname = 'phases';
+    `);
+    assert(rlsCheck.length === 1 && rlsCheck[0].relrowsecurity === true, 'RLS enabled = true on public.phases');
 
     // 9. RPC Signatures and Parameters
     console.log('\n--- 9. RPC Signatures & Parameters ---');

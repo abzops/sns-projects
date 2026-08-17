@@ -61,6 +61,7 @@ graph TD
 
 ### Package 2: Process Runtime Refactor
 - **P2-01 (`VERIFIED`)**: Controlled Milestone $\to$ Phase Physical Rename. Physical table rename `milestones` $\to$ `phases`, column normalization (`phase_id` canonical, `milestone_id` dropped), composite hierarchy integrity (`phases_id_project_unique`, `task_lists_id_phase_project_unique`, composite RESTRICT foreign keys), elimination of dual sync triggers, RLS policy renames, explicit table grants, and full frontend Phase-only migration (`usePhases.js`, zero active milestone symbols). [P2-01 Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md).
+- **P2-01A (`VERIFIED`)**: Phase Grant Hardening and Browser Acceptance Closure. Revocation of administrative DDL table privileges (`TRUNCATE, REFERENCES, TRIGGER`) from `authenticated` on `public.phases`, verification of exact Package-1 RLS policy semantics, and comprehensive browser acceptance across Project $\to$ Phase $\to$ Task List $\to$ Task hierarchy. [P2-01A Spec](../06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md).
 - Multi-instance process execution per Task and Task List.
 - Step-level task execution with independent RACI, approval cycles, and evidence submission.
 - Complete lifecycle management (`running` $\to$ `completed` / `cancelled`).
