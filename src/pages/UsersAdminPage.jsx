@@ -583,10 +583,14 @@ export default function UsersAdminPage() {
           fullName: rawName || email,
           email: email,
           temporaryPassword: edgeData.temporary_password,
+          isReissue: true,
         });
       }
 
       showToast(`Temporary password reissued for ${rawName || email}`, 'success');
+
+      // Refresh authoritative member state from workspace_members
+      await refetchMembers();
     } catch (err) {
       console.error('Error reissuing temporary password:', err);
       const errorMsg = await parseEdgeFunctionError(err);
@@ -1158,15 +1162,18 @@ export default function UsersAdminPage() {
         <Modal
           isOpen={!!createdUserCredentials}
           onClose={() => setCreatedUserCredentials(null)}
-          title="User Created Successfully"
+          title={createdUserCredentials.isReissue ? 'Temporary Password Reissued' : 'User Created Successfully'}
         >
           <div className={styles.credentialsWrap}>
             <div className={styles.credentialsWarning}>
               <ShieldAlert size={20} style={{ flexShrink: 0 }} />
               <div>
-                <strong>Temporary Password Generated</strong>
+                <strong>{createdUserCredentials.isReissue ? 'Temporary Password Reissued' : 'Temporary Password Generated'}</strong>
                 <span>
-                  This temporary password is shown only once. Store or share it securely with the employee. The employee will be required to set their own password upon first login.
+                  {createdUserCredentials.isReissue
+                    ? 'This temporary password replaces all previously issued temporary passwords. Store or share it securely with the employee. The employee will be required to set their own password upon first login.'
+                    : 'This temporary password is shown only once. Store or share it securely with the employee. The employee will be required to set their own password upon first login.'
+                  }
                 </span>
               </div>
             </div>

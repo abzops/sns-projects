@@ -133,6 +133,56 @@ async function runTests() {
     'Test 20: admin-manage-workspace-user Edge Function maintains verify_jwt = true.');
 
   // ═══════════════════════════════════════════════════════════════════════
+  // SECTION 4: ADMIN UI — REISSUE PASSWORD ELIGIBILITY
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n--- Section 4: Admin UI — Reissue Password Eligibility ---');
+
+  const adminSrc = await readFile(path.join(repoRoot, 'src/pages/UsersAdminPage.jsx'), 'utf8');
+
+  // Test 21: Status badge uses member.status === 'active' (authoritative workspace_members.status)
+  assert(adminSrc.includes("member.status === 'active'") && adminSrc.includes('Active'),
+    'Test 21: Status badge is driven by authoritative workspace_members.status.');
+
+  // Test 22: PASSWORD SETUP REQUIRED badge shown for non-active members
+  assert(adminSrc.includes('PASSWORD SETUP REQUIRED'),
+    'Test 22: PASSWORD SETUP REQUIRED badge is rendered for pending members.');
+
+  // Test 23: Reissue Password button visible ONLY when member.status === 'pending'
+  assert(adminSrc.includes("member.status === 'pending'") && adminSrc.includes('Reissue Password'),
+    'Test 23: Reissue Password button visibility is gated on member.status === pending.');
+
+  // Test 24: Reissue Password button is NOT shown for active members (no separate active check needed — the pending gate handles it)
+  const reissueGateMatch = adminSrc.match(/canAdminUsers\s*&&\s*member\.status\s*===\s*'pending'/);
+  assert(reissueGateMatch !== null,
+    'Test 24: Reissue Password button requires both admin authority AND pending status.');
+
+  // Test 25: After reissue, refetchMembers() is called to refresh authoritative state
+  const reissueHandler = adminSrc.slice(adminSrc.indexOf('handleReissueTempPassword'));
+  assert(reissueHandler.includes('refetchMembers()'),
+    'Test 25: handleReissueTempPassword calls refetchMembers() after success.');
+
+  // Test 26: Credentials modal shows context-appropriate title for reissue
+  assert(adminSrc.includes("isReissue ? 'Temporary Password Reissued'"),
+    'Test 26: Credentials modal title is context-aware (reissue vs provision).');
+
+  // Test 27: Reissue credentials include "replaces all previously issued" messaging
+  assert(adminSrc.includes('replaces all previously issued temporary passwords'),
+    'Test 27: Reissue credentials modal states that new password replaces all previous ones.');
+
+  // Test 28: Temporary password is copyable (copy button exists)
+  assert(adminSrc.includes('navigator.clipboard.writeText(createdUserCredentials.temporaryPassword)'),
+    'Test 28: Temporary password has a copy-to-clipboard button.');
+
+  // Test 29: Reissue sets isReissue flag on credentials state
+  const reissueSection = adminSrc.slice(adminSrc.indexOf('reissue_temp_password'), adminSrc.indexOf('refetchMembers', adminSrc.indexOf('reissue_temp_password')));
+  assert(reissueSection.includes('isReissue: true'),
+    'Test 29: Reissue password handler sets isReissue flag on credentials state.');
+
+  // Test 30: Temporary password is never stored/logged (no console.log of password)
+  assert(!adminSrc.includes('console.log') || !adminSrc.match(/console\.log.*temporaryPassword/),
+    'Test 30: Temporary password is never logged to console.');
+
+  // ═══════════════════════════════════════════════════════════════════════
   // SUMMARY
   // ═══════════════════════════════════════════════════════════════════════
   console.log(`\n===============================================================`);
