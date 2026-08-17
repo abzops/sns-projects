@@ -125,6 +125,80 @@ const { data, error } = await supabase.rpc('start_defined_process', {
 
 ---
 
+### 2A. `start_process_instance` (Package 1 Placement-Aware Runtime Engine)
+
+Instantiates a published Defined Process version within the explicit `public.process_instances` entity across 5 placement scopes: `standalone`, `project`, `phase`, `task_list`, or `task`.
+
+#### RPC Signature
+```sql
+public.start_process_instance(
+  p_version_id       uuid,
+  p_instance_name    text,
+  p_overall_due_date date DEFAULT NULL,
+  p_placement_type   text DEFAULT 'standalone',
+  p_project_id       uuid DEFAULT NULL,
+  p_phase_id         uuid DEFAULT NULL,
+  p_task_list_id     uuid DEFAULT NULL,
+  p_parent_task_id   uuid DEFAULT NULL,
+  p_raci_overrides   jsonb DEFAULT NULL,
+  p_owner_id         uuid DEFAULT NULL
+) RETURNS jsonb
+```
+
+#### Client Call (Supabase JS)
+```javascript
+const { data, error } = await supabase.rpc('start_process_instance', {
+  p_version_id: '7e8b8390-1c09-4d69-8bc4-9d58a5d7c3b2',
+  p_instance_name: 'Factory Acceptance Testing #01',
+  p_overall_due_date: '2026-09-30',
+  p_placement_type: 'standalone'
+});
+```
+
+#### Authorization & Placement Rules
+- **Starter Authorization**: Caller must be assigned Responsible (`R`) on the root step (explicit user or dynamic `process_starter`) OR possess Workspace Executive authority (`owner`, `admin`, `system_admin`, `ceo`, `cto`).
+- **Placement Validation**:
+  - `standalone`: Requires `p_project_id`, `p_phase_id`, `p_task_list_id`, `p_parent_task_id` to be `NULL`. Creates a standalone parent task in `public.tasks` with `project_id = NULL`.
+  - `project`: Requires `p_project_id`. Steps attached to project.
+  - `phase`: Requires `p_project_id` and `p_phase_id`. Validates phase belongs to project.
+  - `task_list`: Requires `p_project_id`, `p_phase_id`, and `p_task_list_id`. Validates task list belongs to phase and project.
+  - `task`: Requires `p_parent_task_id`. Authoritatively derives hierarchy from parent task. Parent task RACI is strictly preserved (Decision 39).
+- **Due Date Model (Decisions 33 & 42)**: Single overall due date stored on `process_instances.due_date`. Step tasks receive `due_date = NULL`.
+
+#### Success Response
+```json
+{
+  "process_instance_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "placement_type": "standalone",
+  "root_task_id": "8f8b8390-1c09-4d69-8bc4-9d58a5d7c3b2",
+  "parent_task_id": "e3b0c442-98fc-1c14-9afb-4c8996fb9242",
+  "task_count": 5
+}
+```
+
+---
+
+### 2B. `get_process_instance_progress` (Equal-Weight Step Progress Calculation)
+
+Calculates the equal-weight completion percentage of a Process Instance based on its constituent step tasks.
+
+#### RPC Signature
+```sql
+public.get_process_instance_progress(p_instance_id uuid) RETURNS numeric
+```
+
+#### Client Call (Supabase JS)
+```javascript
+const { data: progressPercent, error } = await supabase.rpc('get_process_instance_progress', {
+  p_instance_id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+});
+```
+
+#### Success Response
+`numeric` value from `0.00` to `100.00` rounded to 2 decimal places.
+
+---
+
 ### 3. `submit_task_evidence`
 
 Allows a Responsible user to submit link or text evidence for a Defined Task.
