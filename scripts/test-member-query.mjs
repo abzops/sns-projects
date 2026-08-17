@@ -25,10 +25,16 @@ async function main() {
   const env = parseEnv(await readFile(envAppPath, 'utf8'));
   const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
 
-  // Authenticate as owner
+  // Require explicit password via environment variable; never guess or use fallbacks
+  const password = process.env.TEST_PASSWORD;
+  if (!password) {
+    console.log('[SKIP] TEST_PASSWORD not set. Skipping live authenticated query.');
+    return;
+  }
+
   const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-    email: 'abhinand@stacknstock.in',
-    password: process.env.TEST_PASSWORD || '123456', // or check session
+    email: process.env.TEST_EMAIL || 'abhinand@stacknstock.in',
+    password,
   });
 
   console.log('Testing workspace_members query with explicit foreign key...');
