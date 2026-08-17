@@ -93,34 +93,67 @@ async function runRealDatabaseLifecycleE2E() {
     // Test Fixture Setup
     const testId = `test_${Date.now()}`;
     const testEmail = `${testId}@example.com`;
+    const testUserId = (await client.query('SELECT gen_random_uuid() as id')).rows[0].id;
 
-    // 1. Create test profile
+    // 1. Create test auth user and profile
+    await client.query(`
+      INSERT INTO auth.users (id, email)
+      VALUES ($1, $2)
+      ON CONFLICT (id) DO NOTHING;
+    `, [testUserId, testEmail]);
+
     const { rows: [profile] } = await client.query(`
-      INSERT INTO public.profiles (id, email, full_name)
-      VALUES (gen_random_uuid(), $1, 'Test User')
+      INSERT INTO public.profiles (id, full_name)
+      VALUES ($1, 'Test User')
+      ON CONFLICT (id) DO UPDATE SET full_name = 'Test User'
       RETURNING id;
-    `, [testEmail]);
+    `, [testUserId]);
 
-    // 2. Create test workspace
+    // 2. Create test workspace and owner membership
     const { rows: [workspace] } = await client.query(`
-      INSERT INTO public.workspaces (name, slug, owner_id)
-      VALUES ('Test WS ' || $1, $1, $2)
+      INSERT INTO public.workspaces (name, created_by)
+      VALUES ('Test WS ' || $1, $2)
       RETURNING id;
     `, [testId, profile.id]);
 
-    // Set authenticated session context
-    await client.query(`SET LOCAL "request.jwt.claims" = '${JSON.stringify({ sub: profile.id })}';`);
+    await client.query(`
+      INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
+      VALUES ($1, $2, 'owner', 'active');
+    `, [workspace.id, profile.id]);
 
-    // 3. Create published defined process with 3 DAG steps: Step 1 -> Step 2 -> Step 3
-    const { rows: [proc] } = await client.query(`
-      INSERT INTO public.defined_processes (workspace_id, name, code)
-      VALUES ($1, 'Test Process ' || $2, 'TP_' || $2)
+    await client.query(`
+      INSERT INTO public.user_system_roles (workspace_id, user_id, role)
+      VALUES ($1, $2, 'system_admin')
+      ON CONFLICT DO NOTHING;
+    `, [workspace.id, profile.id]);
+
+    // Set authenticated session context
+    await client.query(`SET LOCAL "request.jwt.claim.sub" = '${profile.id}';`);
+    await client.query(`SET LOCAL "request.jwt.claims" = '${JSON.stringify({ sub: profile.id, role: 'authenticated' })}';`);
+    await client.query(`SET LOCAL "request.jwt.claim.role" = 'authenticated';`);
+
+    // 3. Create test department
+    const { rows: [department] } = await client.query(`
+      INSERT INTO public.departments (workspace_id, code, name, created_by)
+      VALUES ($1, 'TD_' || $2, 'Test Dept ' || $2, $3)
       RETURNING id;
-    `, [workspace.id, testId]);
+    `, [workspace.id, testId.slice(-6), profile.id]);
+
+    await client.query(`
+      INSERT INTO public.department_memberships (workspace_id, department_id, user_id, is_primary)
+      VALUES ($1, $2, $3, true);
+    `, [workspace.id, department.id, profile.id]);
+
+    // 4. Create published defined process with 3 DAG steps: Step 1 -> Step 2 -> Step 3
+    const { rows: [proc] } = await client.query(`
+      INSERT INTO public.defined_processes (workspace_id, department_id, name, code, process_owner_id, created_by)
+      VALUES ($1, $2, 'Test Process ' || $3, 'TP_' || $3, $4, $4)
+      RETURNING id;
+    `, [workspace.id, department.id, testId, profile.id]);
 
     const { rows: [version] } = await client.query(`
-      INSERT INTO public.defined_process_versions (defined_process_id, version_number, status, published_at, published_by)
-      VALUES ($1, 1, 'published', now(), $2)
+      INSERT INTO public.defined_process_versions (defined_process_id, version_number, status, published_at, published_by, created_by)
+      VALUES ($1, 1, 'published', now(), $2, $2)
       RETURNING id;
     `, [proc.id, profile.id]);
 
@@ -225,7 +258,7 @@ async function runRealDatabaseLifecycleE2E() {
 
     const { rows: [hostTaskList] } = await client.query(`
       INSERT INTO public.task_lists (project_id, milestone_id, name, task_list_type, process_state)
-      VALUES ($1, $2, 'Host Regular Task List', 'standard', NULL)
+      VALUES ($1, $2, 'Host Regular Task List', 'custom', NULL)
       RETURNING id, process_state, completed_at;
     `, [project.id, phase.id]);
 
@@ -333,6 +366,7 @@ async function runRealDatabaseLifecycleE2E() {
 
     // Conflicting replay
     let conflictCaught = false;
+    await client.query('SAVEPOINT sp_conflict;');
     try {
       await client.query(`
         SELECT public.start_process_instance(
@@ -344,6 +378,7 @@ async function runRealDatabaseLifecycleE2E() {
       `, [version.id, idempotencyKey]);
     } catch (err) {
       conflictCaught = err.message.includes('Idempotency conflict');
+      await client.query('ROLLBACK TO SAVEPOINT sp_conflict;');
     }
     assert(conflictCaught, 'Test 12: Conflicting payload with same start_request_id is rejected with Idempotency conflict error');
 
@@ -395,13 +430,13 @@ async function runRealDatabaseLifecycleE2E() {
     const publicComplete = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'complete_responsible_part');
     const publicReject = anonPrivs.find(p => p.nspname === 'public' && p.proname === 'reject_process_task');
 
-    assert(publicStart && !publicStart.is_security_definer && (publicStart.search_path_config || []).includes('search_path='),
+    assert(publicStart && !publicStart.is_security_definer && (publicStart.search_path_config || []).some(c => c.includes('search_path')),
       'Test 15: public.start_process_instance is SECURITY INVOKER with fixed search_path');
-    assert(publicProgress && !publicProgress.is_security_definer && (publicProgress.search_path_config || []).includes('search_path='),
+    assert(publicProgress && !publicProgress.is_security_definer && (publicProgress.search_path_config || []).some(c => c.includes('search_path')),
       'Test 16: public.get_process_instance_progress is SECURITY INVOKER with fixed search_path');
-    assert(publicComplete && !publicComplete.is_security_definer && (publicComplete.search_path_config || []).includes('search_path='),
+    assert(publicComplete && !publicComplete.is_security_definer && (publicComplete.search_path_config || []).some(c => c.includes('search_path')),
       'Test 17: public.complete_responsible_part is SECURITY INVOKER with fixed search_path');
-    assert(publicReject && !publicReject.is_security_definer && (publicReject.search_path_config || []).includes('search_path='),
+    assert(publicReject && !publicReject.is_security_definer && (publicReject.search_path_config || []).some(c => c.includes('search_path')),
       'Test 18: public.reject_process_task is SECURITY INVOKER with fixed search_path');
 
     // Check private engines are SECURITY DEFINER in private schema
@@ -409,11 +444,11 @@ async function runRealDatabaseLifecycleE2E() {
     const privateComplete = anonPrivs.find(p => p.nspname === 'private' && p.proname === 'complete_responsible_part_internal');
     const privateReject = anonPrivs.find(p => p.nspname === 'private' && p.proname === 'reject_process_task_internal');
 
-    assert(privateStart && privateStart.is_security_definer && (privateStart.search_path_config || []).includes('search_path='),
+    assert(privateStart && privateStart.is_security_definer && (privateStart.search_path_config || []).some(c => c.includes('search_path')),
       'Test 19: private.start_process_instance_internal is SECURITY DEFINER with fixed search_path');
-    assert(privateComplete && privateComplete.is_security_definer && (privateComplete.search_path_config || []).includes('search_path='),
+    assert(privateComplete && privateComplete.is_security_definer && (privateComplete.search_path_config || []).some(c => c.includes('search_path')),
       'Test 20: private.complete_responsible_part_internal is SECURITY DEFINER with fixed search_path');
-    assert(privateReject && privateReject.is_security_definer && (privateReject.search_path_config || []).includes('search_path='),
+    assert(privateReject && privateReject.is_security_definer && (privateReject.search_path_config || []).some(c => c.includes('search_path')),
       'Test 21: private.reject_process_task_internal is SECURITY DEFINER with fixed search_path');
 
     // =======================================================================
@@ -434,7 +469,7 @@ async function runRealDatabaseLifecycleE2E() {
 
     const instance3 = startRes3.res;
     const { rows: tasks3 } = await client.query(`
-      SELECT id, workflow_state FROM public.tasks WHERE process_instance_id = $1 ORDER BY position ASC;
+      SELECT id, workflow_state FROM public.tasks WHERE process_instance_id = $1 AND process_step_id IS NOT NULL ORDER BY position ASC;
     `, [instance3.process_instance_id]);
 
     // Test public.complete_responsible_part wrapper

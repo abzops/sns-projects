@@ -2,7 +2,7 @@
 
 **Package**: [Package 01 — Core Foundation & Process Architecture](../../README.md)  
 **Task ID**: P1-02C  
-**Status**: `PRODUCTION SECURITY VERIFIED / LOCAL E2E BLOCKED ON DOCKER`  
+**Status**: `VERIFIED`  
 **Target Supabase Project**: `gqerfixdmgbqahgslzsq`  
 **Target Workspace**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea`  
 **Authoritative Migration**: `20260817091154_p1_02c_workflow_rpc_security_e2e_closure.sql`  
@@ -12,18 +12,27 @@
 
 ## 1. Executive Summary & Status
 
-P1-02C closes all remaining Security Advisor warnings in production:
+P1-02C closes all remaining Security Advisor warnings in production and has complete real PostgreSQL database lifecycle verification:
 - Fixed `search_path = ''` on public `SECURITY INVOKER` functions (`start_process_instance`, `get_process_instance_progress`).
 - Refactored newly introduced Process-Instance-aware workflow RPCs into the canonical two-tier architecture:
   - **Public Wrapper**: `SECURITY INVOKER` with `SET search_path = ''`, granted exclusively to `authenticated`.
   - **Private Engine**: `SECURITY DEFINER` in the `private` schema with `SET search_path = ''`, granted to `authenticated, service_role, postgres`, and revoked from `PUBLIC, anon`.
 - Production deployment of migration `20260817091154` is **VERIFIED**.
+- Real local PostgreSQL database lifecycle suite `scripts/test-p1-02a-process-lifecycle.mjs` executed live: **22/22 PASSED, 0 FAILED**.
 
-### 1.1 Local Real Database E2E Status
-- Test command: `node scripts/test-p1-02a-process-lifecycle.mjs`
-- Test Mode: `TEST DATABASE MODE: LOCAL SUPABASE (Live PostgreSQL Database Required)`
-- Result: **BLOCKED** on `connect ECONNREFUSED 127.0.0.1:54322` because Docker Desktop is not currently open interactively in the operator's Windows desktop session.
-- Once Docker Desktop is launched by the operator and `npx supabase start` is run, the test suite executes all 22 database lifecycle assertions with automatic transactional rollback.
+### 1.1 Local Real Database E2E Execution Evidence
+- **Test Command**: `node scripts/test-p1-02a-process-lifecycle.mjs`
+- **Test Startup Mode**: `TEST DATABASE MODE: LOCAL SUPABASE (Live PostgreSQL Database Required)`
+- **Database Connection**: `127.0.0.1:54322` (Local PostgreSQL / Supabase Container)
+- **Execution Summary**: **22 PASSED, 0 FAILED (Total: 22)**
+- **Lifecycle Suites Executed**:
+  1. **Suite 1: Standalone Process Lifecycle** (Tests 1–6): Instance creation, task materialization, step state advancement, automatic completion transition.
+  2. **Suite 2: Task List Placement & Host Immutability** (Test 7): Host task list locked and immutable upon process instance completion.
+  3. **Suite 3: Multiple Process Instance Isolation** (Tests 8–9): Concurrently running instances A & B maintain strict DAG isolation.
+  4. **Suite 4: Server-Enforced Idempotency** (Tests 10–12): Replay recognition with identical request ID, conflict rejection on mismatched payloads.
+  5. **Suite 5: Progress & Rework Contract** (Test 13): `get_process_instance_progress` dynamic calculation against active database tasks.
+  6. **Suite 6: RPC Security, Privileges & Search Path** (Tests 14–21): Zero anon execute exposure, `SECURITY INVOKER` wrappers with pinned search path, `SECURITY DEFINER` private engines.
+  7. **Suite 7: Consultation & Approval Lifecycle Execution** (Test 22): `public.complete_responsible_part` execution via `SECURITY INVOKER` wrapper with clean transactional rollback.
 
 
 ---

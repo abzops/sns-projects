@@ -2050,13 +2050,6 @@ BEGIN
         ON DELETE RESTRICT;
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_tasks_task_list_version') THEN
-    ALTER TABLE public.tasks
-      ADD CONSTRAINT fk_tasks_task_list_version
-        FOREIGN KEY (task_list_id, defined_process_version_id)
-        REFERENCES public.task_lists(id, defined_process_version_id)
-        ON DELETE RESTRICT;
-  END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_tasks_defined_provenance_coherence') THEN
     ALTER TABLE public.tasks
@@ -2064,19 +2057,27 @@ BEGIN
         (
           process_step_id IS NULL
           AND defined_process_version_id IS NULL
-          AND workflow_state IS NULL
-          AND current_cycle_number IS NULL
-          AND ready_at IS NULL
-          AND activated_at IS NULL
-          AND workflow_completed_at IS NULL
-          AND overdue_cycle_notified IS NULL
+          AND (
+            (
+              workflow_state IS NULL
+              AND current_cycle_number IS NULL
+              AND ready_at IS NULL
+              AND activated_at IS NULL
+              AND workflow_completed_at IS NULL
+              AND overdue_cycle_notified IS NULL
+            )
+            OR
+            (
+              process_instance_id IS NOT NULL
+              AND project_id IS NULL
+              AND parent_task_id IS NULL
+            )
+          )
         )
         OR
         (
           process_step_id IS NOT NULL
           AND defined_process_version_id IS NOT NULL
-          AND task_list_id IS NOT NULL
-          AND milestone_id IS NOT NULL
           AND workflow_state IS NOT NULL
           AND current_cycle_number IS NOT NULL
           AND current_cycle_number >= 1
@@ -2087,8 +2088,8 @@ BEGIN
   END IF;
 END $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_task_list_process_step
-  ON public.tasks (task_list_id, process_step_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_instance_process_step
+  ON public.tasks (process_instance_id, process_step_id)
   WHERE process_step_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_task_list_workflow_state
@@ -3727,251 +3728,6 @@ $$;
 
 REVOKE ALL ON FUNCTION public.start_defined_process(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.start_defined_process(uuid, uuid, uuid, text, jsonb) TO authenticated;
--- ============================================================================
--- 7. RESPONSIBLE COMPLETION RPC
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.complete_responsible_part(
-  p_task_id uuid,
-  p_note    text DEFAULT NULL
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-  v_caller_id        uuid;
-  v_task             RECORD;
-  v_step             RECORD;
-  v_instance         RECORD;
-  v_task_list        RECORD;
-  v_workspace_id     uuid;
-  v_process_name     text;
-  v_is_responsible   boolean := false;
-  v_total_r_count    integer;
-  v_done_r_count     integer;
-  v_pending_subtasks integer;
-  v_missing_evidence integer;
-  v_pending_c_count  integer;
-  v_recipient        RECORD;
-BEGIN
-  v_caller_id := auth.uid();
-  IF v_caller_id IS NULL THEN
-    RAISE EXCEPTION 'Authentication required.';
-  END IF;
-
-  SELECT * INTO v_task FROM public.tasks WHERE id = p_task_id;
-  IF NOT FOUND OR v_task.process_step_id IS NULL THEN
-    RAISE EXCEPTION 'Task not found or not a Defined Process task.';
-  END IF;
-
-  IF v_task.workflow_state NOT IN ('ready', 'active', 'rework_required') THEN
-    RAISE EXCEPTION 'Task is not in an actionable state (current state: %).', v_task.workflow_state;
-  END IF;
-
-  SELECT * INTO v_step FROM public.defined_process_steps WHERE id = v_task.process_step_id;
-
-  -- Context resolution
-  IF v_task.process_instance_id IS NOT NULL THEN
-    SELECT * INTO v_instance FROM public.process_instances WHERE id = v_task.process_instance_id;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'Process instance not found.';
-    END IF;
-    v_workspace_id := v_instance.workspace_id;
-    v_process_name := v_instance.instance_name;
-  ELSE
-    SELECT * INTO v_task_list FROM public.task_lists WHERE id = v_task.task_list_id;
-    SELECT p.workspace_id INTO v_workspace_id FROM public.projects p WHERE p.id = v_task.project_id;
-    v_process_name := v_task_list.name;
-  END IF;
-
-  -- Verify caller has R assignment
-  SELECT EXISTS (
-    SELECT 1 FROM public.task_raci_assignments ra
-    WHERE ra.task_id = p_task_id AND ra.raci_role = 'R'
-      AND (
-        ra.user_id = v_caller_id
-        OR (
-          ra.department_id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM public.department_memberships dm
-            WHERE dm.department_id = ra.department_id AND dm.user_id = v_caller_id AND dm.is_active = true
-          )
-        )
-      )
-  ) INTO v_is_responsible;
-
-  IF NOT v_is_responsible THEN
-    RAISE EXCEPTION 'Caller is not an assigned Responsible user for this task.';
-  END IF;
-
-  -- Check if already completed this cycle
-  IF EXISTS (
-    SELECT 1 FROM public.task_responsible_completions
-    WHERE task_id = p_task_id AND cycle_number = v_task.current_cycle_number AND user_id = v_caller_id
-  ) THEN
-    RAISE EXCEPTION 'Responsible completion already submitted for this cycle.';
-  END IF;
-
-  -- Insert completion record
-  INSERT INTO public.task_responsible_completions (
-    task_id, cycle_number, user_id, completion_note
-  ) VALUES (
-    p_task_id, v_task.current_cycle_number, v_caller_id, p_note
-  );
-
-  -- Count total assigned R users vs completed R users for this cycle
-  WITH distinct_r_users AS (
-    SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.raci_role = 'R' AND ra.user_id IS NOT NULL
-    UNION
-    SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-    JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-    WHERE ra.task_id = p_task_id AND ra.raci_role = 'R' AND ra.department_id IS NOT NULL AND dm.is_active = true
-  )
-  SELECT count(*) INTO v_total_r_count FROM distinct_r_users;
-
-  SELECT count(DISTINCT user_id) INTO v_done_r_count
-  FROM public.task_responsible_completions
-  WHERE task_id = p_task_id AND cycle_number = v_task.current_cycle_number;
-
-  IF v_done_r_count < v_total_r_count THEN
-    -- Transition to active if was ready/rework_required
-    IF v_task.workflow_state <> 'active' THEN
-      PERFORM set_config('sns.process_engine_write', 'on', true);
-      UPDATE public.tasks SET workflow_state = 'active', activated_at = COALESCE(activated_at, now()) WHERE id = p_task_id;
-    END IF;
-
-    RETURN jsonb_build_object(
-      'completed', false,
-      'workflow_state', 'active',
-      'remaining_responsible', v_total_r_count - v_done_r_count
-    );
-  END IF;
-
-  -- All Responsible users completed! Check subtasks & evidence
-  -- Check non-cancelled subtasks
-  SELECT count(*) INTO v_pending_subtasks
-  FROM public.subtasks
-  WHERE task_id = p_task_id AND status NOT IN ('done', 'cancelled');
-
-  IF v_pending_subtasks > 0 THEN
-    RAISE EXCEPTION 'All subtasks must be completed before completing the task (% pending).', v_pending_subtasks;
-  END IF;
-
-  -- Check required evidence definitions
-  SELECT count(*) INTO v_missing_evidence
-  FROM public.defined_process_step_evidence_defs ed
-  WHERE ed.step_id = v_step.id AND ed.is_mandatory = true
-    AND NOT EXISTS (
-      SELECT 1 FROM public.task_evidence_submissions es
-      WHERE es.task_id = p_task_id AND es.evidence_def_id = ed.id AND es.cycle_number = v_task.current_cycle_number
-    );
-
-  IF v_missing_evidence > 0 THEN
-    RAISE EXCEPTION 'Required evidence submission missing (% definitions pending).', v_missing_evidence;
-  END IF;
-
-  -- Check Consultation requirement
-  IF v_step.consultation_required THEN
-    SELECT count(*) INTO v_pending_c_count
-    FROM public.task_raci_assignments ra
-    WHERE ra.task_id = p_task_id AND ra.raci_role = 'C' AND ra.response_required = true
-      AND NOT EXISTS (
-        SELECT 1 FROM public.task_consultation_responses cr
-        WHERE cr.task_id = p_task_id AND cr.cycle_number = v_task.current_cycle_number
-          AND (cr.user_id = ra.user_id OR (ra.department_id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM public.department_memberships dm WHERE dm.department_id = ra.department_id AND dm.user_id = cr.user_id AND dm.is_active = true
-          )))
-      );
-
-    IF v_pending_c_count > 0 THEN
-      PERFORM set_config('sns.process_engine_write', 'on', true);
-      UPDATE public.tasks SET workflow_state = 'awaiting_consultation' WHERE id = p_task_id;
-
-      -- Notify Consulted users
-      FOR v_recipient IN
-        SELECT DISTINCT u_id FROM (
-          SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.raci_role = 'C' AND ra.response_required = true AND ra.user_id IS NOT NULL
-          UNION
-          SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-          JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-          WHERE ra.task_id = p_task_id AND ra.raci_role = 'C' AND ra.response_required = true AND ra.department_id IS NOT NULL AND dm.is_active = true
-        ) sub WHERE u_id IS NOT NULL
-      LOOP
-        PERFORM private.emit_notification(
-          v_workspace_id,
-          v_recipient.u_id,
-          'consultation_required',
-          'Consultation required: ' || v_task.title,
-          'Your input is required for task "' || v_task.title || '" in process "' || v_process_name || '".',
-          'task',
-          p_task_id,
-          v_task.project_id,
-          p_task_id
-        );
-      END LOOP;
-
-      RETURN jsonb_build_object(
-        'completed', false,
-        'workflow_state', 'awaiting_consultation',
-        'pending_consultations', v_pending_c_count
-      );
-    END IF;
-  END IF;
-
-  -- Check Approval requirement
-  IF v_step.approval_required THEN
-    PERFORM set_config('sns.process_engine_write', 'on', true);
-    UPDATE public.tasks SET workflow_state = 'awaiting_approval' WHERE id = p_task_id;
-
-    -- Create pending approval cycle
-    INSERT INTO public.task_approval_cycles (
-      task_id, cycle_number, status
-    ) VALUES (
-      p_task_id, v_task.current_cycle_number, 'pending'
-    ) ON CONFLICT (task_id, cycle_number) DO NOTHING;
-
-    -- Notify Accountable (A)
-    FOR v_recipient IN
-      SELECT DISTINCT u_id FROM (
-        SELECT ra.user_id AS u_id FROM public.task_raci_assignments ra WHERE ra.task_id = p_task_id AND ra.raci_role = 'A' AND ra.user_id IS NOT NULL
-        UNION
-        SELECT dm.user_id AS u_id FROM public.task_raci_assignments ra
-        JOIN public.department_memberships dm ON dm.department_id = ra.department_id
-        WHERE ra.task_id = p_task_id AND ra.raci_role = 'A' AND ra.department_id IS NOT NULL AND dm.is_active = true
-      ) sub WHERE u_id IS NOT NULL
-    LOOP
-      PERFORM private.emit_notification(
-        v_workspace_id,
-        v_recipient.u_id,
-        'approval_required',
-        'Approval required: ' || v_task.title,
-        'Task "' || v_task.title || '" has completed work and is awaiting your approval.',
-        'task',
-        p_task_id,
-        v_task.project_id,
-        p_task_id
-      );
-    END LOOP;
-
-    RETURN jsonb_build_object(
-      'completed', false,
-      'workflow_state', 'awaiting_approval'
-    );
-  END IF;
-
-  -- No consultation or approval pending: complete task directly
-  PERFORM private.complete_task_and_advance(p_task_id, v_caller_id);
-
-  RETURN jsonb_build_object(
-    'completed', true,
-    'workflow_state', 'completed'
-  );
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.complete_responsible_part(uuid, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.complete_responsible_part(uuid, text) TO authenticated;
 
 
 -- ============================================================================
@@ -5607,7 +5363,7 @@ BEGIN
        OR v_existing_instance.project_id IS DISTINCT FROM v_project_id
        OR v_existing_instance.phase_id IS DISTINCT FROM v_phase_id
        OR v_existing_instance.task_list_id IS DISTINCT FROM v_task_list_id
-       OR v_existing_instance.parent_task_id IS DISTINCT FROM v_parent_task_id
+       OR (p_placement_type = 'task' AND v_existing_instance.parent_task_id IS DISTINCT FROM v_parent_task_id)
        OR v_existing_instance.due_date IS DISTINCT FROM p_overall_due_date THEN
       RAISE EXCEPTION 'Idempotency conflict: start_request_id was previously used with different parameters.';
     END IF;
@@ -5803,10 +5559,7 @@ BEGIN
           WHEN r.actor_type = 'user' THEN r.user_id
           ELSE NULL
         END AS resolved_user_id,
-        CASE
-          WHEN r.actor_type = 'department' THEN r.department_id
-          ELSE NULL
-        END AS department_id,
+        NULL::uuid AS department_id,
         COALESCE(r.response_required, false) AS response_required
       FROM public.defined_process_step_raci r
       WHERE r.step_id = v_step.id
@@ -6031,14 +5784,14 @@ BEGIN
 
   -- Preflight: Evidence requirements
   SELECT count(*) INTO v_missing_e
-  FROM public.step_evidence_definitions ed
+  FROM public.defined_process_step_evidence_defs ed
   WHERE ed.step_id = v_step.id
     AND ed.is_mandatory = true
     AND NOT EXISTS (
       SELECT 1 FROM public.task_evidence_submissions es
       WHERE es.task_id = p_task_id
         AND es.cycle_number = p_cycle_number
-        AND es.evidence_definition_id = ed.id
+        AND es.evidence_def_id = ed.id
     );
 
   IF v_missing_e > 0 THEN
@@ -6047,12 +5800,12 @@ BEGIN
 
   -- Record responsible completion
   INSERT INTO public.task_responsible_completions (
-    task_id, cycle_number, user_id, notes
+    task_id, cycle_number, user_id, completion_note
   ) VALUES (
     p_task_id, p_cycle_number, v_caller_id, p_notes
   )
   ON CONFLICT (task_id, cycle_number, user_id)
-  DO UPDATE SET notes = p_notes, completed_at = now();
+  DO UPDATE SET completion_note = p_notes, completed_at = now();
 
   -- Record Audit Event
   INSERT INTO public.process_audit_events (
