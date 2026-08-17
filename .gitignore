@@ -32,3 +32,6 @@ brand guideline stack n stock TM.pdf
 
 # Local data backups
 data-backups/
+
+# Supabase CLI temp cache
+supabase/.temp/
