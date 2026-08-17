@@ -2,7 +2,7 @@
 
 **Package**: [Package 01 — Core Foundation & Process Architecture](../../README.md)  
 **Task ID**: P1-02C  
-**Status**: `VERIFIED`  
+**Status**: `PRODUCTION SECURITY VERIFIED / LOCAL E2E BLOCKED ON DOCKER`  
 **Target Supabase Project**: `gqerfixdmgbqahgslzsq`  
 **Target Workspace**: `dbcaddf1-cf02-4bad-8af1-974301cdfbea`  
 **Authoritative Migration**: `20260817091154_p1_02c_workflow_rpc_security_e2e_closure.sql`  
@@ -10,11 +10,21 @@
 
 ---
 
-## 1. Executive Summary & Problem Addressed
+## 1. Executive Summary & Status
 
-P1-02C is the final closure deliverable for Package 1. It resolves all remaining Security Advisor warnings by establishing fixed `search_path = ''` on public `SECURITY INVOKER` functions and refactoring newly introduced Process-Instance-aware workflow RPCs into the canonical two-tier architecture:
-- **Public Wrapper**: `SECURITY INVOKER` with `SET search_path = ''`, granted exclusively to `authenticated`.
-- **Private Engine**: `SECURITY DEFINER` in the `private` schema with `SET search_path = ''`, granted to `authenticated, service_role, postgres`, and revoked from `PUBLIC, anon`.
+P1-02C closes all remaining Security Advisor warnings in production:
+- Fixed `search_path = ''` on public `SECURITY INVOKER` functions (`start_process_instance`, `get_process_instance_progress`).
+- Refactored newly introduced Process-Instance-aware workflow RPCs into the canonical two-tier architecture:
+  - **Public Wrapper**: `SECURITY INVOKER` with `SET search_path = ''`, granted exclusively to `authenticated`.
+  - **Private Engine**: `SECURITY DEFINER` in the `private` schema with `SET search_path = ''`, granted to `authenticated, service_role, postgres`, and revoked from `PUBLIC, anon`.
+- Production deployment of migration `20260817091154` is **VERIFIED**.
+
+### 1.1 Local Real Database E2E Status
+- Test command: `node scripts/test-p1-02a-process-lifecycle.mjs`
+- Test Mode: `TEST DATABASE MODE: LOCAL SUPABASE (Live PostgreSQL Database Required)`
+- Result: **BLOCKED** on `connect ECONNREFUSED 127.0.0.1:54322` because Docker Desktop is not currently open interactively in the operator's Windows desktop session.
+- Once Docker Desktop is launched by the operator and `npx supabase start` is run, the test suite executes all 22 database lifecycle assertions with automatic transactional rollback.
+
 
 ---
 
