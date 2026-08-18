@@ -1,6 +1,6 @@
 # Package 3 / P3-01 — Operational Hierarchy UI Cutover
 
-**Status**: `DEPLOYED` — signed-in production browser acceptance blocked by browser-controller initialization
+**Status**: `VERIFIED` — manual signed-in production acceptance passed
 
 **Preceding Deliverable**: [P2-03 Parent Task Completion and Runtime Closure](../Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md)
 
@@ -57,9 +57,9 @@ Production was read-only inspected before implementation. It contained 30 Tasks,
 | `npm run build` | **PASS** |
 | GitHub Pages build and deployment | **PASS** |
 | Deployed bundle contract and P3 markers | **PASS** |
-| Signed-in production browser acceptance | **BLOCKED — acceptance tool unavailable** |
+| Signed-in production browser acceptance | **PASS — manually verified** |
 
-The in-app browser controller was unavailable during the first acceptance attempt because its persistent Node kernel could not initialize its assets. This is an acceptance-tool blocker, not an application error. P3-01 must not be marked `VERIFIED` until the deployed signed-in Projects, hierarchy, Task Detail, List, Board, and My Work routes are exercised.
+The in-app browser controller was unavailable during the first acceptance attempt because its persistent Node kernel could not initialize its assets. This was an acceptance-tool blocker, not an application error. Manual signed-in production acceptance subsequently exercised the deployed Projects, hierarchy, Task Detail, List, Board, and My Work routes and passed, closing the P3-01 acceptance gate.
 
 ---
 
@@ -71,6 +71,7 @@ The in-app browser controller was unavailable during the first acceptance attemp
 - The deployed bundle contains the P3-01 hierarchy empty state, Phase Process placement label, and `get_process_instance_progress` integration.
 - The established deployed-bundle regression completed **7/7 PASS**.
 - Browser-controller initialization was retried after deployment and failed before opening a tab with the same local kernel-assets error.
+- Manual signed-in production acceptance subsequently passed against the deployed application.
 
 ---
 

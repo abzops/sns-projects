@@ -23,7 +23,7 @@
 - **Current Canonical Migration**: `20260817142153_p2_03_parent_completion_runtime.sql`
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
 - **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
-- **Package 3 Status**: `P3-01, P3-02 DEPLOYED` (Operational and Subtask hierarchy complete; Package 3 is not yet verified)
+- **Package 3 Status**: **`COMPLETE / VERIFIED`** (`P3-01` and `P3-02` verified; manual signed-in production acceptance passed)
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -81,8 +81,8 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P2-02` Process Movement, Cancellation, Authorization & Audit | **`VERIFIED`** | Migration `20260817123556` · [P2-02 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md) |
 | | `P2-02A` Post-Cancellation Immutability Final Closure | **`VERIFIED`** | Migration `20260817132234` · [P2-02A Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-02A_Post_Cancellation_Immutability_Closure.md) |
 | | `P2-03` Parent Task Completion & Runtime Closure | **`VERIFIED`** | Migration `20260817142153` · [P2-03 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) |
-| **Package 3: Hierarchy UI** | `P3-01` Operational Hierarchy UI Cutover | **`DEPLOYED`** | [P3-01 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — signed-in browser acceptance blocked |
-| | `P3-02` Subtask Hierarchy and Operational Closure | **`DEPLOYED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 verification remains open |
+| **Package 3: Hierarchy UI** | `P3-01` Operational Hierarchy UI Cutover | **`VERIFIED`** | [P3-01 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — manual signed-in production acceptance passed |
+| | `P3-02` Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |

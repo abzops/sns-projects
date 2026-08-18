@@ -1,6 +1,6 @@
 # Package 3 / P3-02 — Subtask Hierarchy and Operational Closure
 
-**Status**: `DEPLOYED` — Package 3 verification remains open
+**Status**: `VERIFIED` — manual signed-in production acceptance passed
 
 **Preceding Deliverable**: [P3-01 Operational Hierarchy UI Cutover](./P3-01_Operational_Hierarchy_UI_Cutover.md)
 
@@ -65,6 +65,7 @@ Task Detail continues to own Subtask CRUD through `useSubtasks`. Successful crea
 | Documentation links | **PASS** |
 | GitHub Pages build and deployment | **PASS** |
 | Deployed bundle contract and P3-02 markers | **PASS** |
+| Signed-in production acceptance | **PASS — manually verified** |
 
 The focused P3-02 suite proves Subtask-only chevrons, true leaf behavior, correct ownership grouping, separation from Child Tasks, all required mixed descendant combinations, deterministic ordering, cancelled semantics, bulk query structure, preserved Task Detail CRUD ownership, and zero active Milestone terminology.
 
@@ -76,12 +77,13 @@ The focused P3-02 suite proves Subtask-only chevrons, true leaf behavior, correc
 - GitHub Pages workflow run `32115634545` completed successfully for that exact commit.
 - Production serves `index-C8OWED_2.js` with the Subtasks group, cancelled-state guard, explicit `subtasks_assignee_id_fkey` relationship, and Child Tasks grouping markers.
 - The established deployed-bundle regression completed **7/7 PASS**.
+- Manual signed-in production acceptance subsequently passed, closing the P3-02 and Package 3 acceptance gates.
 
 ---
 
 ## 7. Scope Boundaries
 
-- Package 3 is not marked `VERIFIED`; broader signed-in acceptance remains a later closure gate.
+- Package 3 is **`COMPLETE / VERIFIED`**; manual signed-in production acceptance passed.
 - No database migration or production data mutation.
 - No Finance or Package 4 work.
 - No fake data or parallel hierarchy model.
