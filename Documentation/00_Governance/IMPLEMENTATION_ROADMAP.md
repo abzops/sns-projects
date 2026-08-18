@@ -19,7 +19,7 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Package 2** | `P2-02` | Process Instance Movement, Cancellation, Authorization & Audit | **`VERIFIED`** | `20260817123556_p2_02_process_instance_movement_cancellation.sql` |
 | **Package 2** | `P2-02A` | Post-Cancellation Immutability Final Closure | **`VERIFIED`** | `20260817132234_p2_02a_post_cancellation_immutability.sql` |
 | **Package 2** | `P2-03` | Parent Task Completion + Runtime Closure | **`VERIFIED`** | `20260817142153_p2_03_parent_completion_runtime.sql` |
-| **Package 3** | `P3-01` | Operational Hierarchy UI Cutover | **`IMPLEMENTED`** | [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — browser acceptance pending |
+| **Package 3** | `P3-01` | Operational Hierarchy UI Cutover | **`DEPLOYED`** | [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — signed-in browser acceptance blocked |
 | **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Buffers, Expense Ledger) | **`PLANNED`** | Financial schemas, RLS, audit logs |
 | **Package 5** | `P5-01..` | Expense Execution Integration (Atomic Intercept, Reallocations) | **`PLANNED`** | Task/Process Expense attachments & audit |
 | **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
@@ -73,7 +73,7 @@ graph TD
 - Complete lifecycle management (`running` $\to$ `completed` / `cancelled`).
 
 ### Package 3: Hierarchy UI / UX Alignment
-- **P3-01 (`IMPLEMENTED`)**: Phase-only operational hierarchy with recursive Task/Child Task chevrons, exact-placement Process Instance groups, separated Process steps, multi-process support, backend-derived progress, responsive states, and preserved List/Board/Task Detail behavior. Signed-in production browser acceptance remains pending because the browser controller could not initialize. [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md).
+- **P3-01 (`DEPLOYED`)**: Phase-only operational hierarchy with recursive Task/Child Task chevrons, exact-placement Process Instance groups, separated Process steps, multi-process support, backend-derived progress, responsive states, and preserved List/Board/Task Detail behavior. GitHub Pages and deployed bundle checks pass; signed-in production browser acceptance is blocked because the browser controller cannot initialize. [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md).
 - P3-02 has not started.
 
 ### Package 4: Finance Database Foundation

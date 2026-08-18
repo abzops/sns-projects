@@ -1,6 +1,6 @@
 # Package 3 / P3-01 — Operational Hierarchy UI Cutover
 
-**Status**: `IMPLEMENTED` — production browser acceptance pending
+**Status**: `DEPLOYED` — signed-in production browser acceptance blocked by browser-controller initialization
 
 **Preceding Deliverable**: [P2-03 Parent Task Completion and Runtime Closure](../Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md)
 
@@ -55,13 +55,26 @@ Production was read-only inspected before implementation. It contained 30 Tasks,
 | Active frontend Milestone terminology | **PASS — 0 matches** |
 | `npm run lint` | **PASS — 0 errors; historical warnings unchanged** |
 | `npm run build` | **PASS** |
-| Signed-in production browser acceptance | **PENDING** |
+| GitHub Pages build and deployment | **PASS** |
+| Deployed bundle contract and P3 markers | **PASS** |
+| Signed-in production browser acceptance | **BLOCKED — acceptance tool unavailable** |
 
 The in-app browser controller was unavailable during the first acceptance attempt because its persistent Node kernel could not initialize its assets. This is an acceptance-tool blocker, not an application error. P3-01 must not be marked `VERIFIED` until the deployed signed-in Projects, hierarchy, Task Detail, List, Board, and My Work routes are exercised.
 
 ---
 
-## 5. Scope Boundaries
+## 5. Production Deployment
+
+- Git commit `9028df0` was pushed to `main`.
+- GitHub Pages workflow run `32114200734` completed successfully for that exact commit.
+- Production `index.html` and its JavaScript asset returned HTTP 200.
+- The deployed bundle contains the P3-01 hierarchy empty state, Phase Process placement label, and `get_process_instance_progress` integration.
+- The established deployed-bundle regression completed **7/7 PASS**.
+- Browser-controller initialization was retried after deployment and failed before opening a tab with the same local kernel-assets error.
+
+---
+
+## 6. Scope Boundaries
 
 - No database schema or migration changes.
 - No changes to P2-03 runtime functions, triggers, RLS, or closure semantics.
