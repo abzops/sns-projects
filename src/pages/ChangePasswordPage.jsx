@@ -160,8 +160,8 @@ export default function ChangePasswordPage() {
     return (
       <div className={styles.page}>
         <div className={styles.card}>
-          <div className={styles.header}>
-            <BrandLogo size="lg" className={styles.brandLogo} />
+          <div className={styles.logoSection}>
+            <BrandLogo size="lg" />
             <h1 className={styles.title}>Workspace Access Denied</h1>
             <p className={styles.subtitle}>
               Your account (<code>{user.email}</code>) is not assigned to the
@@ -278,8 +278,8 @@ export default function ChangePasswordPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.header}>
-          <BrandLogo size="lg" className={styles.brandLogo} />
+        <div className={styles.logoSection}>
+          <BrandLogo size="lg" />
           <h1 className={styles.title}>Set Your Password</h1>
           <p className={styles.subtitle}>
             {onboardingStatus?.must_change_password === true
@@ -288,14 +288,14 @@ export default function ChangePasswordPage() {
           </p>
         </div>
 
-        <div className={styles.userInfoBox}>
-          <span className={styles.userEmailLabel}>Signed in as:</span>
-          <span className={styles.userEmailVal}>{user.email}</span>
+        <div className={styles.userInfo}>
+          <span className={styles.userInfoLabel}>Signed in as:</span>
+          <span className={styles.userInfoValue} title={user.email}>{user.email}</span>
         </div>
 
         {error && (
-          <div className={styles.errorAlert}>
-            <AlertTriangle size={16} className={styles.errorIcon} />
+          <div className={styles.errorBox}>
+            <AlertTriangle size={16} />
             <span>{error}</span>
           </div>
         )}
@@ -303,7 +303,7 @@ export default function ChangePasswordPage() {
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label}>New Password</label>
-            <div className={styles.inputWrap}>
+            <div className={styles.inputWrapper}>
               <Lock size={18} className={styles.inputIcon} />
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -318,7 +318,7 @@ export default function ChangePasswordPage() {
               />
               <button
                 type="button"
-                className={styles.eyeBtn}
+                className={styles.togglePassword}
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
               >
@@ -329,7 +329,7 @@ export default function ChangePasswordPage() {
 
           <div className={styles.field}>
             <label className={styles.label}>Confirm New Password</label>
-            <div className={styles.inputWrap}>
+            <div className={styles.inputWrapper}>
               <Lock size={18} className={styles.inputIcon} />
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -345,83 +345,83 @@ export default function ChangePasswordPage() {
           </div>
 
           {/* Password Requirements Checklist */}
-          <div className={styles.checklist}>
+          <div className={styles.requirementsList}>
             <span className={styles.checklistTitle}>Password requirements:</span>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.hasMinLength ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
                 className={
-                  checks.hasMinLength ? styles.textPass : styles.textFail
+                  checks.hasMinLength ? styles.reqMet : styles.reqUnmet
                 }
               >
                 At least 12 characters
               </span>
             </div>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.hasUppercase ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
                 className={
-                  checks.hasUppercase ? styles.textPass : styles.textFail
+                  checks.hasUppercase ? styles.reqMet : styles.reqUnmet
                 }
               >
                 At least 1 uppercase letter (A–Z)
               </span>
             </div>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.hasLowercase ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
                 className={
-                  checks.hasLowercase ? styles.textPass : styles.textFail
+                  checks.hasLowercase ? styles.reqMet : styles.reqUnmet
                 }
               >
                 At least 1 lowercase letter (a–z)
               </span>
             </div>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.hasDigit ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
-                className={checks.hasDigit ? styles.textPass : styles.textFail}
+                className={checks.hasDigit ? styles.reqMet : styles.reqUnmet}
               >
                 At least 1 number (0–9)
               </span>
             </div>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.hasSymbol ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
-                className={checks.hasSymbol ? styles.textPass : styles.textFail}
+                className={checks.hasSymbol ? styles.reqMet : styles.reqUnmet}
               >
                 At least 1 special character (!@#$%^&*...)
               </span>
             </div>
-            <div className={styles.checkItem}>
+            <div className={styles.reqItem}>
               {checks.passwordsMatch ? (
-                <Check size={14} className={styles.checkPass} />
+                <Check size={14} className={`${styles.reqIcon} ${styles.reqMet}`} />
               ) : (
-                <X size={14} className={styles.checkFail} />
+                <X size={14} className={`${styles.reqIcon} ${styles.reqUnmet}`} />
               )}
               <span
                 className={
-                  checks.passwordsMatch ? styles.textPass : styles.textFail
+                  checks.passwordsMatch ? styles.reqMet : styles.reqUnmet
                 }
               >
                 Passwords match
@@ -436,7 +436,7 @@ export default function ChangePasswordPage() {
           >
             {submitting ? (
               <>
-                <Loader2 size={16} className={styles.btnSpinner} />
+                <Loader2 size={16} className={styles.spinner} />
                 <span>Activating Account…</span>
               </>
             ) : (

@@ -108,10 +108,10 @@ export default function LoginPage() {
           )}
         </button>
 
-        <div className={styles.footer}>
+        <div>
           <p className={styles.footerText}>
             Don&apos;t have an account?{' '}
-            <Link to="/signup" className={styles.link}>
+            <Link to="/signup" className={styles.footerLink}>
               Create one
             </Link>
           </p>

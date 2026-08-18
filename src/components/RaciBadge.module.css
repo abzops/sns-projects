@@ -8,6 +8,24 @@
   letter-spacing: 0.02em;
 }
 
+.default {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+}
+
+.container {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.warnIcon,
+.checkIcon {
+  flex-shrink: 0;
+}
+
 .xs {
   font-size: 0.65rem;
   padding: 2px 6px;
@@ -269,4 +287,14 @@
   color: var(--muted-2);
   font-size: 0.75rem;
   font-style: italic;
+}
+
+@media (max-width: 520px) {
+  .detailsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .compactRow {
+    flex-wrap: wrap;
+  }
 }

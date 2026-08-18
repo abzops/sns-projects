@@ -12,7 +12,8 @@
 .panel {
   width: 100%;
   max-width: 580px;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   background: var(--panel);
   border-left: 1px solid var(--line);
   display: flex;
@@ -29,6 +30,7 @@
   padding: 16px 24px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-soft);
+  flex-shrink: 0;
 }
 
 .headerInfo {
@@ -96,7 +98,9 @@
 
 .content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -296,7 +300,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 30px;
+  height: 30px;
   padding: 0;
+  border-radius: 50%;
+  flex: 0 0 30px;
+}
+
+.subtaskCheckBtn:hover:not(:disabled),
+.subtaskCheckBtn:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
 }
 
 .checkedIcon {
@@ -365,12 +379,17 @@
 }
 
 .subtaskDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--muted-2);
   cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
 }
 
 .subtaskDeleteBtn:hover {
@@ -397,6 +416,7 @@
   color: var(--text);
   font-size: 0.8rem;
   outline: none;
+  min-height: 38px;
 }
 
 .subtaskAssigneeSelect,
@@ -408,6 +428,7 @@
   color: var(--text);
   font-size: 0.76rem;
   outline: none;
+  min-height: 38px;
 }
 
 .addSubtaskBtn {
@@ -422,6 +443,7 @@
   font-size: 0.78rem;
   font-weight: 800;
   cursor: pointer;
+  min-height: 38px;
 }
 
 .addSubtaskBtn:disabled {
@@ -493,32 +515,37 @@
   font-size: 0.76rem;
 }
 
-.raciBlock {
+.raciRoleBlock {
   background: var(--panel-soft);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
-  padding: 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
 }
 
-.raciBlockHeader {
+.raciRoleHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.raciRoleMeta {
+.raciRoleLabelWrap {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
-.raciRoleMeta strong {
+.raciRoleName {
   font-size: 0.78rem;
   color: var(--text);
-  display: block;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .raciDesc {
@@ -527,33 +554,34 @@
   display: block;
 }
 
-.raciBadge {
-  width: 22px;
-  height: 22px;
+.raciPill {
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
   font-size: 0.72rem;
   font-weight: 800;
+  flex: 0 0 24px;
 }
 
-.badgeA {
+.pillA {
   background: rgba(253, 226, 21, 0.18);
   color: var(--yellow);
 }
 
-.badgeR {
+.pillR {
   background: rgba(90, 157, 232, 0.18);
   color: #6bb0ff;
 }
 
-.badgeC {
+.pillC {
   background: rgba(232, 160, 58, 0.18);
   color: #ffb752;
 }
 
-.badgeI {
+.pillI {
   background: rgba(255, 255, 255, 0.08);
   color: var(--muted);
 }
@@ -570,6 +598,7 @@
   font-weight: 700;
   color: var(--muted);
   cursor: pointer;
+  min-height: 32px;
 }
 
 .addRaciBtn:hover {
@@ -586,38 +615,57 @@
   color: var(--text);
   font-size: 0.82rem;
   outline: none;
+  min-height: 40px;
 }
 
-.raciEmptyWarning {
-  font-size: 0.74rem;
-  color: #ff7d6b;
-  margin: 0;
-  font-style: italic;
+.accountableSelect:focus,
+.addRaciSelectRow select:focus,
+.subtaskInput:focus,
+.subtaskAssigneeSelect:focus,
+.subtaskDateInput:focus {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(253, 226, 21, 0.1);
+  outline: none;
 }
 
-.raciEmptyMuted {
+.raciAccountableSelectWrap {
+  min-width: 0;
+}
+
+.raciEmpty {
   font-size: 0.74rem;
   color: var(--muted-2);
   margin: 0;
   font-style: italic;
 }
 
-.tagGrid {
+.raciItemsList {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
-.raciItemPill {
+.raciItemTag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 3px 4px 3px 7px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   font-size: 0.74rem;
   color: var(--text);
+}
+
+.raciItemName {
+  min-width: 0;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deptCode {
@@ -628,22 +676,30 @@
   border-radius: 3px;
 }
 
-.removeTagBtn {
+.removeRaciBtn {
   background: transparent;
   border: none;
   color: var(--muted-2);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
+  border-radius: 50%;
+  flex: 0 0 28px;
 }
 
-.removeTagBtn:hover {
+.removeRaciBtn:hover,
+.removeRaciBtn:focus-visible {
   color: var(--red);
+  background: rgba(232, 97, 74, 0.12);
+  outline: none;
 }
 
 /* Add RACI Box */
-.addRaciBox {
+.addRaciForm {
   background: var(--panel);
   border: 1px solid var(--yellow);
   border-radius: var(--radius-xs);
@@ -667,6 +723,19 @@
   border: none;
   color: var(--muted-2);
   cursor: pointer;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.closeAddBtn:hover,
+.closeAddBtn:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
 }
 
 .targetTypeTabs {
@@ -728,6 +797,7 @@
   padding: 16px 24px;
   border-top: 1px solid var(--line);
   background: var(--panel-soft);
+  flex-shrink: 0;
 }
 
 .footerLeft,
@@ -1048,4 +1118,108 @@
   font-weight: 700;
   cursor: pointer;
   align-self: flex-end;
+}
+
+@media (max-width: 720px) {
+  .header,
+  .content,
+  .footer {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .propertiesGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .subtaskRow {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .subtaskMeta {
+    width: 100%;
+    padding-left: 26px;
+    flex-wrap: wrap;
+  }
+
+  .subtaskInput {
+    flex-basis: 100%;
+  }
+
+  .subtaskAssigneeSelect,
+  .subtaskDateInput {
+    flex: 1 1 150px;
+    min-height: 38px;
+  }
+
+  .addSubtaskBtn {
+    min-height: 38px;
+  }
+
+  .raciHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .raciWarning {
+    width: 100%;
+  }
+
+  .raciItemTag {
+    width: 100%;
+  }
+
+  .raciItemName {
+    flex: 1;
+    max-width: none;
+  }
+
+  .addRaciSelectRow {
+    flex-direction: column;
+  }
+
+  .addRaciSelectRow select,
+  .addConfirmBtn {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .footer {
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .footerLeft,
+  .footerRight {
+    flex: 1 1 auto;
+  }
+
+  .footerRight {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 420px) {
+  .header {
+    align-items: flex-start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .content {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .footerLeft,
+  .footerRight {
+    width: 100%;
+  }
+
+  .footerRight > button {
+    flex: 1;
+  }
 }

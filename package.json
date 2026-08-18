@@ -8,6 +8,7 @@
     "build": "vite build",
     "db:setup": "node scripts/apply-supabase-db.mjs",
     "lint": "oxlint",
+    "verify:css-modules": "node scripts/verify-css-module-contracts.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

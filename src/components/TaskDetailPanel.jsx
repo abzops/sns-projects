@@ -31,6 +31,44 @@ import { supabase } from '../lib/supabase';
 import { useToast } from './Toast';
 import styles from './TaskDetailPanel.module.css';
 
+function RaciAssignmentIdentity({ assignment }) {
+  const profile = assignment?.profiles;
+  const department = assignment?.departments;
+  const displayName = profile?.full_name || department?.name || 'Unassigned';
+
+  return (
+    <>
+      {profile ? (
+        <Avatar
+          name={displayName}
+          src={profile.avatar_url}
+          size="xs"
+        />
+      ) : department ? (
+        <span
+          className={styles.deptCode}
+          style={{ backgroundColor: department.color || 'var(--yellow)' }}
+          title={department.name}
+        >
+          {department.code || 'DEPT'}
+        </span>
+      ) : (
+        <Avatar name={displayName} size="xs" />
+      )}
+      <span className={styles.raciItemName} title={displayName}>{displayName}</span>
+      {profile && department && (
+        <span
+          className={styles.deptCode}
+          style={{ backgroundColor: department.color || 'var(--yellow)' }}
+          title={department.name}
+        >
+          {department.code || 'DEPT'}
+        </span>
+      )}
+    </>
+  );
+}
+
 const priorityOptions = [
   { value: 'none', label: 'None' },
   { value: 'low', label: 'Low' },
@@ -971,17 +1009,14 @@ export default function TaskDetailPanel({
                 ) : (
                   responsible.map((r) => (
                     <div key={r.id} className={styles.raciItemTag}>
-                      <Avatar
-                        name={r.profiles?.full_name || 'User'}
-                        src={r.profiles?.avatar_url}
-                        size="xs"
-                      />
-                      <span>{r.profiles?.full_name || r.departments?.name}</span>
+                      <RaciAssignmentIdentity assignment={r} />
                       {!isDefinedTask && (
                         <button
                           type="button"
                           onClick={() => removeRaci(r.id)}
                           className={styles.removeRaciBtn}
+                          aria-label={`Remove ${r.profiles?.full_name || r.departments?.name || 'Responsible assignment'}`}
+                          title="Remove assignment"
                         >
                           <X size={12} />
                         </button>
@@ -1016,18 +1051,15 @@ export default function TaskDetailPanel({
                 ) : (
                   consulted.map((c) => (
                     <div key={c.id} className={styles.raciItemTag}>
-                      <Avatar
-                        name={c.profiles?.full_name || 'User'}
-                        src={c.profiles?.avatar_url}
-                        size="xs"
-                      />
-                      <span>{c.profiles?.full_name || c.departments?.name}</span>
+                      <RaciAssignmentIdentity assignment={c} />
                       {c.response_required && <span className={styles.reqBadge}>Required</span>}
                       {!isDefinedTask && (
                         <button
                           type="button"
                           onClick={() => removeRaci(c.id)}
                           className={styles.removeRaciBtn}
+                          aria-label={`Remove ${c.profiles?.full_name || c.departments?.name || 'Consulted assignment'}`}
+                          title="Remove assignment"
                         >
                           <X size={12} />
                         </button>
@@ -1062,17 +1094,14 @@ export default function TaskDetailPanel({
                 ) : (
                   informed.map((i) => (
                     <div key={i.id} className={styles.raciItemTag}>
-                      <Avatar
-                        name={i.profiles?.full_name || 'User'}
-                        src={i.profiles?.avatar_url}
-                        size="xs"
-                      />
-                      <span>{i.profiles?.full_name || i.departments?.name}</span>
+                      <RaciAssignmentIdentity assignment={i} />
                       {!isDefinedTask && (
                         <button
                           type="button"
                           onClick={() => removeRaci(i.id)}
                           className={styles.removeRaciBtn}
+                          aria-label={`Remove ${i.profiles?.full_name || i.departments?.name || 'Informed assignment'}`}
+                          title="Remove assignment"
                         >
                           <X size={12} />
                         </button>

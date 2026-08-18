@@ -16,6 +16,16 @@
   color: var(--muted);
 }
 
+.spinner {
+  animation: workspaceSpin 0.8s linear infinite;
+}
+
+@keyframes workspaceSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .createBtn {
   display: inline-flex;
   align-items: center;

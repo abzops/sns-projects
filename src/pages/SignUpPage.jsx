@@ -52,8 +52,8 @@ export default function SignUpPage() {
       <div className={styles.page}>
         <div className={styles.ambientGlow} />
         <div className={styles.card}>
-          <div className={styles.successIconWrap}>
-            <CheckCircle2 size={48} className={styles.successIcon} />
+          <div className={styles.successIcon}>
+            <CheckCircle2 size={48} />
           </div>
           <h1 className={styles.title}>Account Created</h1>
           <p className={styles.subtitle}>
@@ -174,10 +174,10 @@ export default function SignUpPage() {
           )}
         </button>
 
-        <div className={styles.footer}>
+        <div>
           <p className={styles.footerText}>
             Already have an account?{' '}
-            <Link to="/login" className={styles.link}>
+            <Link to="/login" className={styles.footerLink}>
               Sign In
             </Link>
           </p>

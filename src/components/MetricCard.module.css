@@ -81,6 +81,10 @@
 }
 
 /* Variants */
+.default {
+  border-left-color: var(--line);
+}
+
 .accent {
   border-left: 3px solid var(--yellow);
 }
