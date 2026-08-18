@@ -71,7 +71,7 @@ export default function ProcessesPage() {
     <div className={styles.page}>
       <PageHeader
         title="Defined Processes"
-        subtitle="Standardized, repeatable business workflows with multi-step RACI governance"
+        subtitle="Standardized, repeatable business workflows with clear ownership and assignments"
         badge={processes.length > 0 ? `${processes.length} Defined` : null}
         actions={
           <div className={styles.headerActions}>

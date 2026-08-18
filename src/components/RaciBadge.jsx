@@ -4,8 +4,8 @@ import styles from './RaciBadge.module.css';
 
 export function RaciRoleTag({ role, count = null, size = 'sm' }) {
   const configs = {
-    R: { label: 'Responsible', short: 'R', desc: 'Does the work', className: styles.tagR },
-    A: { label: 'Accountable', short: 'A', desc: 'Owns outcome', className: styles.tagA },
+    R: { label: 'Assignee', short: 'R', desc: 'Does the work', className: styles.tagR },
+    A: { label: 'Owner', short: 'A', desc: 'Owns outcome', className: styles.tagA },
     C: { label: 'Consulted', short: 'C', desc: 'Provides input', className: styles.tagC },
     I: { label: 'Informed', short: 'I', desc: 'Kept updated', className: styles.tagI },
   };
@@ -74,24 +74,24 @@ export default function RaciBadge({ raci, compact = false, showDetails = false }
 
   if (!hasAny) {
     return (
-      <span className={styles.incompleteBadge} title="RACI incomplete: Needs Responsible & Accountable">
+      <span className={styles.incompleteBadge} title="Assignments incomplete: Needs an Owner and Assignee">
         <AlertCircle size={12} />
-        <span>RACI Incomplete</span>
+        <span>Assignments Incomplete</span>
       </span>
     );
   }
 
   if (compact) {
-    const aName = accountable?.profiles?.full_name || accountable?.departments?.name || 'Accountable Owner';
-    const rNames = responsible.map((r) => r.profiles?.full_name || r.departments?.name || r.departments?.code || 'Responsible').join(', ');
+    const aName = accountable?.profiles?.full_name || accountable?.departments?.name || 'Owner';
+    const rNames = responsible.map((r) => r.profiles?.full_name || r.departments?.name || r.departments?.code || 'Assignee').join(', ');
     const cCount = consulted.length;
     const iCount = informed.length;
     const cNames = consulted.map((c) => c.profiles?.full_name || c.departments?.name || c.departments?.code).join(', ');
     const iNames = informed.map((i) => i.profiles?.full_name || i.departments?.name || i.departments?.code).join(', ');
 
     const tooltipParts = [];
-    if (accountable) tooltipParts.push(`Accountable (A): ${aName}`);
-    if (responsible.length > 0) tooltipParts.push(`Responsible (R): ${rNames}`);
+    if (accountable) tooltipParts.push(`Owner (A): ${aName}`);
+    if (responsible.length > 0) tooltipParts.push(`Assignees (R): ${rNames}`);
     if (cCount > 0) tooltipParts.push(`Consulted (C): ${cNames}`);
     if (iCount > 0) tooltipParts.push(`Informed (I): ${iNames}`);
     const fullTooltip = tooltipParts.join('\n');
@@ -99,20 +99,20 @@ export default function RaciBadge({ raci, compact = false, showDetails = false }
     return (
       <div className={styles.compactRow} title={fullTooltip}>
         {!isComplete && (
-          <span className={styles.miniIncomplete} title="Incomplete RACI: Requires 1 Accountable and ≥1 Responsible">
+          <span className={styles.miniIncomplete} title="Incomplete assignments: Requires 1 Owner and at least 1 Assignee">
             <AlertCircle size={12} />
           </span>
         )}
 
         {accountable && (
-          <div className={styles.compactA} title={`Accountable: ${aName}`}>
+          <div className={styles.compactA} title={`Owner: ${aName}`}>
             <span className={styles.roleLetterA}>A</span>
             <span className={styles.compactName}>{aName}</span>
           </div>
         )}
 
         {responsible.length > 0 && (
-          <div className={styles.compactR} title={`Responsible: ${rNames}`}>
+          <div className={styles.compactR} title={`Assignees: ${rNames}`}>
             <span className={styles.roleLetterR}>R</span>
             <RaciAvatarStack items={responsible} max={2} size="xs" />
           </div>
@@ -140,12 +140,12 @@ export default function RaciBadge({ raci, compact = false, showDetails = false }
       {!isComplete ? (
         <div className={styles.incompleteBanner}>
           <AlertCircle size={14} className={styles.warnIcon} />
-          <span>RACI Incomplete (Requires 1 Accountable & ≥1 Responsible)</span>
+          <span>Assignments Incomplete (Requires 1 Owner & at least 1 Assignee)</span>
         </div>
       ) : (
         <div className={styles.completeBanner}>
           <ShieldCheck size={14} className={styles.checkIcon} />
-          <span>RACI Assigned</span>
+          <span>Assignments Complete</span>
         </div>
       )}
 

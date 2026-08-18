@@ -480,8 +480,8 @@ export default function MyWorkPage() {
           >
             <span className={styles.tabBadgeR}>R</span>
             <div className={styles.tabLabelWrap}>
-              <strong>Needs My Action</strong>
-              <small>Responsible ({tabCounts.R})</small>
+              <strong>Assigned to Me</strong>
+              <small>Assignee ({tabCounts.R})</small>
             </div>
           </button>
 
@@ -493,7 +493,7 @@ export default function MyWorkPage() {
             <span className={styles.tabBadgeA}>A</span>
             <div className={styles.tabLabelWrap}>
               <strong>I Own</strong>
-              <small>Accountable ({tabCounts.A})</small>
+              <small>Owner ({tabCounts.A})</small>
             </div>
           </button>
 
@@ -612,13 +612,13 @@ export default function MyWorkPage() {
               : activeTab === 'R'
               ? 'No action required right now'
               : activeTab === 'A'
-              ? 'No accountable tasks assigned to you'
+              ? 'No tasks owned by you'
               : 'Inbox is clear'
           }
           description={
             search || filterOnlyOverdue || filterOnlyBlocked || filterPriority
               ? 'Try adjusting your filters or search terms.'
-              : 'Tasks assigned to you via RACI matrix will appear here automatically.'
+              : 'Tasks where you are an Owner, Assignee, Consulted, or Informed participant will appear here automatically.'
           }
         />
       ) : viewMode === 'list' ? (
@@ -629,7 +629,7 @@ export default function MyWorkPage() {
                 <th>Task & Project</th>
                 <th>Status</th>
                 <th>Priority</th>
-                <th>RACI Assignment</th>
+                <th>Ownership & Assignment</th>
                 <th>Due Date</th>
               </tr>
             </thead>

@@ -24,6 +24,7 @@ import EmptyState from '../components/EmptyState';
 import { useProcessInstance } from '../hooks/useProcessInstance';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import { getRaciRoleLabel } from '../utils/raciPresentation';
 import styles from './ProcessInstancePage.module.css';
 
 function formatDate(d) {
@@ -117,7 +118,7 @@ export default function ProcessInstancePage() {
         if (res.data?.completed) {
           showToast(`Step "${task.title}" completed!`, 'success');
         } else if (res.data?.remaining_responsible > 0) {
-          showToast(`Your contribution recorded! (${res.data.remaining_responsible} Responsible pending)`, 'success');
+          showToast(`Your contribution was recorded. (${res.data.remaining_responsible} Assignees remaining)`, 'success');
         } else {
           showToast(`Task advanced to ${res.data?.workflow_state || 'next state'}!`, 'success');
         }
@@ -436,7 +437,7 @@ export default function ProcessInstancePage() {
                       <div className={styles.metaItem}>
                         <User size={13} className={styles.metaIcon} />
                         <span>
-                          Responsible: {task.responsible_completed_count} / {task.responsible_count} completed
+                          Assignees: {task.responsible_completed_count} / {task.responsible_count} completed
                         </span>
                       </div>
                     )}
@@ -452,10 +453,10 @@ export default function ProcessInstancePage() {
 
                   {/* RACI Avatars Row */}
                   <div className={styles.raciRow}>
-                    <span className={styles.raciLabel}>RACI:</span>
+                    <span className={styles.raciLabel}>Assignments:</span>
                     <div className={styles.raciChips}>
                       {(task.raci || []).map((r) => (
-                        <span key={r.id} className={styles.raciChip} title={`${r.raci_role}: ${r.profiles?.full_name}`}>
+                        <span key={r.id} className={styles.raciChip} title={`${getRaciRoleLabel(r.raci_role)} (${r.raci_role}): ${r.profiles?.full_name}`}>
                           <span className={styles.raciRoleTag}>{r.raci_role}</span>
                           <Avatar
                             name={r.profiles?.full_name || 'User'}

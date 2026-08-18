@@ -393,7 +393,7 @@ export function useProcessInstance(taskListId) {
       return { success: true, data };
     } catch (err) {
       console.error('[useProcessInstance] completeResponsiblePart error:', err);
-      return { success: false, error: err.message || 'Failed to complete responsible part.' };
+      return { success: false, error: err.message || 'Failed to complete your assigned work.' };
     }
   };
 

@@ -24,7 +24,7 @@ export default function ProcessValidationPanel({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Process & RACI Matrix Validation"
+      title="Process Ownership & Assignment Validation"
       size="md"
     >
       <div className={styles.container}>
@@ -36,7 +36,7 @@ export default function ProcessValidationPanel({
               <div>
                 <h4 className={styles.bannerTitle}>Matrix is Valid & Ready for Publication</h4>
                 <p className={styles.bannerSubtext}>
-                  All {summary.totalSteps} steps meet complete governance, single Accountable, and active member requirements.
+                  All {summary.totalSteps} steps have a single Owner, required Assignees, and active members.
                 </p>
               </div>
             </>
@@ -70,14 +70,14 @@ export default function ProcessValidationPanel({
           </div>
 
           <div className={styles.statCard}>
-            <span className={styles.statLabel}>Responsible (R)</span>
+            <span className={styles.statLabel}>Assignees (R)</span>
             <span className={`${styles.statValue} ${summary.withResponsible === summary.totalSteps && summary.totalSteps > 0 ? styles.statGood : styles.statWarn}`}>
               {summary.withResponsible}/{summary.totalSteps}
             </span>
           </div>
 
           <div className={styles.statCard}>
-            <span className={styles.statLabel}>Accountable (A)</span>
+            <span className={styles.statLabel}>Owner (A)</span>
             <span className={`${styles.statValue} ${summary.withAccountable === summary.totalSteps && summary.totalSteps > 0 ? styles.statGood : styles.statWarn}`}>
               {summary.withAccountable}/{summary.totalSteps}
             </span>

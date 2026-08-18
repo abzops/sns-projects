@@ -161,7 +161,7 @@ export default function StartProcessModal({
     }
 
     if (!isUserRootResponsible) {
-      showToast('Only a Responsible user on the first step can start this process.', 'error');
+      showToast('Only an Assignee on the first step can start this process.', 'error');
       return;
     }
 
@@ -309,7 +309,7 @@ export default function StartProcessModal({
               <div className={styles.authRow}>
                 <CheckCircle2 size={16} className={styles.passIcon} />
                 <span>
-                  You are assigned as <strong>Responsible (R)</strong> on root step{' '}
+                  You are an <strong>Assignee (R)</strong> on root step{' '}
                   <code>{rootStepInfo?.step?.step_code}</code> ({rootStepInfo?.step?.title}). You may start this process.
                 </span>
               </div>
@@ -317,7 +317,7 @@ export default function StartProcessModal({
               <div className={styles.authRow}>
                 <ShieldAlert size={16} className={styles.failIcon} />
                 <span>
-                  Only a <strong>Responsible (R)</strong> user on the first step can start this process.
+                  Only an <strong>Assignee (R)</strong> on the first step can start this process.
                 </span>
               </div>
             )}

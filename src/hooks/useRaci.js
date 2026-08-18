@@ -46,7 +46,7 @@ export function useRaci(taskId) {
       setAssignments(data || []);
     } catch (err) {
       console.error('Error fetching RACI assignments:', err);
-      setError(err.message || 'Failed to load RACI assignments');
+      setError(err.message || 'Failed to load ownership and assignments');
     } finally {
       setLoading(false);
     }

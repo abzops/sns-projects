@@ -63,7 +63,7 @@ export default function RaciMatrix({
       <div className={styles.headerBar}>
         <div className={styles.titleGroup}>
           <Layers size={16} className={styles.sectionIcon} />
-          <h3 className={styles.sectionTitle}>RACI Execution Matrix</h3>
+          <h3 className={styles.sectionTitle}>Workflow Ownership & Assignments</h3>
           <span className={styles.stepBadge}>
             {steps.length} {steps.length === 1 ? 'Step' : 'Steps'}
           </span>
@@ -91,11 +91,11 @@ export default function RaciMatrix({
                 <th className={styles.thSeq}>#</th>
                 <th className={styles.thCode}>Step ID</th>
                 <th className={styles.thTitle}>Step / Procedure</th>
-                <th className={styles.thR} title="Responsible: Who does the work">
-                  R <span className={styles.thSub}>Responsible</span>
+                <th className={styles.thR} title="Assignees: Who does the work">
+                  R <span className={styles.thSub}>Assignees</span>
                 </th>
-                <th className={styles.thA} title="Accountable: Single decision maker">
-                  A <span className={styles.thSub}>Accountable</span>
+                <th className={styles.thA} title="Owner: Single decision maker">
+                  A <span className={styles.thSub}>Owner</span>
                 </th>
                 <th className={styles.thC} title="Consulted: Two-way input">
                   C <span className={styles.thSub}>Consulted</span>

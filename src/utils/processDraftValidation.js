@@ -146,7 +146,7 @@ export function validateProcessDraft(draft, activeMembers = []) {
         stepCode: stepCode || `Step ${stepNum}`,
         title: stepTitle,
         field: 'raci_R',
-        message: `Step ${stepNum} (${stepCode || 'STP'}): Missing Responsible (R). At least one is required.`,
+        message: `Step ${stepNum} (${stepCode || 'STP'}): Missing Assignee. At least one is required.`,
       });
     }
 
@@ -161,7 +161,7 @@ export function validateProcessDraft(draft, activeMembers = []) {
         stepCode: stepCode || `Step ${stepNum}`,
         title: stepTitle,
         field: 'raci_A',
-        message: `Step ${stepNum} (${stepCode || 'STP'}): Missing Accountable (A). Exactly one is required.`,
+        message: `Step ${stepNum} (${stepCode || 'STP'}): Missing Owner. Exactly one is required.`,
       });
     } else {
       issues.push({
@@ -171,7 +171,7 @@ export function validateProcessDraft(draft, activeMembers = []) {
         stepCode: stepCode || `Step ${stepNum}`,
         title: stepTitle,
         field: 'raci_A',
-        message: `Step ${stepNum} (${stepCode || 'STP'}): Multiple Accountable (A) assignments found (${aAssignments.length}). Exactly one is allowed.`,
+        message: `Step ${stepNum} (${stepCode || 'STP'}): Multiple Owners found (${aAssignments.length}). Exactly one is allowed.`,
       });
     }
 
@@ -191,7 +191,7 @@ export function validateProcessDraft(draft, activeMembers = []) {
             stepCode: stepCode || `Step ${stepNum}`,
             title: stepTitle,
             field: 'process_starter',
-            message: `Step ${stepNum}: "Process Starter" is only permitted in Responsible (R). Cannot be ${item.raci_role}.`,
+            message: `Step ${stepNum}: "Process Starter" is only permitted as an Assignee. It cannot use role ${item.raci_role}.`,
           });
         }
       } else if (userId) {
@@ -239,7 +239,7 @@ export function validateProcessDraft(draft, activeMembers = []) {
           stepCode: stepCode || `Step ${stepNum}`,
           title: stepTitle,
           field: 'approval_separation',
-          message: `Step ${stepNum}: Approval is required, so Accountable cannot be in the concrete Responsible set.`,
+          message: `Step ${stepNum}: Approval is required, so the Owner cannot also be a named Assignee.`,
         });
       }
     }

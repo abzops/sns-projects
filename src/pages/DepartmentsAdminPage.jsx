@@ -255,7 +255,7 @@ export default function DepartmentsAdminPage() {
         <EmptyState
           icon={Building2}
           title="No departments configured"
-          description="Create departments to organize projects and enable RACI delegation."
+          description="Create departments to organize projects and enable ownership and assignment delegation."
           actionLabel="Create First Department"
           onAction={handleOpenCreate}
         />

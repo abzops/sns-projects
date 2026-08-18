@@ -375,9 +375,9 @@ export default function DashboardPage() {
             variant={metrics.overdueTasksCount > 0 ? 'danger' : 'default'}
           />
           <MetricCard
-            title="RACI Incomplete"
+            title="Assignments Incomplete"
             value={metrics.raciIncompleteCount}
-            subtitle="Tasks missing Accountable / Responsible"
+            subtitle="Tasks missing an Owner or Assignee"
             icon={ShieldAlert}
             variant={metrics.raciIncompleteCount > 0 ? 'warning' : 'success'}
           />
@@ -410,7 +410,7 @@ export default function DashboardPage() {
             <div className={styles.emptyCard}>
               <FolderKanban size={36} />
               <h3>No projects created yet</h3>
-              <p>Create your first project to start tracking phases, RACI matrix, and Kanban boards.</p>
+              <p>Create your first project to start tracking phases, ownership, assignments, and Kanban boards.</p>
               <Link to={`/workspace/${workspaceId}/projects`} className={styles.emptyActionBtn}>
                 <Plus size={16} /> Create Project
               </Link>

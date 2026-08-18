@@ -53,7 +53,7 @@ export default function DepartmentsPage() {
         <EmptyState
           icon={Building2}
           title="No departments configured"
-          description="Create organizational departments (e.g. Software & IT, Engineering, Operations) to enable departmental filtered views and RACI routing."
+          description="Create organizational departments (e.g. Software & IT, Engineering, Operations) to enable departmental filtered views and responsibility routing."
           actionLabel={canAdmin ? "Setup Departments" : undefined}
           onAction={canAdmin ? () => navigate(`/workspace/${workspaceId}/admin/departments`) : undefined}
         />

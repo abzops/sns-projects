@@ -215,7 +215,7 @@ export default function ProjectsPage() {
           description={
             search || filterStatus || filterPriority
               ? "Try clearing your search or status filters."
-              : "Create your first project to start tracking phases, RACI matrix, and Kanban boards."
+              : "Create your first project to start tracking phases, ownership, assignments, and Kanban boards."
           }
           actionLabel={canCreate && !search && !filterStatus ? "Create Project" : undefined}
           onAction={canCreate ? handleOpenModal : undefined}

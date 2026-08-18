@@ -72,7 +72,7 @@ export default function WorkspacesPage() {
         <EmptyState
           icon={Building2}
           title="No workspaces yet"
-          description="Create your first organization workspace to start managing projects, departments, and RACI matrices."
+          description="Create your first organization workspace to start managing projects, departments, ownership, and assignments."
           actionLabel="Create Workspace"
           onAction={() => setShowModal(true)}
         />

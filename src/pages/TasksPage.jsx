@@ -543,7 +543,7 @@ export default function TasksPage() {
     if (!newTaskTitle.trim()) return;
 
     if (!newTaskAccountable) {
-      showToast('Mandatory: Exactly 1 Accountable (A) user is required.', 'error');
+      showToast('An Owner is required.', 'error');
       return;
     }
 
@@ -568,7 +568,7 @@ export default function TasksPage() {
 
       if (createErr) throw createErr;
 
-      showToast('Task created successfully with RACI assignment', 'success');
+      showToast('Task created successfully with ownership and assignments', 'success');
       handleCloseAddTask();
     } catch (err) {
       console.error('Failed to create task:', err);
@@ -1570,7 +1570,7 @@ export default function TasksPage() {
                     </th>
                     <th className={styles.colHeaderStatus}>Status</th>
                     <th className={styles.colHeaderPriority}>Priority</th>
-                    <th className={styles.colHeaderRaci}>RACI Assignment</th>
+                    <th className={styles.colHeaderRaci}>Ownership & Assignment</th>
                     <th onClick={() => handleSort('due_date')} className={`${styles.sortableHeader} ${styles.colHeaderDate}`}>
                       Due Date
                     </th>
@@ -1909,11 +1909,11 @@ export default function TasksPage() {
 
           {/* Mandatory RACI Selection */}
           <div className={styles.raciInputBox}>
-            <span className={styles.raciBoxTitle}>Mandatory RACI Assignment</span>
+            <span className={styles.raciBoxTitle}>Ownership & Assignment</span>
             <div className={styles.modalRow}>
               <div className={styles.modalField}>
                 <label className={styles.modalLabel} htmlFor="taskAccountable">
-                  Accountable Owner (A) <span className={styles.reqStar}>*</span>
+                  Owner <span className={styles.reqStar}>*</span>
                 </label>
                 <select
                   id="taskAccountable"
@@ -1926,7 +1926,7 @@ export default function TasksPage() {
                   required
                   disabled={addingTask}
                 >
-                  <option value="">Select Accountable User…</option>
+                  <option value="">Select Owner…</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.user_id || ''}>
                       {getMemberDisplayName(m, user)}
@@ -1937,7 +1937,7 @@ export default function TasksPage() {
 
               <div className={styles.modalField}>
                 <label className={styles.modalLabel} htmlFor="taskResponsible">
-                  Responsible Doer (R) <span className={styles.reqStar}>*</span>
+                  Assignee <span className={styles.reqStar}>*</span>
                 </label>
                 <select
                   id="taskResponsible"
@@ -1947,7 +1947,7 @@ export default function TasksPage() {
                   required
                   disabled={addingTask}
                 >
-                  <option value="">Select Responsible User…</option>
+                  <option value="">Select Assignee…</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.user_id || ''}>
                       {getMemberDisplayName(m, user)}

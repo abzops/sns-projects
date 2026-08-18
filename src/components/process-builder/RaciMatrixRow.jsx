@@ -172,12 +172,12 @@ export default function RaciMatrixRow({
 
         {/* 5. R Cell */}
         <td className={styles.rCell}>
-          {renderRaciCell('R', rAssignments, 'Responsible')}
+          {renderRaciCell('R', rAssignments, 'Assignees')}
         </td>
 
         {/* 6. A Cell */}
         <td className={styles.aCell}>
-          {renderRaciCell('A', aAssignments, 'Accountable')}
+          {renderRaciCell('A', aAssignments, 'Owner')}
         </td>
 
         {/* 7. C Cell */}
@@ -246,9 +246,9 @@ export default function RaciMatrixRow({
           onClose={() => setActivePickerRole(null)}
           title={`Assign ${
             activePickerRole === 'R'
-              ? 'Responsible (R)'
+              ? 'Assignees (R)'
               : activePickerRole === 'A'
-              ? 'Accountable (A)'
+              ? 'Owner (A)'
               : activePickerRole === 'C'
               ? 'Consulted (C)'
               : 'Informed (I)'

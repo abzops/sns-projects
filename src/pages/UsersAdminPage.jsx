@@ -1388,7 +1388,7 @@ export default function UsersAdminPage() {
               disabled={submitting}
             />
             <span className={styles.fieldHint}>
-              This will be displayed across project tasks, RACI assignments, and audit trails.
+              This will be displayed across project tasks, ownership and assignments, and audit trails.
             </span>
           </div>
 

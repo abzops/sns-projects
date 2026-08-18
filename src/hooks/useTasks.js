@@ -276,7 +276,7 @@ export function useTasks(projectId, workspaceId) {
     if (!accountableUserId || !responsibleUserId) {
       return {
         data: null,
-        error: new Error('New tasks require at least 1 Responsible and exactly 1 Accountable user.'),
+        error: new Error('New tasks require exactly one Owner and at least one Assignee.'),
       };
     }
 
@@ -364,7 +364,7 @@ export function useTasks(projectId, workspaceId) {
     if (raciInsertErr) {
       console.error('RACI insertion failed; rolling back task creation:', raciInsertErr);
       await supabase.from('tasks').delete().eq('id', createdTask.id);
-      return { data: null, error: new Error(`Failed to assign mandatory RACI: ${raciInsertErr.message}`) };
+      return { data: null, error: new Error(`Failed to save ownership and assignments: ${raciInsertErr.message}`) };
     }
 
     await fetchTasks({ silent: true });

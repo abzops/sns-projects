@@ -480,7 +480,7 @@ export default function DepartmentWorkspacePage() {
                 <th>Task & Project</th>
                 <th>Status</th>
                 <th>Priority</th>
-                <th>RACI Assignment</th>
+                <th>Ownership & Assignment</th>
                 <th>Due Date</th>
               </tr>
             </thead>

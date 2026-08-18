@@ -248,7 +248,7 @@ export default function TaskDetailPanel({
       showToast(
         data?.completed
           ? 'Step completed!'
-          : `Contribution saved (${data?.remaining_responsible} Responsible remaining).`,
+          : `Contribution saved (${data?.remaining_responsible} Assignees remaining).`,
         'success'
       );
       setShowCompleteForm(false);
@@ -368,7 +368,7 @@ export default function TaskDetailPanel({
       if (accountable) await removeRaci(accountable.id);
       await assignRaci({ raciRole: 'A', userId });
     } catch (err) {
-      showToast(err.message || 'Failed to update Accountable assignment', 'error');
+      showToast(err.message || 'Failed to update Owner', 'error');
       await refetchRaci();
     }
   };
@@ -386,7 +386,7 @@ export default function TaskDetailPanel({
       setSelectedTargetId('');
       setAddRaciRole(null);
     } catch (err) {
-      showToast(err.message || 'Failed to add RACI assignment', 'error');
+      showToast(err.message || 'Failed to add assignment', 'error');
     }
   };
 
@@ -498,7 +498,7 @@ export default function TaskDetailPanel({
                 )}
               </div>
               <div className={styles.definedBannerNote}>
-                This step is governed by the Defined Process Engine. Workflow transitions occur automatically via RACI actions.
+                This step is governed by the Defined Process Engine. Workflow transitions occur automatically through participant actions.
               </div>
             </div>
           )}
@@ -609,7 +609,7 @@ export default function TaskDetailPanel({
               {isActionableState && userIsResponsible && (
                 <div className={styles.execBox}>
                   <div className={styles.execBoxTop}>
-                    <span className={styles.execBoxTitle}>Responsible Contribution</span>
+                    <span className={styles.execBoxTitle}>Complete My Assigned Work</span>
                     <button
                       type="button"
                       className={styles.execActionBtn}
@@ -745,7 +745,7 @@ export default function TaskDetailPanel({
               {task.workflow_state === 'awaiting_approval' && userIsAccountable && (
                 <div className={styles.execBox}>
                   <div className={styles.execBoxTop}>
-                    <span className={styles.execBoxTitle}>Accountable Decision</span>
+                    <span className={styles.execBoxTitle}>Owner Decision</span>
                     <div className={styles.btnRow}>
                       <button
                         type="button"
@@ -940,11 +940,11 @@ export default function TaskDetailPanel({
             <div className={styles.raciHeader}>
               <div className={styles.raciTitleWrap}>
                 <ShieldCheck size={16} className={styles.raciIcon} />
-                <h3 className={styles.raciTitle}>RACI Responsibility Matrix</h3>
+                <h3 className={styles.raciTitle}>Ownership & Assignments</h3>
               </div>
               {!isRaciComplete && (
                 <span className={styles.raciWarning}>
-                  <AlertCircle size={12} /> Requires 1 Accountable & ≥1 Responsible
+                  <AlertCircle size={12} /> Requires 1 Owner & at least 1 Assignee
                 </span>
               )}
             </div>
@@ -954,7 +954,7 @@ export default function TaskDetailPanel({
               <div className={styles.raciRoleHeader}>
                 <div className={styles.raciRoleLabelWrap}>
                   <span className={`${styles.raciPill} ${styles.pillA}`}>A</span>
-                  <span className={styles.raciRoleName}>Accountable (Single Owner)</span>
+                  <span className={styles.raciRoleName}>Owner</span>
                 </div>
               </div>
 
@@ -966,7 +966,7 @@ export default function TaskDetailPanel({
                       src={accountable?.profiles?.avatar_url}
                       size="xs"
                     />
-                    <span>{accountable?.profiles?.full_name || 'Defined Accountable'}</span>
+                    <span>{accountable?.profiles?.full_name || 'Defined Owner'}</span>
                   </div>
                 ) : (
                   <select
@@ -974,7 +974,7 @@ export default function TaskDetailPanel({
                     value={accountable?.user_id || ''}
                     onChange={(e) => handleSetAccountable(e.target.value)}
                   >
-                    <option value="">Select Accountable owner…</option>
+                    <option value="">Select Owner…</option>
                     {members.map((m) => (
                       <option key={m.id} value={m.user_id || ''}>
                         {getMemberDisplayName(m, user)}
@@ -990,7 +990,7 @@ export default function TaskDetailPanel({
               <div className={styles.raciRoleHeader}>
                 <div className={styles.raciRoleLabelWrap}>
                   <span className={`${styles.raciPill} ${styles.pillR}`}>R</span>
-                  <span className={styles.raciRoleName}>Responsible (Doers)</span>
+                  <span className={styles.raciRoleName}>Assignees</span>
                 </div>
                 {!isDefinedTask && (
                   <button
@@ -1005,7 +1005,7 @@ export default function TaskDetailPanel({
 
               <div className={styles.raciItemsList}>
                 {responsible.length === 0 ? (
-                  <span className={styles.raciEmpty}>No Responsible users assigned.</span>
+                  <span className={styles.raciEmpty}>No Assignees assigned.</span>
                 ) : (
                   responsible.map((r) => (
                     <div key={r.id} className={styles.raciItemTag}>
@@ -1015,7 +1015,7 @@ export default function TaskDetailPanel({
                           type="button"
                           onClick={() => removeRaci(r.id)}
                           className={styles.removeRaciBtn}
-                          aria-label={`Remove ${r.profiles?.full_name || r.departments?.name || 'Responsible assignment'}`}
+                          aria-label={`Remove ${r.profiles?.full_name || r.departments?.name || 'Assignee'}`}
                           title="Remove assignment"
                         >
                           <X size={12} />
@@ -1116,7 +1116,7 @@ export default function TaskDetailPanel({
             {!isDefinedTask && addRaciRole && (
               <form onSubmit={handleAddRaciAssignment} className={styles.addRaciForm}>
                 <div className={styles.addRaciHeader}>
-                  <span>Add to {addRaciRole === 'R' ? 'Responsible' : addRaciRole === 'C' ? 'Consulted' : 'Informed'}</span>
+                  <span>Add to {addRaciRole === 'R' ? 'Assignees' : addRaciRole === 'C' ? 'Consulted' : 'Informed'}</span>
                   <button type="button" onClick={() => setAddRaciRole(null)} className={styles.closeAddBtn}>
                     <X size={14} />
                   </button>

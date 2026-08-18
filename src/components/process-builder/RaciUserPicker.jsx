@@ -11,6 +11,7 @@ import {
 import Modal from '../Modal';
 import Avatar from '../Avatar';
 import styles from './RaciUserPicker.module.css';
+import { getRaciRoleLabel } from '../../utils/raciPresentation';
 
 export default function RaciUserPicker({
   isOpen,
@@ -124,14 +125,7 @@ export default function RaciUserPicker({
   };
 
   const isSingleSelect = role === 'A';
-  const roleName =
-    role === 'R'
-      ? 'Responsible'
-      : role === 'A'
-      ? 'Accountable'
-      : role === 'C'
-      ? 'Consulted'
-      : 'Informed';
+  const roleName = getRaciRoleLabel(role, { group: role === 'R' });
 
   return (
     <Modal
@@ -167,12 +161,12 @@ export default function RaciUserPicker({
         <div className={styles.roleHint}>
           {role === 'R' && (
             <span>
-              <strong>Responsible (R):</strong> People who do the work to achieve the step. Multi-select. Can include <em>Process Starter</em>.
+              <strong>Assignees (R):</strong> People who do the work to achieve the step. Multi-select. Can include <em>Process Starter</em>.
             </span>
           )}
           {role === 'A' && (
             <span>
-              <strong>Accountable (A):</strong> The single individual with final decision authority. Single-select only.
+              <strong>Owner (A):</strong> The single individual with final decision authority. Single-select only.
             </span>
           )}
           {role === 'C' && (
@@ -219,7 +213,7 @@ export default function RaciUserPicker({
                   <span className={styles.dynamicBadge}>Dynamic Actor</span>
                 </div>
                 <span className={styles.userSubtext}>
-                  Whoever initiates the process instance becomes Responsible at runtime
+                  Whoever initiates the process instance becomes an Assignee at runtime
                 </span>
               </div>
             </div>

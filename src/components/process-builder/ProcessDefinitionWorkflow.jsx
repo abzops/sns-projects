@@ -10,14 +10,10 @@ import {
   Users,
 } from 'lucide-react';
 import Avatar from '../Avatar';
+import { RACI_ROLE_GROUP_LABELS } from '../../utils/raciPresentation';
 import styles from './ProcessDefinitionWorkflow.module.css';
 
-const roleLabels = {
-  A: 'Accountable',
-  R: 'Responsible',
-  C: 'Consulted',
-  I: 'Informed',
-};
+const roleLabels = RACI_ROLE_GROUP_LABELS;
 
 function ActorChip({ assignment }) {
   const isStarter = assignment.actor_type === 'process_starter';
@@ -85,7 +81,7 @@ export default function ProcessDefinitionWorkflow({ steps = [], isLinear = true 
       <div className={styles.sectionHeader}>
         <div>
           <div className={styles.eyebrow}>Workflow</div>
-          <h2 id="workflow-definition-title" className={styles.sectionTitle}>Execution steps and RACI</h2>
+          <h2 id="workflow-definition-title" className={styles.sectionTitle}>Execution steps and assignments</h2>
         </div>
         <span className={`${styles.flowBadge} ${isLinear ? styles.linearFlow : styles.customFlow}`}>
           {isLinear ? <ArrowDown size={14} /> : <GitBranch size={14} />}
