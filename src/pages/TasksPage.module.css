@@ -498,23 +498,31 @@
   gap: 8px;
 }
 
-.addTaskListBtn {
+.contextAddBtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 0;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
-  font-size: 0.75rem;
-  font-weight: 700;
   color: var(--text);
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
-.addTaskListBtn:hover {
+.contextAddBtn:hover {
+  background: rgba(253, 226, 21, 0.08);
   border-color: var(--yellow);
   color: var(--yellow);
+}
+
+.contextAddBtn:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
 }
 
 .deletePhaseBtn {
@@ -647,25 +655,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.addTaskInlineBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 5px 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.addTaskInlineBtn:hover {
-  border-color: var(--yellow);
-  color: var(--yellow);
 }
 
 .deleteTaskListBtn {
@@ -1010,6 +999,55 @@
 .modalRow {
   display: flex;
   gap: 12px;
+}
+
+.contextSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+  margin-bottom: 14px;
+  background: rgba(253, 226, 21, 0.04);
+  border: 1px solid rgba(253, 226, 21, 0.24);
+  border-radius: var(--radius-xs);
+}
+
+.contextSummaryHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--yellow);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.contextPath {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text);
+  font-size: 0.82rem;
+  min-width: 0;
+}
+
+.contextPath > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.contextKind {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .raciInputBox {

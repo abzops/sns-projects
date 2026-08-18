@@ -10,6 +10,7 @@
     "lint": "oxlint",
     "verify:css-modules": "node scripts/verify-css-module-contracts.mjs",
     "test:process-definition": "node scripts/test-operational-v1-process-definition-access.mjs",
+    "test:hierarchy-context": "node scripts/test-operational-v1-contextual-hierarchy-create.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

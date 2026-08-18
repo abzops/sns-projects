@@ -47,6 +47,7 @@ import {
   BookmarkPlus,
   AlertCircle,
   Workflow,
+  LockKeyhole,
 } from 'lucide-react';
 
 import TaskRow from '../components/TaskRow';
@@ -57,6 +58,12 @@ import Modal from '../components/Modal';
 import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { getPlacementProcesses } from '../lib/hierarchy';
+import {
+  createTaskCreationContext,
+  createTaskListCreationContext,
+  resolveTaskListParentId,
+  resolveTaskParentIds,
+} from '../utils/hierarchyCreationContext';
 
 import styles from './TasksPage.module.css';
 
@@ -321,6 +328,8 @@ export default function TasksPage() {
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showAddPhaseModal, setShowAddPhaseModal] = useState(false);
   const [showAddTaskListModal, setShowAddTaskListModal] = useState(false);
+  const [taskCreationContext, setTaskCreationContext] = useState(null);
+  const [taskListCreationContext, setTaskListCreationContext] = useState(null);
 
   // Kanban local board state & dragging refs
   const [activeId, setActiveId] = useState(null);
@@ -487,17 +496,46 @@ export default function TasksPage() {
     }
   };
 
-  const handleOpenAddTask = (presetPhaseId = '', presetTaskListId = '') => {
+  const handleOpenAddTask = ({ phase = null, taskList = null } = {}) => {
+    const context = phase && taskList
+      ? createTaskCreationContext({
+          projectId,
+          projectName: project?.name,
+          phase,
+          taskList,
+        })
+      : null;
+
+    setTaskCreationContext(context);
     setNewTaskTitle('');
     setNewTaskDesc('');
-    setNewTaskPhaseId(presetPhaseId || (phases[0]?.id ?? ''));
-    setNewTaskTaskListId(presetTaskListId || '');
+    setNewTaskPhaseId(context?.phaseId || (phases[0]?.id ?? ''));
+    setNewTaskTaskListId(context?.taskListId || '');
     setNewTaskStatus(statuses?.[0]?.id ?? '');
     setNewTaskPriority('medium');
     setNewTaskAccountable('');
     setNewTaskResponsible('');
     setNewTaskDueDate('');
     setShowAddTaskModal(true);
+  };
+
+  const handleCloseAddTask = () => {
+    setShowAddTaskModal(false);
+    setTaskCreationContext(null);
+  };
+
+  const handleOpenAddTaskList = (phase = null) => {
+    const context = phase ? createTaskListCreationContext(phase) : null;
+    setTaskListCreationContext(context);
+    setNewTaskListPhaseId(context?.phaseId || phases[0]?.id || '');
+    setNewTaskListName('');
+    setNewTaskListDesc('');
+    setShowAddTaskListModal(true);
+  };
+
+  const handleCloseAddTaskList = () => {
+    setShowAddTaskListModal(false);
+    setTaskListCreationContext(null);
   };
 
   const handleCreateTaskSubmit = async (e) => {
@@ -511,11 +549,16 @@ export default function TasksPage() {
 
     setAddingTask(true);
     try {
+      const target = resolveTaskParentIds(
+        taskCreationContext,
+        newTaskPhaseId,
+        newTaskTaskListId
+      );
       const { error: createErr } = await createTask({
         title: newTaskTitle.trim(),
         description: newTaskDesc.trim(),
-        phase_id: newTaskPhaseId || null,
-        task_list_id: newTaskTaskListId || null,
+        phase_id: target.phaseId || null,
+        task_list_id: target.taskListId || null,
         status_id: newTaskStatus || statuses?.[0]?.id,
         priority: newTaskPriority,
         accountable_id: newTaskAccountable,
@@ -526,7 +569,7 @@ export default function TasksPage() {
       if (createErr) throw createErr;
 
       showToast('Task created successfully with RACI assignment', 'success');
-      setShowAddTaskModal(false);
+      handleCloseAddTask();
     } catch (err) {
       console.error('Failed to create task:', err);
       showToast(err.message || 'Failed to create task', 'error');
@@ -568,8 +611,12 @@ export default function TasksPage() {
 
     setAddingTaskList(true);
     try {
+      const targetPhaseId = resolveTaskListParentId(
+        taskListCreationContext,
+        newTaskListPhaseId
+      );
       const { error: tlErr } = await createTaskList({
-        phaseId: newTaskListPhaseId,
+        phaseId: targetPhaseId,
         name: newTaskListName.trim(),
         description: newTaskListDesc.trim(),
       });
@@ -578,7 +625,7 @@ export default function TasksPage() {
       showToast('Task list created', 'success');
       setNewTaskListName('');
       setNewTaskListDesc('');
-      setShowAddTaskListModal(false);
+      handleCloseAddTaskList();
     } catch (err) {
       showToast(err.message || 'Failed to create task list', 'error');
     } finally {
@@ -1058,10 +1105,7 @@ export default function TasksPage() {
             </button>
             <button
               className={styles.secondaryActionBtn}
-              onClick={() => {
-                setNewTaskListPhaseId(phases[0]?.id || '');
-                setShowAddTaskListModal(true);
-              }}
+              onClick={() => handleOpenAddTaskList()}
               title="Create Task List"
               disabled={phases.length === 0}
             >
@@ -1255,14 +1299,12 @@ export default function TasksPage() {
                       <div className={styles.phaseActions}>
                         <button
                           type="button"
-                          className={styles.addTaskListBtn}
-                          onClick={() => {
-                            setNewTaskListPhaseId(phase.id);
-                            setShowAddTaskListModal(true);
-                          }}
-                          title="Add Task List under this Phase"
+                          className={styles.contextAddBtn}
+                          onClick={() => handleOpenAddTaskList(phase)}
+                          title="Add Task List"
+                          aria-label="Add Task List"
                         >
-                          <Plus size={13} /> Task List
+                          <Plus size={15} aria-hidden="true" />
                         </button>
                         <button
                           type="button"
@@ -1296,10 +1338,7 @@ export default function TasksPage() {
                             <span>No task lists in this phase.</span>
                             <button
                               type="button"
-                              onClick={() => {
-                                setNewTaskListPhaseId(phase.id);
-                                setShowAddTaskListModal(true);
-                              }}
+                              onClick={() => handleOpenAddTaskList(phase)}
                               className={styles.inlineAddLink}
                             >
                               + Create Task List
@@ -1382,10 +1421,12 @@ export default function TasksPage() {
                                       <>
                                         <button
                                           type="button"
-                                          className={styles.addTaskInlineBtn}
-                                          onClick={() => handleOpenAddTask(phase.id, taskList.id)}
+                                          className={styles.contextAddBtn}
+                                          onClick={() => handleOpenAddTask({ phase, taskList })}
+                                          title="Add Task"
+                                          aria-label="Add Task"
                                         >
-                                          <Plus size={13} /> Add Task
+                                          <Plus size={15} aria-hidden="true" />
                                         </button>
                                         <button
                                           type="button"
@@ -1415,7 +1456,7 @@ export default function TasksPage() {
                                       emptyMessage={
                                         taskListProcesses.length > 0
                                           ? 'No ordinary tasks in this list.'
-                                          : 'No tasks in this list. Use + Add Task above to create one.'
+                                          : 'No tasks in this list. Use the + button above to create one.'
                                       }
                                     />
                                   </div>
@@ -1676,30 +1717,43 @@ export default function TasksPage() {
       {/* ───── Create Task List Modal ───── */}
       <Modal
         isOpen={showAddTaskListModal}
-        onClose={() => setShowAddTaskListModal(false)}
+        onClose={handleCloseAddTaskList}
         title="Create Task List"
       >
         <form onSubmit={handleCreateTaskListSubmit}>
-          <div className={styles.modalField}>
-            <label className={styles.modalLabel} htmlFor="parentPhase">
-              Parent Phase
-            </label>
-            <select
-              id="parentPhase"
-              className={styles.modalSelect}
-              value={newTaskListPhaseId}
-              onChange={(e) => setNewTaskListPhaseId(e.target.value)}
-              required
-              disabled={addingTaskList}
-            >
-              <option value="">Select Phase…</option>
-              {phases.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {taskListCreationContext ? (
+            <div className={styles.contextSummary} role="note" aria-label="Locked creation context">
+              <div className={styles.contextSummaryHeader}>
+                <LockKeyhole size={14} aria-hidden="true" />
+                <span>Creating inside selected Phase</span>
+              </div>
+              <div className={styles.contextPath}>
+                <span className={styles.contextKind}>Phase</span>
+                <strong>{taskListCreationContext.phaseName}</strong>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel} htmlFor="parentPhase">
+                Parent Phase
+              </label>
+              <select
+                id="parentPhase"
+                className={styles.modalSelect}
+                value={newTaskListPhaseId}
+                onChange={(e) => setNewTaskListPhaseId(e.target.value)}
+                required
+                disabled={addingTaskList}
+              >
+                <option value="">Select Phase…</option>
+                {phases.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className={styles.modalField}>
             <label className={styles.modalLabel} htmlFor="taskListName">
@@ -1737,7 +1791,7 @@ export default function TasksPage() {
             <button
               type="button"
               className={styles.cancelBtn}
-              onClick={() => setShowAddTaskListModal(false)}
+              onClick={handleCloseAddTaskList}
               disabled={addingTaskList}
             >
               Cancel
@@ -1754,7 +1808,7 @@ export default function TasksPage() {
       </Modal>
 
       {/* ───── Create Task Modal (with Cascading Hierarchy & Mandatory RACI) ───── */}
-      <Modal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} title="New Task" size="lg">
+      <Modal isOpen={showAddTaskModal} onClose={handleCloseAddTask} title="New Task" size="lg">
         <form onSubmit={handleCreateTaskSubmit}>
           <div className={styles.modalField}>
             <label className={styles.modalLabel} htmlFor="taskTitle">
@@ -1789,6 +1843,21 @@ export default function TasksPage() {
           </div>
 
           {/* Cascading Hierarchy Selection */}
+          {taskCreationContext ? (
+            <div className={styles.contextSummary} role="note" aria-label="Locked creation context">
+              <div className={styles.contextSummaryHeader}>
+                <LockKeyhole size={14} aria-hidden="true" />
+                <span>Creating inside selected Task List</span>
+              </div>
+              <div className={styles.contextPath}>
+                <span><span className={styles.contextKind}>Project</span>{taskCreationContext.projectName}</span>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span><span className={styles.contextKind}>Phase</span>{taskCreationContext.phaseName}</span>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span><span className={styles.contextKind}>Task List</span>{taskCreationContext.taskListName}</span>
+              </div>
+            </div>
+          ) : (
           <div className={styles.modalRow}>
             <div className={styles.modalField}>
               <label className={styles.modalLabel} htmlFor="taskPhase">
@@ -1836,6 +1905,7 @@ export default function TasksPage() {
               </select>
             </div>
           </div>
+          )}
 
           {/* Mandatory RACI Selection */}
           <div className={styles.raciInputBox}>
@@ -1947,7 +2017,7 @@ export default function TasksPage() {
             <button
               type="button"
               className={styles.cancelBtn}
-              onClick={() => setShowAddTaskModal(false)}
+              onClick={handleCloseAddTask}
               disabled={addingTask}
             >
               Cancel
