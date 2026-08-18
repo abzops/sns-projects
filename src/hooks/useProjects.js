@@ -32,24 +32,25 @@ function computeTaskMetrics(taskRows = []) {
   return { counts, completed, overdue };
 }
 
-export function useProjects(workspaceId) {
+export function useProjects(workspaceId, authorizationScopeKey = 'default') {
   const { user } = useAuth()
   const userId = user?.id || null
-  const [projects, setProjects] = useState(() => projectsCache.get(workspaceId) || [])
-  const [loading, setLoading] = useState(() => !projectsCache.has(workspaceId))
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`
+  const [projects, setProjects] = useState(() => projectsCache.get(cacheKey) || [])
+  const [loading, setLoading] = useState(() => !projectsCache.has(cacheKey))
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
   const fetchProjects = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId || !userId) {
+    if (!workspaceId || !userId || !authorizationScopeKey) {
       setProjects([])
       setLoading(false)
       setRefreshing(false)
       return
     }
 
-    if (!isSilent && !projectsCache.has(workspaceId)) {
+    if (!isSilent && !projectsCache.has(cacheKey)) {
       setLoading(true)
     } else {
       setRefreshing(true)
@@ -125,20 +126,23 @@ export function useProjects(workspaceId) {
       }
     })
 
-    projectsCache.set(workspaceId, enriched)
+    projectsCache.set(cacheKey, enriched)
     setProjects(enriched)
     setLoading(false)
     setRefreshing(false)
-  }, [workspaceId, userId])
+  }, [authorizationScopeKey, cacheKey, workspaceId, userId])
 
   useEffect(() => {
     // If workspace changed, pick up cache or set empty
-    if (projectsCache.has(workspaceId)) {
-      setProjects(projectsCache.get(workspaceId))
+    if (projectsCache.has(cacheKey)) {
+      setProjects(projectsCache.get(cacheKey))
       setLoading(false)
+    } else {
+      setProjects([])
+      setLoading(true)
     }
     fetchProjects()
-  }, [fetchProjects, workspaceId])
+  }, [cacheKey, fetchProjects])
 
   const createProject = async (input) => {
     const supabase = getSupabase()

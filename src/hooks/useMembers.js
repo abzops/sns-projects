@@ -43,8 +43,9 @@ function normalizeMemberProfiles(members) {
 export function useMembers(workspaceId) {
   const { user } = useAuth();
   const userId = user?.id || null;
-  const [members, setMembers] = useState(() => membersCache.get(workspaceId) || []);
-  const [loading, setLoading] = useState(() => !membersCache.has(workspaceId));
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}`;
+  const [members, setMembers] = useState(() => membersCache.get(cacheKey) || []);
+  const [loading, setLoading] = useState(() => !membersCache.has(cacheKey));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
@@ -57,7 +58,7 @@ export function useMembers(workspaceId) {
       return;
     }
 
-    if (!isSilent && !membersCache.has(workspaceId)) {
+    if (!isSilent && !membersCache.has(cacheKey)) {
       setLoading(true);
     } else {
       setRefreshing(true);
@@ -98,11 +99,11 @@ export function useMembers(workspaceId) {
         if (rawError) throw rawError;
 
         const resolved = await attachProfilesFallback(supabase, rawMembers || []);
-        membersCache.set(workspaceId, resolved);
+        membersCache.set(cacheKey, resolved);
         setMembers(resolved);
       } else {
         const normalized = normalizeMemberProfiles(data || []);
-        membersCache.set(workspaceId, normalized);
+        membersCache.set(cacheKey, normalized);
         setMembers(normalized);
       }
     } catch (err) {
@@ -112,15 +113,17 @@ export function useMembers(workspaceId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [workspaceId, userId]);
+  }, [cacheKey, workspaceId, userId]);
 
   useEffect(() => {
-    if (membersCache.has(workspaceId)) {
-      setMembers(membersCache.get(workspaceId));
+    if (membersCache.has(cacheKey)) {
+      setMembers(membersCache.get(cacheKey));
       setLoading(false);
+    } else {
+      setMembers([]);
     }
     fetchMembers();
-  }, [fetchMembers, workspaceId]);
+  }, [cacheKey, fetchMembers]);
 
   const removeMember = async (memberId) => {
     const supabase = getSupabase();

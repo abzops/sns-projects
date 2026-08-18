@@ -56,13 +56,17 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const { projects = [], loading, error, createProject } = useProjects(workspaceId);
+  const {
+    canMutateOperationalData,
+    hasGlobalOperationalVisibility,
+    authorizationScopeKey,
+    user,
+  } = useUserContext(workspaceId);
+  const { projects = [], loading, error, createProject } = useProjects(workspaceId, authorizationScopeKey);
   const { members = [] } = useMembers(workspaceId);
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
-
-  const { canAdministerWorkspace, isProjectAdmin, user } = useUserContext(workspaceId);
-  const canCreate = canAdministerWorkspace || isProjectAdmin;
+  const canCreate = canMutateOperationalData;
 
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');
@@ -145,8 +149,12 @@ export default function ProjectsPage() {
   return (
     <div className={styles.container}>
       <PageHeader
-        title="Projects Portfolio"
-        subtitle={`Active initiatives and task execution boards for ${currentWorkspace?.name || 'Workspace'}`}
+        title={hasGlobalOperationalVisibility ? 'Projects Portfolio' : 'My Visible Projects'}
+        subtitle={
+          hasGlobalOperationalVisibility
+            ? `Active initiatives and task execution boards for ${currentWorkspace?.name || 'Workspace'}`
+            : `Projects you own or participate in within ${currentWorkspace?.name || 'this workspace'}`
+        }
         badge={<span className={styles.totalBadge}>{projects.length} Projects</span>}
         actions={
           canCreate && (
@@ -211,11 +219,19 @@ export default function ProjectsPage() {
       ) : filteredProjects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
-          title={search || filterStatus || filterPriority ? "No matching projects" : "No projects yet"}
+          title={
+            search || filterStatus || filterPriority
+              ? 'No matching projects'
+              : hasGlobalOperationalVisibility
+                ? 'No projects yet'
+                : 'No projects in your operational scope'
+          }
           description={
             search || filterStatus || filterPriority
               ? "Try clearing your search or status filters."
-              : "Create your first project to start tracking phases, ownership, assignments, and Kanban boards."
+              : hasGlobalOperationalVisibility
+                ? 'Create a project to start tracking phases, ownership, assignments, and Kanban boards.'
+                : 'Projects you own or participate in will appear here automatically.'
           }
           actionLabel={canCreate && !search && !filterStatus ? "Create Project" : undefined}
           onAction={canCreate ? handleOpenModal : undefined}

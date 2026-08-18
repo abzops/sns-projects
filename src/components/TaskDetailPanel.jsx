@@ -88,6 +88,7 @@ export default function TaskDetailPanel({
   departments = [],
   onWorkflowUpdated,
   onSubtasksChange,
+  readOnly = false,
 }) {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -214,6 +215,7 @@ export default function TaskDetailPanel({
   };
 
   const handleSave = () => {
+    if (readOnly) return;
     if (isDefinedTask) {
       // For Defined Tasks, preserve title, status_id, and due_date from original task
       onSave?.({
@@ -227,7 +229,7 @@ export default function TaskDetailPanel({
   };
 
   const handleDelete = () => {
-    if (isDefinedTask) return; // Defined Tasks cannot be deleted
+    if (isDefinedTask || readOnly) return; // Defined Tasks and read-only viewers cannot delete
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
@@ -237,6 +239,7 @@ export default function TaskDetailPanel({
 
   // Defined Task RPC Handlers
   const handleCompleteMyPart = async () => {
+    if (readOnly) return;
     setActionLoading(true);
     try {
       const { data, error } = await supabase.rpc('complete_responsible_part', {
@@ -263,6 +266,7 @@ export default function TaskDetailPanel({
 
   const handleSubmitEvidence = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     setActionLoading(true);
     try {
       const payload =
@@ -292,6 +296,7 @@ export default function TaskDetailPanel({
 
   const handleSubmitConsultation = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     if (!consultText.trim()) return;
     setActionLoading(true);
     try {
@@ -313,6 +318,7 @@ export default function TaskDetailPanel({
   };
 
   const handleApprove = async () => {
+    if (readOnly) return;
     setActionLoading(true);
     try {
       const { data, error } = await supabase.rpc('approve_process_task', {
@@ -331,6 +337,7 @@ export default function TaskDetailPanel({
 
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     if (!rejectReason.trim() || !rejectDueDate) {
       showToast('Rejection reason and target due date are required.', 'error');
       return;
@@ -358,7 +365,7 @@ export default function TaskDetailPanel({
 
   // Custom RACI Handlers
   const handleSetAccountable = async (userId) => {
-    if (isDefinedTask) return;
+    if (isDefinedTask || readOnly) return;
     try {
       if (!userId) {
         if (accountable) await removeRaci(accountable.id);
@@ -375,7 +382,7 @@ export default function TaskDetailPanel({
 
   const handleAddRaciAssignment = async (e) => {
     e.preventDefault();
-    if (isDefinedTask || !selectedTargetId || !addRaciRole) return;
+    if (isDefinedTask || readOnly || !selectedTargetId || !addRaciRole) return;
     const isUser = selectedTargetType === 'user';
     try {
       await assignRaci({
@@ -393,6 +400,7 @@ export default function TaskDetailPanel({
   // Subtask creation handler
   const handleAddSubtask = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     if (!newSubtaskTitle.trim()) return;
     setIsAddingSubtask(true);
     try {
@@ -415,6 +423,7 @@ export default function TaskDetailPanel({
   };
 
   const handleToggleSubtask = async (subtask) => {
+    if (readOnly) return;
     if (subtask.status === 'cancelled') return;
     const { error } = await toggleSubtask(subtask.id, subtask.status);
     if (error) {
@@ -425,6 +434,7 @@ export default function TaskDetailPanel({
   };
 
   const handleDeleteSubtask = async (subtaskId) => {
+    if (readOnly) return;
     const { error } = await deleteSubtask(subtaskId);
     if (error) {
       showToast(error.message || 'Failed to delete subtask', 'error');
@@ -506,16 +516,16 @@ export default function TaskDetailPanel({
           {/* Title Input */}
           <div className={styles.field}>
             <label className={styles.label} htmlFor="task-title">
-              Title {isDefinedTask && <Lock size={12} className={styles.lockIcon} />}
+              Title {(isDefinedTask || readOnly) && <Lock size={12} className={styles.lockIcon} />}
             </label>
             <input
               id="task-title"
-              className={`${styles.titleInput} ${isDefinedTask ? styles.lockedInput : ''}`}
+              className={`${styles.titleInput} ${isDefinedTask || readOnly ? styles.lockedInput : ''}`}
               type="text"
               value={form.title}
               onChange={handleChange('title')}
               placeholder="Task title…"
-              disabled={isDefinedTask}
+              disabled={isDefinedTask || readOnly}
             />
           </div>
 
@@ -531,6 +541,7 @@ export default function TaskDetailPanel({
               onChange={handleChange('description')}
               placeholder="Add details, notes, or acceptance criteria…"
               rows={3}
+              disabled={readOnly}
             />
           </div>
 
@@ -539,14 +550,14 @@ export default function TaskDetailPanel({
             {/* Status */}
             <div className={styles.propertyItem}>
               <label className={styles.propertyLabel} htmlFor="task-status">
-                Status {isDefinedTask && <Lock size={11} className={styles.lockIcon} />}
+                Status {(isDefinedTask || readOnly) && <Lock size={11} className={styles.lockIcon} />}
               </label>
               <select
                 id="task-status"
-                className={`${styles.select} ${isDefinedTask ? styles.lockedInput : ''}`}
+                className={`${styles.select} ${isDefinedTask || readOnly ? styles.lockedInput : ''}`}
                 value={form.status_id}
                 onChange={handleChange('status_id')}
-                disabled={isDefinedTask}
+                disabled={isDefinedTask || readOnly}
               >
                 {statuses.length > 0 ? (
                   statuses.map((s) => (
@@ -570,6 +581,7 @@ export default function TaskDetailPanel({
                 className={styles.select}
                 value={form.priority}
                 onChange={handleChange('priority')}
+                disabled={readOnly}
               >
                 {priorityOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -582,15 +594,15 @@ export default function TaskDetailPanel({
             {/* Due Date */}
             <div className={styles.propertyItem}>
               <label className={styles.propertyLabel} htmlFor="task-due-date">
-                Due Date {isDefinedTask && <Lock size={11} className={styles.lockIcon} />}
+                Due Date {(isDefinedTask || readOnly) && <Lock size={11} className={styles.lockIcon} />}
               </label>
               <input
                 id="task-due-date"
                 type="date"
-                className={`${styles.dateInput} ${isDefinedTask ? styles.lockedInput : ''}`}
+                className={`${styles.dateInput} ${isDefinedTask || readOnly ? styles.lockedInput : ''}`}
                 value={form.due_date}
                 onChange={handleChange('due_date')}
-                disabled={isDefinedTask}
+                disabled={isDefinedTask || readOnly}
               />
             </div>
           </div>
@@ -598,7 +610,7 @@ export default function TaskDetailPanel({
           {/* ═════════════════════════════════════════════════════════════ */}
           {/* DEFINED PROCESS EXECUTION SECTION (When task is Defined)     */}
           {/* ═════════════════════════════════════════════════════════════ */}
-          {isDefinedTask && (
+          {isDefinedTask && !readOnly && (
             <div className={styles.executionSection}>
               <div className={styles.execHeader}>
                 <Sparkles size={16} className={styles.execIcon} />
@@ -843,7 +855,7 @@ export default function TaskDetailPanel({
                             ? 'Mark uncompleted'
                             : 'Mark completed'
                       }
-                      disabled={isCancelled}
+                      disabled={readOnly || isCancelled}
                     >
                       {isCancelled ? (
                         <XCircle size={16} className={styles.cancelledIcon} />
@@ -881,14 +893,16 @@ export default function TaskDetailPanel({
                           {st.due_date}
                         </span>
                       )}
-                      <button
-                        type="button"
-                        className={styles.subtaskDeleteBtn}
-                        onClick={() => handleDeleteSubtask(st.id)}
-                        title="Delete subtask"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className={styles.subtaskDeleteBtn}
+                          onClick={() => handleDeleteSubtask(st.id)}
+                          title="Delete subtask"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -896,7 +910,7 @@ export default function TaskDetailPanel({
             </div>
 
             {/* Inline Add Subtask Form */}
-            <form onSubmit={handleAddSubtask} className={styles.addSubtaskForm}>
+            {!readOnly && <form onSubmit={handleAddSubtask} className={styles.addSubtaskForm}>
               <input
                 type="text"
                 placeholder="Add execution subtask…"
@@ -930,7 +944,7 @@ export default function TaskDetailPanel({
               >
                 <Plus size={14} /> Add
               </button>
-            </form>
+            </form>}
           </div>
 
           {/* ═════════════════════════════════════════════════════════════ */}
@@ -959,7 +973,7 @@ export default function TaskDetailPanel({
               </div>
 
               <div className={styles.raciAccountableSelectWrap}>
-                {isDefinedTask ? (
+                {isDefinedTask || readOnly ? (
                   <div className={styles.lockedRaciChip}>
                     <Avatar
                       name={accountable?.profiles?.full_name || 'Unassigned'}
@@ -992,7 +1006,7 @@ export default function TaskDetailPanel({
                   <span className={`${styles.raciPill} ${styles.pillR}`}>R</span>
                   <span className={styles.raciRoleName}>Assignees</span>
                 </div>
-                {!isDefinedTask && (
+                {!isDefinedTask && !readOnly && (
                   <button
                     type="button"
                     className={styles.addRaciBtn}
@@ -1010,7 +1024,7 @@ export default function TaskDetailPanel({
                   responsible.map((r) => (
                     <div key={r.id} className={styles.raciItemTag}>
                       <RaciAssignmentIdentity assignment={r} />
-                      {!isDefinedTask && (
+                      {!isDefinedTask && !readOnly && (
                         <button
                           type="button"
                           onClick={() => removeRaci(r.id)}
@@ -1034,7 +1048,7 @@ export default function TaskDetailPanel({
                   <span className={`${styles.raciPill} ${styles.pillC}`}>C</span>
                   <span className={styles.raciRoleName}>Consulted (Advisors)</span>
                 </div>
-                {!isDefinedTask && (
+                {!isDefinedTask && !readOnly && (
                   <button
                     type="button"
                     className={styles.addRaciBtn}
@@ -1053,7 +1067,7 @@ export default function TaskDetailPanel({
                     <div key={c.id} className={styles.raciItemTag}>
                       <RaciAssignmentIdentity assignment={c} />
                       {c.response_required && <span className={styles.reqBadge}>Required</span>}
-                      {!isDefinedTask && (
+                      {!isDefinedTask && !readOnly && (
                         <button
                           type="button"
                           onClick={() => removeRaci(c.id)}
@@ -1077,7 +1091,7 @@ export default function TaskDetailPanel({
                   <span className={`${styles.raciPill} ${styles.pillI}`}>I</span>
                   <span className={styles.raciRoleName}>Informed (Notified)</span>
                 </div>
-                {!isDefinedTask && (
+                {!isDefinedTask && !readOnly && (
                   <button
                     type="button"
                     className={styles.addRaciBtn}
@@ -1095,7 +1109,7 @@ export default function TaskDetailPanel({
                   informed.map((i) => (
                     <div key={i.id} className={styles.raciItemTag}>
                       <RaciAssignmentIdentity assignment={i} />
-                      {!isDefinedTask && (
+                      {!isDefinedTask && !readOnly && (
                         <button
                           type="button"
                           onClick={() => removeRaci(i.id)}
@@ -1113,7 +1127,7 @@ export default function TaskDetailPanel({
             </div>
 
             {/* Add RACI Inline Form (Custom Tasks only) */}
-            {!isDefinedTask && addRaciRole && (
+            {!isDefinedTask && !readOnly && addRaciRole && (
               <form onSubmit={handleAddRaciAssignment} className={styles.addRaciForm}>
                 <div className={styles.addRaciHeader}>
                   <span>Add to {addRaciRole === 'R' ? 'Assignees' : addRaciRole === 'C' ? 'Consulted' : 'Informed'}</span>
@@ -1184,7 +1198,7 @@ export default function TaskDetailPanel({
         {/* Footer */}
         <div className={styles.footer}>
           <div className={styles.footerLeft}>
-            {!isDefinedTask && onDelete && (
+            {!isDefinedTask && !readOnly && onDelete && (
               <button
                 className={`${styles.deleteBtn} ${confirmDelete ? styles.deleteConfirm : ''}`}
                 onClick={handleDelete}
@@ -1203,13 +1217,15 @@ export default function TaskDetailPanel({
             >
               Close
             </button>
-            <button
-              className={styles.saveBtn}
-              onClick={handleSave}
-              type="button"
-            >
-              Save Changes
-            </button>
+            {!readOnly && (
+              <button
+                className={styles.saveBtn}
+                onClick={handleSave}
+                type="button"
+              >
+                Save Changes
+              </button>
+            )}
           </div>
         </div>
       </div>

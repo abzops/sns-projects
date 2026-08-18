@@ -62,7 +62,7 @@ export function getProcessCardCapabilities(process, permissions = {}) {
     hasPublished: Boolean(publishedVersion),
     hasDraft: Boolean(draftVersion),
     canViewPublished: Boolean(publishedVersion),
-    canStart: Boolean(publishedVersion),
+    canStart: Boolean(publishedVersion && permissions.canStart !== false),
     canViewDraft: Boolean(draftVersion),
     canEditDraft: Boolean(draftVersion && permissions.canEditDraft),
     canPublishDraft: Boolean(draftVersion && permissions.canPublishDraft),

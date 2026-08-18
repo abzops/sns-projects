@@ -106,7 +106,7 @@ export default function WorkspacesPage() {
                 </span>
                 <span className={styles.badge}>
                   <FolderOpen size={13} />
-                  {ws.project_count ?? 0} project{(ws.project_count ?? 0) !== 1 ? 's' : ''}
+                  {ws.project_count ?? 0} visible project{(ws.project_count ?? 0) !== 1 ? 's' : ''}
                 </span>
               </div>
 

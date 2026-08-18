@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const instanceCache = new Map(); // taskListId -> instanceData
 
-export function useProcessInstance(taskListId) {
-  const [instance, setInstance] = useState(() => (taskListId ? instanceCache.get(taskListId) || null : null));
-  const [loading, setLoading] = useState(() => (taskListId ? !instanceCache.has(taskListId) : false));
+export function useProcessInstance(taskListId, authorizationScopeKey = 'default') {
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const cacheKey = `${userId || 'anonymous'}:${taskListId || 'none'}:${authorizationScopeKey || 'loading'}`;
+  const [instance, setInstance] = useState(() => (taskListId ? instanceCache.get(cacheKey) || null : null));
+  const [loading, setLoading] = useState(() => (taskListId ? !instanceCache.has(cacheKey) : false));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchInstance = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!taskListId) {
+    if (!taskListId || !userId || !authorizationScopeKey) {
       setInstance(null);
       setLoading(false);
       setRefreshing(false);
@@ -19,7 +23,7 @@ export function useProcessInstance(taskListId) {
     }
 
     try {
-      if (!isSilent && !instanceCache.has(taskListId)) {
+      if (!isSilent && !instanceCache.has(cacheKey)) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -81,9 +85,15 @@ export function useProcessInstance(taskListId) {
           )
         `)
         .eq('id', taskListId)
-        .single();
+        .maybeSingle();
 
       if (lErr) throw lErr;
+      if (!listData) {
+        instanceCache.delete(cacheKey);
+        setInstance(null);
+        setError('The requested process instance is unavailable or you do not have access.');
+        return;
+      }
 
       // 2. Fetch all defined tasks for this instance
       const { data: tasksData, error: tErr } = await supabase
@@ -366,7 +376,7 @@ export function useProcessInstance(taskListId) {
         progress_percent: progressPercent,
       };
 
-      instanceCache.set(taskListId, instancePayload);
+      instanceCache.set(cacheKey, instancePayload);
       setInstance(instancePayload);
     } catch (err) {
       console.error('[useProcessInstance] Error loading process instance:', err);
@@ -375,7 +385,7 @@ export function useProcessInstance(taskListId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [taskListId]);
+  }, [authorizationScopeKey, cacheKey, taskListId, userId]);
 
   useEffect(() => {
     fetchInstance();

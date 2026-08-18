@@ -57,7 +57,7 @@ import HierarchyTaskTree, { HierarchyProcessGroups } from '../components/Hierarc
 import Modal from '../components/Modal';
 import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
-import { getPlacementProcesses } from '../lib/hierarchy';
+import { buildScopedProjectHierarchy, getPlacementProcesses } from '../lib/hierarchy';
 import {
   createTaskCreationContext,
   createTaskListCreationContext,
@@ -252,6 +252,18 @@ export default function TasksPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const {
+    canMutateOperationalData,
+    authorizationScopeKey,
+    loading: userContextLoading,
+  } = useUserContext(workspaceId);
+  const {
+    projects = [],
+    loading: projectsLoading,
+    error: projectsError,
+  } = useProjects(workspaceId, authorizationScopeKey);
+  const project = projects.find((item) => item.id === projectId) || null;
+  const visibleProjectId = project?.id || null;
 
   const {
     tasks = [],
@@ -262,10 +274,9 @@ export default function TasksPage() {
     deleteTask,
     reorderTask,
     refetch: refetchTasks,
-  } = useTasks(projectId, workspaceId);
-  const { statuses = [], loading: statusesLoading } = useTaskStatuses(projectId);
+  } = useTasks(visibleProjectId, workspaceId);
+  const { statuses = [], loading: statusesLoading } = useTaskStatuses(visibleProjectId);
   const { members = [] } = useMembers(workspaceId);
-  const { projects = [] } = useProjects(workspaceId);
   const { departments = [] } = useDepartments(workspaceId);
   const {
     phases = [],
@@ -273,27 +284,19 @@ export default function TasksPage() {
     error: phasesError,
     createPhase,
     deletePhase,
-  } = usePhases(projectId);
+  } = usePhases(visibleProjectId);
   const {
     taskLists = [],
     loading: taskListsLoading,
     error: taskListsError,
     createTaskList,
     deleteTaskList,
-  } = useTaskLists(projectId);
+  } = useTaskLists(visibleProjectId);
   const {
     processInstances = [],
     loading: processInstancesLoading,
     error: processInstancesError,
-  } = useProjectProcessInstances(projectId);
-
-  const project = projects?.find((p) => p.id === projectId);
-
-  // User context & task mutation permissions
-  const {
-    canMutateOperationalData,
-    loading: userContextLoading,
-  } = useUserContext(workspaceId);
+  } = useProjectProcessInstances(visibleProjectId);
 
   const canMutateTasks =
     !userContextLoading &&
@@ -987,13 +990,36 @@ export default function TasksPage() {
     () => (activeId ? tasks.find((t) => t.id === activeId) : null),
     [activeId, tasks]
   );
+  const scopedHierarchy = useMemo(
+    () => buildScopedProjectHierarchy(phases, taskLists, tasks),
+    [phases, taskLists, tasks]
+  );
 
   const isInitialLoading =
+    (projectsLoading && !project) ||
     (tasksLoading && tasks.length === 0) ||
     (statusesLoading && statuses.length === 0) ||
     (phasesLoading && phases.length === 0) ||
     (taskListsLoading && taskLists.length === 0) ||
     (processInstancesLoading && processInstances.length === 0);
+
+  if (!projectsLoading && !project) {
+    return (
+      <div className={styles.page}>
+        <EmptyState
+          icon={AlertCircle}
+          title={projectsError ? 'Unable to load project' : 'Project unavailable'}
+          description={
+            projectsError
+              ? 'Please check your connection and try again.'
+              : 'This project does not exist or is outside your authorized operational scope.'
+          }
+          actionLabel="Back to Projects"
+          onAction={() => navigate(`/workspace/${workspaceId}/projects`)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -1084,7 +1110,7 @@ export default function TasksPage() {
             </button>
           </div>
 
-          <div className={styles.actionButtons}>
+          {canMutateTasks && <div className={styles.actionButtons}>
             <button
               className={styles.secondaryActionBtn}
               onClick={() => setShowAddPhaseModal(true)}
@@ -1109,7 +1135,7 @@ export default function TasksPage() {
               <Plus size={16} />
               <span>Add Task</span>
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -1227,14 +1253,14 @@ export default function TasksPage() {
               icon={Layers}
               title="No Phases configured"
               description="Create phases and task lists to organize project execution into structured deliverables."
-              actionLabel="Create First Phase"
-              onAction={() => setShowAddPhaseModal(true)}
+              actionLabel={canMutateTasks ? 'Create First Phase' : undefined}
+              onAction={canMutateTasks ? () => setShowAddPhaseModal(true) : undefined}
             />
           ) : (
             <div className={styles.phasesList}>
-              {phases.map((phase) => {
+              {scopedHierarchy.map((phase) => {
                 const isPhaseCollapsed = collapsedPhases.has(phase.id);
-                const phaseTaskLists = taskLists.filter((tl) => tl.phase_id === phase.id);
+                const phaseTaskLists = phase.taskLists;
                 const phaseProcesses = getPlacementProcesses(processInstances, 'phase', phase.id);
                 const phaseProcessTasks = tasks.filter(
                   (task) => task.process_instance_id && phaseProcesses.some((item) => item.id === task.process_instance_id)
@@ -1286,7 +1312,7 @@ export default function TasksPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className={styles.phaseActions}>
+                      {canMutateTasks && <div className={styles.phaseActions}>
                         <button
                           type="button"
                           className={styles.contextAddBtn}
@@ -1304,7 +1330,7 @@ export default function TasksPage() {
                         >
                           Delete
                         </button>
-                      </div>
+                      </div>}
                     </div>
 
                     {/* Phase Body: Task Lists */}
@@ -1326,18 +1352,20 @@ export default function TasksPage() {
                         {phaseTaskLists.length === 0 ? (
                           <div className={styles.emptyTaskListNotice}>
                             <span>No task lists in this phase.</span>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAddTaskList(phase)}
-                              className={styles.inlineAddLink}
-                            >
-                              + Create Task List
-                            </button>
+                            {canMutateTasks && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddTaskList(phase)}
+                                className={styles.inlineAddLink}
+                              >
+                                + Create Task List
+                              </button>
+                            )}
                           </div>
                         ) : (
                           phaseTaskLists.map((taskList) => {
                             const isTaskListCollapsed = collapsedTaskLists.has(taskList.id);
-                            const listTasks = tasks.filter((t) => t.task_list_id === taskList.id);
+                            const listTasks = taskList.tasks;
                             const taskListProcesses = getPlacementProcesses(
                               processInstances,
                               'task_list',
@@ -1407,7 +1435,7 @@ export default function TasksPage() {
                                       >
                                         <Workflow size={13} /> View Process
                                       </button>
-                                    ) : (
+                                    ) : canMutateTasks ? (
                                       <>
                                         <button
                                           type="button"
@@ -1427,7 +1455,7 @@ export default function TasksPage() {
                                           Delete
                                         </button>
                                       </>
-                                    )}
+                                    ) : null}
                                   </div>
                                 </div>
 
@@ -1612,6 +1640,7 @@ export default function TasksPage() {
           members={members}
           departments={departments}
           onSubtasksChange={() => refetchTasks({ silent: true })}
+          readOnly={!canMutateTasks}
         />
       )}
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-let workspacesCache = null;
+const workspacesCache = new Map();
 
 function countByWorkspace(rows = []) {
   return rows.reduce((counts, row) => {
@@ -14,8 +14,9 @@ function countByWorkspace(rows = []) {
 export function useWorkspaces() {
   const { user } = useAuth()
   const userId = user?.id || null
-  const [workspaces, setWorkspaces] = useState(() => workspacesCache || [])
-  const [loading, setLoading] = useState(() => workspacesCache === null)
+  const cacheKey = userId || 'anonymous'
+  const [workspaces, setWorkspaces] = useState(() => workspacesCache.get(cacheKey) || [])
+  const [loading, setLoading] = useState(() => !workspacesCache.has(cacheKey))
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
@@ -28,7 +29,7 @@ export function useWorkspaces() {
       return
     }
 
-    if (!isSilent && workspacesCache === null) {
+    if (!isSilent && !workspacesCache.has(cacheKey)) {
       setLoading(true)
     } else {
       setRefreshing(true)
@@ -74,19 +75,21 @@ export function useWorkspaces() {
       project_count: projectCounts[workspace.id] || 0,
     }))
 
-    workspacesCache = enriched
+    workspacesCache.set(cacheKey, enriched)
     setWorkspaces(enriched)
     setLoading(false)
     setRefreshing(false)
-  }, [userId])
+  }, [cacheKey, userId])
 
   useEffect(() => {
-    if (workspacesCache !== null) {
-      setWorkspaces(workspacesCache)
+    if (workspacesCache.has(cacheKey)) {
+      setWorkspaces(workspacesCache.get(cacheKey))
       setLoading(false)
+    } else {
+      setWorkspaces([])
     }
     fetchWorkspaces()
-  }, [fetchWorkspaces])
+  }, [cacheKey, fetchWorkspaces])
 
   const createWorkspace = async (input) => {
     const name = typeof input === 'string' ? input : input?.name

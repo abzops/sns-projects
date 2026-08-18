@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const phasesCache = new Map(); // projectId -> phases[]
 
 export function usePhases(projectId) {
-  const [phases, setPhases] = useState(() => phasesCache.get(projectId) || []);
-  const [loading, setLoading] = useState(() => !phasesCache.has(projectId));
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const cacheKey = `${userId || 'anonymous'}:${projectId || 'none'}`;
+  const [phases, setPhases] = useState(() => phasesCache.get(cacheKey) || []);
+  const [loading, setLoading] = useState(() => !phasesCache.has(cacheKey));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchPhases = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!projectId) {
+    if (!projectId || !userId) {
       setPhases([]);
       setLoading(false);
       setRefreshing(false);
@@ -19,7 +23,7 @@ export function usePhases(projectId) {
     }
 
     try {
-      if (!isSilent && !phasesCache.has(projectId)) {
+      if (!isSilent && !phasesCache.has(cacheKey)) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -85,7 +89,7 @@ export function usePhases(projectId) {
         };
       });
 
-      phasesCache.set(projectId, enriched);
+      phasesCache.set(cacheKey, enriched);
       setPhases(enriched);
     } catch (err) {
       console.error('Error fetching phases:', err);
@@ -94,15 +98,17 @@ export function usePhases(projectId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [projectId]);
+  }, [cacheKey, projectId, userId]);
 
   useEffect(() => {
-    if (phasesCache.has(projectId)) {
-      setPhases(phasesCache.get(projectId));
+    if (phasesCache.has(cacheKey)) {
+      setPhases(phasesCache.get(cacheKey));
       setLoading(false);
+    } else {
+      setPhases([]);
     }
     fetchPhases();
-  }, [fetchPhases, projectId]);
+  }, [cacheKey, fetchPhases]);
 
   const createPhase = async ({ name, description, start_date, end_date }) => {
     if (!projectId || !name?.trim()) return { data: null, error: new Error('Project ID and Phase name are required') };

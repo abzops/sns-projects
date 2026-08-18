@@ -7,8 +7,9 @@ const taskStatusesCache = new Map(); // projectId -> statuses[]
 export function useTaskStatuses(projectId) {
   const { user } = useAuth()
   const userId = user?.id || null
-  const [statuses, setStatuses] = useState(() => taskStatusesCache.get(projectId) || [])
-  const [loading, setLoading] = useState(() => !taskStatusesCache.has(projectId))
+  const cacheKey = `${userId || 'anonymous'}:${projectId || 'none'}`
+  const [statuses, setStatuses] = useState(() => taskStatusesCache.get(cacheKey) || [])
+  const [loading, setLoading] = useState(() => !taskStatusesCache.has(cacheKey))
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
@@ -21,7 +22,7 @@ export function useTaskStatuses(projectId) {
       return
     }
 
-    if (!isSilent && !taskStatusesCache.has(projectId)) {
+    if (!isSilent && !taskStatusesCache.has(cacheKey)) {
       setLoading(true)
     } else {
       setRefreshing(true)
@@ -36,20 +37,22 @@ export function useTaskStatuses(projectId) {
       .order('position', { ascending: true })
 
     const list = data || [];
-    taskStatusesCache.set(projectId, list);
+    taskStatusesCache.set(cacheKey, list);
     setStatuses(list)
     setError(fetchError)
     setLoading(false)
     setRefreshing(false)
-  }, [projectId, userId])
+  }, [cacheKey, projectId, userId])
 
   useEffect(() => {
-    if (taskStatusesCache.has(projectId)) {
-      setStatuses(taskStatusesCache.get(projectId))
+    if (taskStatusesCache.has(cacheKey)) {
+      setStatuses(taskStatusesCache.get(cacheKey))
       setLoading(false)
+    } else {
+      setStatuses([])
     }
     fetchStatuses()
-  }, [fetchStatuses, projectId])
+  }, [cacheKey, fetchStatuses])
 
   return { statuses, loading, refreshing, error, refetch: fetchStatuses }
 }

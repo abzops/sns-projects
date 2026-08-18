@@ -58,7 +58,7 @@ export default function ProcessDefinitionPage() {
         <EmptyState
           icon={FileSearch}
           title="Unable to load process definition"
-          description={error || 'The requested exact version is unavailable.'}
+          description="The requested process definition is unavailable or you do not have access."
           actionLabel="Retry"
           onAction={refetch}
         />

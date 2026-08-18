@@ -33,16 +33,16 @@ import styles from './ProcessesPage.module.css';
 export default function ProcessesPage() {
   const { workspaceId } = useParams();
   const { showToast } = useToast();
+  const userContext = useUserContext(workspaceId);
   const {
     processes = [],
     loading,
     error,
     publishVersion,
-  } = useDefinedProcesses(workspaceId);
-
-  const userContext = useUserContext(workspaceId);
+  } = useDefinedProcesses(workspaceId, userContext.authorizationScopeKey);
   const canCreateProcess = canManageProcessDraft(null, userContext);
-  const hasStartableProcess = processes.some((process) => Boolean(process.published_version));
+  const canStartProcesses = !userContext.isReadOnly;
+  const hasStartableProcess = canStartProcesses && processes.some((process) => Boolean(process.published_version));
 
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState(null);
@@ -84,7 +84,7 @@ export default function ProcessesPage() {
                 <span>New Process</span>
               </Link>
             )}
-            <button
+            {canStartProcesses && <button
               type="button"
               className={styles.startBtn}
               onClick={() => handleStartProcess(null)}
@@ -92,7 +92,7 @@ export default function ProcessesPage() {
             >
               <Play size={16} />
               <span>Start Process</span>
-            </button>
+            </button>}
           </div>
         }
       />
@@ -121,6 +121,7 @@ export default function ProcessesPage() {
             const capabilities = getProcessCardCapabilities(proc, {
               canEditDraft: canManageProcessDraft(proc, userContext),
               canPublishDraft: canPublishProcessDraft(proc, userContext),
+              canStart: canStartProcesses,
             });
 
             return (
@@ -209,13 +210,13 @@ export default function ProcessesPage() {
                         >
                           <Eye size={14} /> {capabilities.hasDraft ? 'View Live Definition' : 'View Definition'}
                         </Link>
-                        <button
+                        {capabilities.canStart && <button
                           type="button"
                           className={styles.primaryActionBtn}
                           onClick={() => handleStartProcess(proc.id)}
                         >
                           <Play size={14} /> Start Process
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   )}

@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const taskListsCache = new Map(); // `${projectId}:${phaseId || 'all'}` -> taskLists[]
 
 export function useTaskLists(projectId, phaseId = null) {
-  const cacheKey = `${projectId}:${phaseId || 'all'}`;
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const cacheKey = `${userId || 'anonymous'}:${projectId || 'none'}:${phaseId || 'all'}`;
   const [taskLists, setTaskLists] = useState(() => taskListsCache.get(cacheKey) || []);
   const [loading, setLoading] = useState(() => !taskListsCache.has(cacheKey));
   const [refreshing, setRefreshing] = useState(false);
@@ -12,7 +15,7 @@ export function useTaskLists(projectId, phaseId = null) {
 
   const fetchTaskLists = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!projectId) {
+    if (!projectId || !userId) {
       setTaskLists([]);
       setLoading(false);
       setRefreshing(false);
@@ -101,7 +104,7 @@ export function useTaskLists(projectId, phaseId = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [projectId, phaseId, cacheKey]);
+  }, [projectId, phaseId, cacheKey, userId]);
 
   useEffect(() => {
     if (taskListsCache.has(cacheKey)) {

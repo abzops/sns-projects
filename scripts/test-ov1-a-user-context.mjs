@@ -25,7 +25,7 @@ assert.match(context, /const canMutateOperationalData =/);
 assert.match(context, /const isReadOnly = !canMutateOperationalData/);
 assert.match(appLayout, /canAdministerWorkspace/);
 assert.match(dashboard, /hasGlobalOperationalVisibility/);
-assert.match(projects, /canAdministerWorkspace \|\| isProjectAdmin/);
+assert.match(projects, /const canCreate = canMutateOperationalData/);
 assert.match(tasks, /canMutateOperationalData/);
 assert.match(processAccess, /canAdministerWorkspace/);
 

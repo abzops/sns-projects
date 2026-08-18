@@ -26,6 +26,7 @@ export function useProcessDefinition(workspaceId, processId, versionId) {
 
     setLoading(true);
     setError(null);
+    setDefinition(null);
 
     try {
       const [processResult, versionResult] = await Promise.all([

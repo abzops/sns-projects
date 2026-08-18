@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const processesCache = new Map(); // workspaceId -> processes[]
 
-export function useDefinedProcesses(workspaceId) {
-  const [processes, setProcesses] = useState(() => (workspaceId ? processesCache.get(workspaceId) || [] : []));
-  const [loading, setLoading] = useState(() => (workspaceId ? !processesCache.has(workspaceId) : false));
+export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'default') {
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
+  const [processes, setProcesses] = useState(() => (workspaceId ? processesCache.get(cacheKey) || [] : []));
+  const [loading, setLoading] = useState(() => (workspaceId ? !processesCache.has(cacheKey) : false));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchProcesses = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId) {
+    if (!workspaceId || !userId || !authorizationScopeKey) {
       setProcesses([]);
       setLoading(false);
       setRefreshing(false);
@@ -19,7 +23,7 @@ export function useDefinedProcesses(workspaceId) {
     }
 
     try {
-      if (!isSilent && !processesCache.has(workspaceId)) {
+      if (!isSilent && !processesCache.has(cacheKey)) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -58,7 +62,7 @@ export function useDefinedProcesses(workspaceId) {
       if (pErr) throw pErr;
 
       if (!procData || procData.length === 0) {
-        processesCache.set(workspaceId, []);
+        processesCache.set(cacheKey, []);
         setProcesses([]);
         setLoading(false);
         setRefreshing(false);
@@ -125,7 +129,7 @@ export function useDefinedProcesses(workspaceId) {
         };
       });
 
-      processesCache.set(workspaceId, enriched);
+      processesCache.set(cacheKey, enriched);
       setProcesses(enriched);
     } catch (err) {
       console.error('[useDefinedProcesses] Error fetching processes:', err);
@@ -134,7 +138,7 @@ export function useDefinedProcesses(workspaceId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [workspaceId]);
+  }, [authorizationScopeKey, cacheKey, workspaceId, userId]);
 
   useEffect(() => {
     fetchProcesses();

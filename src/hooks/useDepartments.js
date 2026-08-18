@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const departmentsCache = new Map(); // workspaceId -> departments[]
 
 export function useDepartments(workspaceId) {
-  const [departments, setDepartments] = useState(() => departmentsCache.get(workspaceId) || []);
-  const [loading, setLoading] = useState(() => !departmentsCache.has(workspaceId));
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}`;
+  const [departments, setDepartments] = useState(() => departmentsCache.get(cacheKey) || []);
+  const [loading, setLoading] = useState(() => !departmentsCache.has(cacheKey));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchDepartments = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId) {
+    if (!workspaceId || !userId) {
       setDepartments([]);
       setLoading(false);
       setRefreshing(false);
@@ -19,7 +23,7 @@ export function useDepartments(workspaceId) {
     }
 
     try {
-      if (!isSilent && !departmentsCache.has(workspaceId)) {
+      if (!isSilent && !departmentsCache.has(cacheKey)) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -85,7 +89,7 @@ export function useDepartments(workspaceId) {
         };
       });
 
-      departmentsCache.set(workspaceId, enriched);
+      departmentsCache.set(cacheKey, enriched);
       setDepartments(enriched);
     } catch (err) {
       console.error('Error fetching departments:', err);
@@ -94,15 +98,17 @@ export function useDepartments(workspaceId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [workspaceId]);
+  }, [cacheKey, workspaceId, userId]);
 
   useEffect(() => {
-    if (departmentsCache.has(workspaceId)) {
-      setDepartments(departmentsCache.get(workspaceId));
+    if (departmentsCache.has(cacheKey)) {
+      setDepartments(departmentsCache.get(cacheKey));
       setLoading(false);
+    } else {
+      setDepartments([]);
     }
     fetchDepartments();
-  }, [fetchDepartments, workspaceId]);
+  }, [cacheKey, fetchDepartments]);
 
   const createDepartment = async ({ code, name, description = '', color = '#FDE215' }) => {
     if (!workspaceId || !code || !name) return null;
@@ -153,7 +159,7 @@ export function useDepartments(workspaceId) {
       if (updateError) throw updateError;
       setDepartments((prev) => {
         const next = prev.map((d) => (d.id === id ? data : d));
-        departmentsCache.set(workspaceId, next);
+        departmentsCache.set(cacheKey, next);
         return next;
       });
       return data;
@@ -173,7 +179,7 @@ export function useDepartments(workspaceId) {
       if (deleteError) throw deleteError;
       setDepartments((prev) => {
         const next = prev.filter((d) => d.id !== id);
-        departmentsCache.set(workspaceId, next);
+        departmentsCache.set(cacheKey, next);
         return next;
       });
     } catch (err) {

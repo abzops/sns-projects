@@ -104,6 +104,9 @@ export function useUserContext(workspaceId) {
     workspaceRole === 'admin' ||
     workspaceRole === 'member';
   const isReadOnly = !canMutateOperationalData;
+  const authorizationScopeKey = loading
+    ? null
+    : `${workspaceRole || 'none'}:${[...systemRoles].sort().join(',') || 'no-system-role'}`;
 
   return {
     user,
@@ -123,6 +126,7 @@ export function useUserContext(workspaceId) {
     canMutateOperationalData,
     isViewer,
     isReadOnly,
+    authorizationScopeKey,
     loading,
     error,
     refetch: fetchContext,

@@ -86,3 +86,32 @@ export function getPlacementProcesses(processInstances = [], placementType, plac
     return false;
   });
 }
+
+// Builds only from rows already returned by RLS. Missing ancestors never cause
+// hidden siblings or guessed containers to be synthesized in the browser.
+export function buildScopedProjectHierarchy(phases = [], taskLists = [], tasks = []) {
+  const listsByPhase = new Map();
+  const tasksByList = new Map();
+  const visiblePhaseIds = new Set(phases.map((phase) => phase.id));
+
+  for (const taskList of taskLists) {
+    if (!visiblePhaseIds.has(taskList.phase_id)) continue;
+    append(listsByPhase, taskList.phase_id, taskList);
+  }
+
+  const visibleTaskListIds = new Set(
+    [...listsByPhase.values()].flat().map((taskList) => taskList.id)
+  );
+  for (const task of tasks) {
+    if (!visibleTaskListIds.has(task.task_list_id)) continue;
+    append(tasksByList, task.task_list_id, task);
+  }
+
+  return phases.map((phase) => ({
+    ...phase,
+    taskLists: (listsByPhase.get(phase.id) || []).map((taskList) => ({
+      ...taskList,
+      tasks: tasksByList.get(taskList.id) || [],
+    })),
+  }));
+}

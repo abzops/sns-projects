@@ -50,7 +50,7 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
   const currentUserRole = currentUserMember?.role || 'viewer';
 
   const isOwner = currentUserRole === 'owner';
-  const isAdmin = currentUserRole === 'admin' || isOwner;
+  const canManageWorkspace = currentUserRole === 'admin' || isOwner;
 
   // Initialize workspace name when data loads
   if (workspace && !workspaceName && !isSubmitting) {
@@ -152,11 +152,11 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                     className={styles.input}
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
-                    disabled={!isAdmin}
+                    disabled={!canManageWorkspace}
                     required
                   />
                 </div>
-                {isAdmin && (
+                {canManageWorkspace && (
                   <button
                     type="submit"
                     className={styles.primaryBtn}
@@ -193,7 +193,7 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                 <p>Manage personnel who have access to this workspace</p>
               </div>
               <div className={styles.cardHeaderActions}>
-                {isAdmin && (
+                {canManageWorkspace && (
                   <Link
                     to={`/workspace/${workspaceId}/admin/users`}
                     className={styles.primaryBtn}
@@ -256,7 +256,7 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
                       <div className={styles.memberActions}>
                         <RoleBadge role={member.role} size="sm" />
 
-                        {isAdmin && member.role !== 'owner' && (
+                        {canManageWorkspace && member.role !== 'owner' && (
                           <button
                             className={styles.iconBtn}
                             onClick={() => handleRemoveMember(member.id, displayName)}

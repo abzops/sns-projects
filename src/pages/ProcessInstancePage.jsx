@@ -23,6 +23,7 @@ import { CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { useProcessInstance } from '../hooks/useProcessInstance';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserContext } from '../hooks/useUserContext';
 import { useToast } from '../components/Toast';
 import { getRaciRoleLabel } from '../utils/raciPresentation';
 import styles from './ProcessInstancePage.module.css';
@@ -74,6 +75,7 @@ export default function ProcessInstancePage() {
   const { workspaceId, taskListId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isReadOnly, authorizationScopeKey } = useUserContext(workspaceId);
   const { showToast } = useToast();
 
   const {
@@ -87,7 +89,7 @@ export default function ProcessInstancePage() {
     submitConsultation,
     approveTask,
     rejectTask,
-  } = useProcessInstance(taskListId);
+  } = useProcessInstance(taskListId, authorizationScopeKey);
 
   // Selected task for detail panel
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -111,6 +113,7 @@ export default function ProcessInstancePage() {
 
   // Handler: Complete My Part
   const handleCompletePart = async (task, note = null) => {
+    if (isReadOnly) return;
     setActionLoading(true);
     try {
       const res = await completeResponsiblePart(task.id, note);
@@ -133,6 +136,7 @@ export default function ProcessInstancePage() {
   // Handler: Add Evidence Submit
   const handleEvidenceSubmit = async (e) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!evidenceModalTask) return;
 
     setActionLoading(true);
@@ -159,6 +163,7 @@ export default function ProcessInstancePage() {
   // Handler: Consultation Submit
   const handleConsultSubmit = async (e) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!consultModalTask || !consultText.trim()) return;
 
     setActionLoading(true);
@@ -178,6 +183,7 @@ export default function ProcessInstancePage() {
 
   // Handler: Approve Task
   const handleApprove = async (task) => {
+    if (isReadOnly) return;
     setActionLoading(true);
     try {
       const res = await approveTask(task.id);
@@ -194,6 +200,7 @@ export default function ProcessInstancePage() {
   // Handler: Reject Task Submit
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!rejectModalTask || !rejectReason.trim() || !rejectDueDate) {
       showToast('Rejection reason and new due date are required.', 'error');
       return;
@@ -229,7 +236,7 @@ export default function ProcessInstancePage() {
         <EmptyState
           icon={AlertCircle}
           title="Process Instance Not Found"
-          description={error || 'The requested defined process instance could not be loaded.'}
+          description="The requested process instance is unavailable or you do not have access."
           actionLabel="Back to Projects"
           onAction={() => navigate(`/workspace/${workspaceId}/projects`)}
         />
@@ -470,7 +477,7 @@ export default function ProcessInstancePage() {
                   </div>
 
                   {/* Inline Execution Actions (if applicable to current user) */}
-                  {!isCompleted && (
+                  {!isCompleted && !isReadOnly && (
                     <div className={styles.actionsBar} onClick={(e) => e.stopPropagation()}>
                       {/* Responsible Actions */}
                       {isActionable && userIsResponsible && (
@@ -547,6 +554,7 @@ export default function ProcessInstancePage() {
           statuses={[]}
           members={[]}
           departments={[]}
+          readOnly={isReadOnly}
         />
       )}
 

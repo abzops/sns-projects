@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDepartments } from '../hooks/useDepartments';
+import { useUserContext } from '../hooks/useUserContext';
 import { supabase } from '../lib/supabase';
 import PageHeader from '../components/PageHeader';
 import TaskCard from '../components/TaskCard';
@@ -28,11 +29,16 @@ export default function MyWorkPage() {
   const { user } = useAuth();
   const userId = user?.id || null;
   const { departments = [] } = useDepartments(workspaceId);
+  const { departmentMemberships = [], isReadOnly } = useUserContext(workspaceId);
+  const departmentIds = useMemo(
+    () => departmentMemberships.map((membership) => membership.departments?.id).filter(Boolean),
+    [departmentMemberships]
+  );
 
   const cacheKey = `${workspaceId}:${userId || ''}`;
   const cachedData = myWorkCache.get(cacheKey) || null;
 
-  const [activeTab, setActiveTab] = useState('R'); // 'R' | 'A' | 'C' | 'I' | 'all'
+  const [activeTab, setActiveTab] = useState('all'); // RACI role | 'S' (Subtasks) | 'all'
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'cards'
   const [search, setSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -64,9 +70,8 @@ export default function MyWorkPage() {
       setError(null);
 
       try {
-        // Step 1: Concurrently fetch user's RACI assignments AND direct assignee tasks
-        const [raciRes, directRes] = await Promise.all([
-          supabase
+        // Step 1: bulk-fetch every direct involvement path; RLS remains authoritative.
+        let raciQuery = supabase
             .from('task_raci_assignments')
             .select(`
               id,
@@ -113,8 +118,13 @@ export default function MyWorkPage() {
                   avatar_url
                 )
               )
-            `)
-            .eq('user_id', userId),
+            `);
+        raciQuery = departmentIds.length > 0
+          ? raciQuery.or(`user_id.eq.${userId},department_id.in.(${departmentIds.join(',')})`)
+          : raciQuery.eq('user_id', userId);
+
+        const [raciRes, directRes, subtaskAssignmentRes] = await Promise.all([
+          raciQuery,
 
           supabase
             .from('tasks')
@@ -158,10 +168,42 @@ export default function MyWorkPage() {
               )
             `)
             .eq('assignee_id', userId),
+
+          supabase
+            .from('subtasks')
+            .select(`
+              id,
+              task_id,
+              title,
+              status,
+              assignee_id,
+              due_date,
+              tasks:task_id (
+                id,
+                project_id,
+                phase_id,
+                task_list_id,
+                title,
+                description,
+                status_id,
+                priority,
+                assignee_id,
+                due_date,
+                position,
+                created_at,
+                projects:project_id (id, name, color, workspace_id),
+                phases:phases!fk_tasks_phase (id, name),
+                task_lists:task_lists!fk_tasks_task_list (id, name),
+                task_statuses:status_id (id, name, color, system_code),
+                assignee:assignee_id (id, full_name, avatar_url)
+              )
+            `)
+            .eq('assignee_id', userId),
         ]);
 
         if (raciRes.error) throw raciRes.error;
         if (directRes.error) throw directRes.error;
+        if (subtaskAssignmentRes.error) throw subtaskAssignmentRes.error;
 
         // Combine unique tasks for this workspace
         const taskMap = new Map();
@@ -193,6 +235,24 @@ export default function MyWorkPage() {
           if (userRolesByTaskId.get(t.id).size === 0) {
             userRolesByTaskId.get(t.id).add('R');
           }
+        }
+
+        // A Subtask assignment is distinct from a Child Task. Surface its parent Task
+        // once and retain the assigned Subtask records for clear My Work context.
+        const mySubtasksByTaskId = new Map();
+        for (const item of subtaskAssignmentRes.data || []) {
+          const t = item.tasks;
+          if (!t || t.projects?.workspace_id !== workspaceId) continue;
+          if (!taskMap.has(t.id)) taskMap.set(t.id, t);
+          if (!userRolesByTaskId.has(t.id)) userRolesByTaskId.set(t.id, new Set());
+          userRolesByTaskId.get(t.id).add('S');
+          if (!mySubtasksByTaskId.has(t.id)) mySubtasksByTaskId.set(t.id, []);
+          mySubtasksByTaskId.get(t.id).push({
+            id: item.id,
+            title: item.title,
+            status: item.status,
+            due_date: item.due_date,
+          });
         }
 
         const allTaskIds = Array.from(taskMap.keys());
@@ -266,6 +326,7 @@ export default function MyWorkPage() {
           return {
             ...t,
             myRoles,
+            myAssignedSubtasks: mySubtasksByTaskId.get(t.id) || [],
             raci: {
               all: raciList,
               responsible,
@@ -289,7 +350,7 @@ export default function MyWorkPage() {
         setRefreshing(false);
       }
     },
-    [cacheKey, userId, workspaceId]
+    [cacheKey, departmentIds, userId, workspaceId]
   );
 
   useEffect(() => {
@@ -309,6 +370,7 @@ export default function MyWorkPage() {
     const aTasks = tasks.filter((t) => t.myRoles?.includes('A'));
     const cTasks = tasks.filter((t) => t.myRoles?.includes('C'));
     const iTasks = tasks.filter((t) => t.myRoles?.includes('I'));
+    const subtaskTasks = tasks.filter((t) => t.myRoles?.includes('S'));
 
     const overdueCount = tasks.filter((t) => {
       if (!t.due_date) return false;
@@ -329,6 +391,7 @@ export default function MyWorkPage() {
       A: aTasks.length,
       C: cTasks.length,
       I: iTasks.length,
+      S: subtaskTasks.length,
       all: tasks.length,
       overdue: overdueCount,
       blocked: blockedCount,
@@ -376,6 +439,7 @@ export default function MyWorkPage() {
   }, [activeTab, filterOnlyBlocked, filterOnlyOverdue, filterPriority, search, tasks]);
 
   const handleTaskSave = async (updatedTask) => {
+    if (isReadOnly) return;
     try {
       const { error: saveErr } = await supabase
         .from('tasks')
@@ -399,6 +463,7 @@ export default function MyWorkPage() {
   };
 
   const handleTaskDelete = async (taskId) => {
+    if (isReadOnly) return;
     try {
       const { error: delErr } = await supabase.from('tasks').delete().eq('id', taskId);
       if (delErr) throw delErr;
@@ -523,6 +588,18 @@ export default function MyWorkPage() {
 
           <button
             type="button"
+            className={`${styles.tabBtn} ${activeTab === 'S' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('S')}
+          >
+            <span className={styles.tabBadgeAll}>✓</span>
+            <div className={styles.tabLabelWrap}>
+              <strong>My Subtasks</strong>
+              <small>Assigned Subtasks ({tabCounts.S})</small>
+            </div>
+          </button>
+
+          <button
+            type="button"
             className={`${styles.tabBtn} ${activeTab === 'all' ? styles.tabActive : ''}`}
             onClick={() => setActiveTab('all')}
           >
@@ -618,7 +695,7 @@ export default function MyWorkPage() {
           description={
             search || filterOnlyOverdue || filterOnlyBlocked || filterPriority
               ? 'Try adjusting your filters or search terms.'
-              : 'Tasks where you are an Owner, Assignee, Consulted, or Informed participant will appear here automatically.'
+              : 'Tasks and Subtasks where you are an Owner, Assignee, Consulted, Informed, or direct participant will appear here automatically.'
           }
         />
       ) : viewMode === 'list' ? (
@@ -678,6 +755,7 @@ export default function MyWorkPage() {
           statuses={[]}
           members={[]}
           departments={departments}
+          readOnly={isReadOnly}
         />
       )}
     </div>

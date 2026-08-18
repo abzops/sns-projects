@@ -35,7 +35,7 @@ export default function DepartmentWorkspacePage() {
 
   const currentDept = departments.find((d) => d.id === departmentId);
 
-  const { canAdministerWorkspace } = useUserContext(workspaceId);
+  const { canAdministerWorkspace, isReadOnly } = useUserContext(workspaceId);
   const canAdmin = canAdministerWorkspace;
 
   // View state
@@ -542,6 +542,7 @@ export default function DepartmentWorkspacePage() {
           statuses={[]}
           members={deptMembers}
           departments={departments}
+          readOnly={isReadOnly}
         />
       )}
     </div>

@@ -70,24 +70,26 @@ export default function DashboardPage() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
 
-  const { projects = [], loading: projectsLoading } = useProjects(workspaceId);
+  const userContext = useUserContext(workspaceId);
+  const {
+    user,
+    isOwner,
+    isCEO,
+    isCTO,
+    isSystemAdmin,
+    hasGlobalOperationalVisibility,
+    canMutateOperationalData,
+    isReadOnly,
+    workspaceRole,
+    authorizationScopeKey,
+  } = userContext;
+  const { projects = [], loading: projectsLoading } = useProjects(workspaceId, authorizationScopeKey);
   const { departments = [] } = useDepartments(workspaceId);
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
 
-  const userContext = useUserContext(workspaceId);
-  const {
-    isOwner,
-    isCEO,
-    isCTO,
-    isProjectAdmin,
-    isSystemAdmin,
-    canAdministerWorkspace,
-    hasGlobalOperationalVisibility,
-    workspaceRole,
-  } = userContext;
-
-  const cachedTasks = dashboardTasksCache.get(workspaceId) || null;
+  const dashboardCacheKey = `${user?.id || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
+  const cachedTasks = dashboardTasksCache.get(dashboardCacheKey) || null;
   const [allTasks, setAllTasks] = useState(() => cachedTasks || []);
   const [tasksLoading, setTasksLoading] = useState(() => !cachedTasks);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -104,7 +106,7 @@ export default function DashboardPage() {
       }
 
       try {
-        if (!dashboardTasksCache.has(workspaceId)) {
+        if (!dashboardTasksCache.has(dashboardCacheKey)) {
           setTasksLoading(true);
         }
         const projectIds = projects.map((p) => p.id);
@@ -184,7 +186,7 @@ export default function DashboardPage() {
           };
         });
 
-        dashboardTasksCache.set(workspaceId, enriched);
+        dashboardTasksCache.set(dashboardCacheKey, enriched);
         setAllTasks(enriched);
       } catch (err) {
         console.error('Error loading dashboard tasks:', err);
@@ -194,7 +196,7 @@ export default function DashboardPage() {
     }
 
     loadWorkspaceTasks();
-  }, [workspaceId, projects, projectsLoading]);
+  }, [dashboardCacheKey, workspaceId, projects, projectsLoading]);
 
   // Aggregate Metrics
   const metrics = useMemo(() => {
@@ -307,10 +309,10 @@ export default function DashboardPage() {
     personaTitle = 'System & Project Administration';
     personaRole = 'system_admin';
   } else if (isOwner) {
-    personaTitle = 'Workspace Operations';
+    personaTitle = 'My Operational Scope';
     personaRole = 'owner';
-  } else if (!hasGlobalOperationalVisibility && !canAdministerWorkspace) {
-    personaTitle = 'Team Operations';
+  } else if (!hasGlobalOperationalVisibility) {
+    personaTitle = 'My Operational Scope';
     personaRole = workspaceRole || 'member';
   }
 
@@ -329,7 +331,7 @@ export default function DashboardPage() {
             >
               <CheckSquare size={16} /> My Work
             </Link>
-            {(canAdministerWorkspace || isProjectAdmin) && (
+            {canMutateOperationalData && (
               <Link
                 to={`/workspace/${workspaceId}/projects`}
                 className={styles.newProjectBtn}
@@ -349,7 +351,7 @@ export default function DashboardPage() {
           <MetricCard
             title="Active Projects"
             value={metrics.activeProjectsCount}
-            subtitle={`Across ${departments.length} departments`}
+            subtitle={hasGlobalOperationalVisibility ? `Across ${departments.length} departments` : 'Within your visible scope'}
             icon={FolderKanban}
             variant="accent"
             onClick={() => navigate(`/workspace/${workspaceId}/projects`)}
@@ -399,7 +401,7 @@ export default function DashboardPage() {
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitleRow}>
               <Activity size={18} className={styles.sectionIcon} />
-              <h2 className={styles.sectionTitle}>Project Portfolio</h2>
+              <h2 className={styles.sectionTitle}>{hasGlobalOperationalVisibility ? 'Project Portfolio' : 'Visible Projects'}</h2>
               <span className={styles.countBadge}>{projects.length}</span>
             </div>
             <span className={styles.healthLabelNote}>Calculated UI Project Health</span>
@@ -410,11 +412,17 @@ export default function DashboardPage() {
           ) : projects.length === 0 ? (
             <div className={styles.emptyCard}>
               <FolderKanban size={36} />
-              <h3>No projects created yet</h3>
-              <p>Create your first project to start tracking phases, ownership, assignments, and Kanban boards.</p>
-              <Link to={`/workspace/${workspaceId}/projects`} className={styles.emptyActionBtn}>
-                <Plus size={16} /> Create Project
-              </Link>
+              <h3>{hasGlobalOperationalVisibility ? 'No projects created yet' : 'No projects in your operational scope'}</h3>
+              <p>
+                {hasGlobalOperationalVisibility
+                  ? 'Create a project to start tracking phases, ownership, assignments, and Kanban boards.'
+                  : 'Projects you own or participate in will appear here automatically.'}
+              </p>
+              {canMutateOperationalData && (
+                <Link to={`/workspace/${workspaceId}/projects`} className={styles.emptyActionBtn}>
+                  <Plus size={16} /> Create Project
+                </Link>
+              )}
             </div>
           ) : (
             <div className={styles.tableWrapper}>
@@ -563,6 +571,7 @@ export default function DashboardPage() {
           statuses={[]}
           members={[]}
           departments={departments}
+          readOnly={isReadOnly}
         />
       )}
     </div>

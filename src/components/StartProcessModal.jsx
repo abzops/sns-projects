@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../hooks/useProjects';
 import { usePhases } from '../hooks/usePhases';
 import { useToast } from './Toast';
+import { useUserContext } from '../hooks/useUserContext';
 import styles from './StartProcessModal.module.css';
 
 export default function StartProcessModal({
@@ -19,6 +20,7 @@ export default function StartProcessModal({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { authorizationScopeKey } = useUserContext(workspaceId);
 
   const [selectedProcessId, setSelectedProcessId] = useState(initialProcessId || '');
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -32,7 +34,7 @@ export default function StartProcessModal({
   const [isUserRootResponsible, setIsUserRootResponsible] = useState(false);
 
   // Fetch projects in workspace
-  const { projects = [] } = useProjects(workspaceId);
+  const { projects = [] } = useProjects(workspaceId, authorizationScopeKey);
 
   // Fetch phases for selected project
   const { phases = [] } = usePhases(selectedProjectId);

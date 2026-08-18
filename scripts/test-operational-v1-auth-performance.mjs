@@ -143,7 +143,7 @@ assert.match(taskFetchDependencies, /userId/);
 assert.doesNotMatch(taskFetchDependencies, /\buser\b|statuses|members|tasks\.length/);
 assert.match(tasksHook, /await Promise\.all\(\[/);
 assert.match(tasksHook, /taskSourceRef/);
-assert.match(myWork, /\[cacheKey, userId, workspaceId\]/);
+assert.match(myWork, /\[cacheKey, departmentIds, userId, workspaceId\]/);
 assert.doesNotMatch(myWork, /\[cacheKey, user, workspaceId\]/);
 
 console.log('Operational V1 auth/performance regression: PASS (19 behavioral and source contracts)');
