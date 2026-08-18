@@ -94,6 +94,7 @@ export function useUserContext(workspaceId) {
   const isProjectAdmin = systemRoles.includes('project_admin');
   const isSystemAdmin = systemRoles.includes('system_admin');
   const isAdmin = isOwner || isWorkspaceAdmin || isSystemAdmin;
+  const isViewer = workspaceRole === 'viewer';
 
   return {
     user,
@@ -108,6 +109,7 @@ export function useUserContext(workspaceId) {
     isCTO,
     isProjectAdmin,
     isSystemAdmin,
+    isViewer,
     loading,
     error,
     refetch: fetchContext,

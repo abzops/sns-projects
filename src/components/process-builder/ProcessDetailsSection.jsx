@@ -19,6 +19,41 @@ export default function ProcessDetailsSection({
     onChange({ [field]: value });
   };
 
+  const department = departments.find((item) => item.id === processMeta.department_id) || null;
+  const owner = activeMembers.find((member) => (
+    (member.user_id || member.id) === processMeta.process_owner_id
+  )) || null;
+  const ownerName = owner?.full_name || owner?.profiles?.full_name || owner?.email || 'Unassigned';
+
+  if (readonly) {
+    return (
+      <div className={`${styles.card} ${styles.readonlyCard}`}>
+        <div className={styles.readonlyGrid}>
+          <div className={styles.readonlyField}>
+            <span className={styles.label}><FileText size={14} className={styles.icon} /> Process Name</span>
+            <strong title={processMeta.name}>{processMeta.name || 'Untitled process'}</strong>
+          </div>
+          <div className={styles.readonlyField}>
+            <span className={styles.label}><Hash size={14} className={styles.icon} /> Process Code</span>
+            <strong className={styles.codeValue}>{processMeta.code || 'Not provided'}</strong>
+          </div>
+          <div className={styles.readonlyField}>
+            <span className={styles.label}><Building2 size={14} className={styles.icon} /> Owning Department</span>
+            <strong title={department?.name}>{department ? `${department.name} (${department.code})` : 'Not available'}</strong>
+          </div>
+          <div className={styles.readonlyField}>
+            <span className={styles.label}><UserCheck size={14} className={styles.icon} /> Process Owner</span>
+            <strong title={ownerName}>{ownerName}</strong>
+          </div>
+        </div>
+        <div className={styles.readonlyDescription}>
+          <span className={styles.label}><AlignLeft size={14} className={styles.icon} /> Description</span>
+          <p>{processMeta.description || 'No process description provided.'}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.card}>
       <div className={styles.grid}>

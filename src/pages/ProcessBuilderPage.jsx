@@ -17,6 +17,7 @@ import { useMembers } from '../hooks/useMembers';
 import { useUserContext } from '../hooks/useUserContext';
 import { useProcessDraft } from '../hooks/useProcessDraft';
 import { validateProcessDraft } from '../utils/processDraftValidation';
+import { canManageProcessDraft } from '../utils/processVersionAccess';
 import ProcessDetailsSection from '../components/process-builder/ProcessDetailsSection';
 import RaciMatrix from '../components/process-builder/RaciMatrix';
 import ProcessValidationPanel from '../components/process-builder/ProcessValidationPanel';
@@ -30,7 +31,7 @@ export default function ProcessBuilderPage() {
 
   const { departments = [] } = useDepartments(workspaceId);
   const { members = [] } = useMembers(workspaceId);
-  const { isOwner, isAdmin, isProjectAdmin, isSystemAdmin, isViewer } = useUserContext(workspaceId);
+  const userContext = useUserContext(workspaceId);
 
   const {
     loading,
@@ -87,7 +88,7 @@ export default function ProcessBuilderPage() {
     }
   };
 
-  if (loading) {
+  if (loading || userContext.loading) {
     return (
       <div className={styles.loadingContainer}>
         <Spinner size="lg" />
@@ -96,7 +97,13 @@ export default function ProcessBuilderPage() {
     );
   }
 
-  const isReadOnly = isViewer;
+  const isReadOnly = !canManageProcessDraft(
+    processId ? {
+      department_id: processMeta.department_id,
+      process_owner_id: processMeta.process_owner_id,
+    } : null,
+    userContext
+  );
 
   return (
     <div className={styles.page}>

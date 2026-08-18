@@ -4,6 +4,12 @@
   gap: 24px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .newProcessBtn {
   display: inline-flex;
   align-items: center;
@@ -202,13 +208,98 @@
   font-weight: 600;
 }
 
+.versionSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.versionRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.versionStateIcon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.liveIcon {
+  background: rgba(96, 211, 148, 0.12);
+  color: var(--good);
+}
+
+.draftIcon {
+  background: rgba(255, 176, 32, 0.12);
+  color: #ffb020;
+}
+
+.versionText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.versionText strong,
+.versionText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.versionText strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.versionText span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
 .cardFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: auto;
   padding-top: 8px;
 }
 
+.versionActionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actionGroupLabel {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.actionRow {
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
 .primaryActionBtn {
-  width: 100%;
+  flex: 1 1 130px;
   padding: 10px 14px;
   background: var(--yellow);
   color: #000;
@@ -230,7 +321,7 @@
 }
 
 .publishBtn {
-  width: 100%;
+  flex: 1 1 130px;
   padding: 10px 14px;
   background: rgba(96, 211, 148, 0.15);
   border: 1px solid rgba(96, 211, 148, 0.4);
@@ -255,15 +346,9 @@
   cursor: not-allowed;
 }
 
-.draftActionsGroup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.editDraftBtn {
-  flex: 1;
+.editDraftBtn,
+.viewDefinitionBtn {
+  flex: 1 1 120px;
   padding: 10px 14px;
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -286,6 +371,24 @@
   color: var(--yellow);
 }
 
+.viewDefinitionBtn {
+  color: var(--yellow);
+  border-color: rgba(253, 226, 21, 0.32);
+  background: rgba(253, 226, 21, 0.06);
+}
+
+.viewDefinitionBtn:hover,
+.viewDefinitionBtn:focus-visible,
+.editDraftBtn:focus-visible,
+.primaryActionBtn:focus-visible,
+.publishBtn:focus-visible,
+.newProcessBtn:focus-visible,
+.startBtn:focus-visible {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(253, 226, 21, 0.12);
+  outline: none;
+}
+
 .unavailLabel {
   display: block;
   text-align: center;
@@ -295,3 +398,25 @@
   padding: 8px 0;
 }
 
+@media (max-width: 620px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .headerActions,
+  .statsRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .headerActions > a,
+  .headerActions > button,
+  .actionRow > a,
+  .actionRow > button {
+    width: 100%;
+  }
+
+  .cardHeader {
+    align-items: flex-start;
+  }
+}

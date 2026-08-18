@@ -4,16 +4,15 @@ import {
   Workflow,
   Plus,
   Play,
-  CheckCircle2,
   Clock,
   Sparkles,
-  Building,
-  User,
   Layers,
-  ArrowRight,
   ShieldCheck,
   Edit3,
   AlertCircle,
+  Eye,
+  Radio,
+  FileClock,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import StartProcessModal from '../components/StartProcessModal';
@@ -23,6 +22,12 @@ import Avatar from '../components/Avatar';
 import { useDefinedProcesses } from '../hooks/useDefinedProcesses';
 import { useUserContext } from '../hooks/useUserContext';
 import { useToast } from '../components/Toast';
+import {
+  canManageProcessDraft,
+  canPublishProcessDraft,
+  getProcessCardCapabilities,
+  getProcessDefinitionPath,
+} from '../utils/processVersionAccess';
 import styles from './ProcessesPage.module.css';
 
 export default function ProcessesPage() {
@@ -31,13 +36,13 @@ export default function ProcessesPage() {
   const {
     processes = [],
     loading,
-    refreshing,
     error,
     publishVersion,
   } = useDefinedProcesses(workspaceId);
 
-  const { isOwner, isAdmin, isProjectAdmin, isSystemAdmin } = useUserContext(workspaceId);
-  const canPublish = isOwner || isAdmin || isProjectAdmin || isSystemAdmin;
+  const userContext = useUserContext(workspaceId);
+  const canCreateProcess = canManageProcessDraft(null, userContext);
+  const hasStartableProcess = processes.some((process) => Boolean(process.published_version));
 
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState(null);
@@ -69,19 +74,21 @@ export default function ProcessesPage() {
         subtitle="Standardized, repeatable business workflows with multi-step RACI governance"
         badge={processes.length > 0 ? `${processes.length} Defined` : null}
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Link
-              to={`/workspace/${workspaceId}/processes/new`}
-              className={styles.newProcessBtn}
-            >
-              <Plus size={16} />
-              <span>New Process</span>
-            </Link>
+          <div className={styles.headerActions}>
+            {canCreateProcess && (
+              <Link
+                to={`/workspace/${workspaceId}/processes/new`}
+                className={styles.newProcessBtn}
+              >
+                <Plus size={16} />
+                <span>New Process</span>
+              </Link>
+            )}
             <button
               type="button"
               className={styles.startBtn}
               onClick={() => handleStartProcess(null)}
-              disabled={processes.length === 0}
+              disabled={!hasStartableProcess}
             >
               <Play size={16} />
               <span>Start Process</span>
@@ -111,6 +118,10 @@ export default function ProcessesPage() {
             const publishedVer = proc.published_version;
             const draftVer = proc.draft_version;
             const ownerName = proc.profiles?.full_name || 'Unassigned';
+            const capabilities = getProcessCardCapabilities(proc, {
+              canEditDraft: canManageProcessDraft(proc, userContext),
+              canPublishDraft: canPublishProcessDraft(proc, userContext),
+            });
 
             return (
               <div key={proc.id} className={`${styles.card} ${isDemo ? styles.demoCard : ''}`}>
@@ -146,14 +157,35 @@ export default function ProcessesPage() {
                 <div className={styles.statsRow}>
                   <div className={styles.statItem}>
                     <Layers size={14} className={styles.statIcon} />
-                    <span>{proc.step_count} {proc.step_count === 1 ? 'Step' : 'Steps'}</span>
+                    <span>{proc.versions.length} {proc.versions.length === 1 ? 'Version' : 'Versions'}</span>
                   </div>
                   <div className={styles.statItem}>
                     <Clock size={14} className={styles.statIcon} />
                     <span>
-                      {publishedVer ? `v${publishedVer.version_number} (Live)` : draftVer ? 'Draft Only' : 'No Version'}
+                      {publishedVer && draftVer ? 'Live + Draft' : publishedVer ? 'Live' : draftVer ? 'Draft Only' : 'No Version'}
                     </span>
                   </div>
+                </div>
+
+                <div className={styles.versionSummary}>
+                  {publishedVer && (
+                    <div className={styles.versionRow}>
+                      <span className={`${styles.versionStateIcon} ${styles.liveIcon}`}><Radio size={13} /></span>
+                      <div className={styles.versionText}>
+                        <strong>Live v{publishedVer.version_number}</strong>
+                        <span>{publishedVer.step_count} {publishedVer.step_count === 1 ? 'step' : 'steps'} · Published snapshot</span>
+                      </div>
+                    </div>
+                  )}
+                  {draftVer && (
+                    <div className={styles.versionRow}>
+                      <span className={`${styles.versionStateIcon} ${styles.draftIcon}`}><FileClock size={13} /></span>
+                      <div className={styles.versionText}>
+                        <strong>Draft v{draftVer.version_number}</strong>
+                        <span>{draftVer.step_count} {draftVer.step_count === 1 ? 'step' : 'steps'} · Work in progress</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Owner Info */}
@@ -167,37 +199,62 @@ export default function ProcessesPage() {
 
                 {/* Card Actions Footer */}
                 <div className={styles.cardFooter}>
-                  {publishedVer ? (
-                    <button
-                      type="button"
-                      className={styles.primaryActionBtn}
-                      onClick={() => handleStartProcess(proc.id)}
-                    >
-                      <Play size={14} /> Start Process
-                    </button>
-                  ) : draftVer ? (
-                    <div className={styles.draftActionsGroup}>
-                      <Link
-                        to={`/workspace/${workspaceId}/processes/${proc.id}/builder`}
-                        className={styles.editDraftBtn}
-                      >
-                        <Edit3 size={14} /> Edit Draft
-                      </Link>
-                      {canPublish && (
+                  {capabilities.hasPublished && (
+                    <div className={styles.versionActionGroup}>
+                      <span className={styles.actionGroupLabel}>Live v{publishedVer.version_number}</span>
+                      <div className={styles.actionRow}>
+                        <Link
+                          to={getProcessDefinitionPath(workspaceId, proc.id, publishedVer.id)}
+                          className={styles.viewDefinitionBtn}
+                        >
+                          <Eye size={14} /> {capabilities.hasDraft ? 'View Live Definition' : 'View Definition'}
+                        </Link>
                         <button
                           type="button"
-                          className={styles.publishBtn}
-                          onClick={() => handlePublish(draftVer.id, proc.name)}
-                          disabled={publishingId === draftVer.id}
-                          style={{ flex: 1 }}
+                          className={styles.primaryActionBtn}
+                          onClick={() => handleStartProcess(proc.id)}
                         >
-                          <ShieldCheck size={14} />
-                          {publishingId === draftVer.id ? 'Publishing...' : 'Publish'}
+                          <Play size={14} /> Start Process
                         </button>
-                      )}
+                      </div>
                     </div>
-                  ) : (
-                    <span className={styles.unavailLabel}>Draft under review</span>
+                  )}
+
+                  {capabilities.hasDraft && (
+                    <div className={styles.versionActionGroup}>
+                      <span className={styles.actionGroupLabel}>Draft v{draftVer.version_number}</span>
+                      <div className={styles.actionRow}>
+                        <Link
+                          to={getProcessDefinitionPath(workspaceId, proc.id, draftVer.id)}
+                          className={styles.viewDefinitionBtn}
+                        >
+                          <Eye size={14} /> View Draft
+                        </Link>
+                        {capabilities.canEditDraft && (
+                          <Link
+                            to={`/workspace/${workspaceId}/processes/${proc.id}/builder`}
+                            className={styles.editDraftBtn}
+                          >
+                            <Edit3 size={14} /> Edit Draft
+                          </Link>
+                        )}
+                        {capabilities.canPublishDraft && (
+                          <button
+                            type="button"
+                            className={styles.publishBtn}
+                            onClick={() => handlePublish(draftVer.id, proc.name)}
+                            disabled={publishingId === draftVer.id}
+                          >
+                            <ShieldCheck size={14} />
+                            {publishingId === draftVer.id ? 'Publishing...' : 'Publish Draft'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {!capabilities.hasPublished && !capabilities.hasDraft && (
+                    <span className={styles.unavailLabel}>No visible process version</span>
                   )}
                 </div>
               </div>

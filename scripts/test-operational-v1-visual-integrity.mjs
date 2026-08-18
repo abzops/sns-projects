@@ -18,6 +18,7 @@ const surfacePairs = [
   ['Subtasks', 'src/components/TaskDetailPanel.jsx', 'src/components/TaskDetailPanel.module.css'],
   ['RACI editor', 'src/components/TaskDetailPanel.jsx', 'src/components/TaskDetailPanel.module.css'],
   ['Process Catalog', 'src/pages/ProcessesPage.jsx', 'src/pages/ProcessesPage.module.css'],
+  ['Process Definition', 'src/pages/ProcessDefinitionPage.jsx', 'src/pages/ProcessDefinitionPage.module.css'],
   ['Process Builder', 'src/pages/ProcessBuilderPage.jsx', 'src/pages/ProcessBuilderPage.module.css'],
   ['Process Instance', 'src/pages/ProcessInstancePage.jsx', 'src/pages/ProcessInstancePage.module.css'],
   ['Departments', 'src/pages/DepartmentsPage.jsx', 'src/pages/DepartmentsPage.module.css'],
