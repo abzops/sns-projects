@@ -3,7 +3,7 @@
 **Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
 
 **Certification Date**: 2026-08-18  
-**Certified Application Commit**: `94fd1179cfc62ccde874e9c4f9f243d716c6dfff`
+**Certified Application Commit**: `e6ade4787d89158e4410c7ac75d6407287858ceb`
 **Scope**: Current non-Finance SNS Projects application  
 **Database Migration**: None
 
@@ -33,6 +33,7 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | Task Detail RACI markup used a newer CSS Module contract while its stylesheet still exposed the retired selector names | The active RACI selectors now match exactly. A/R/C/I pills, role labels, assignment identity, department context, long-name handling, and remove controls have deliberate spacing, wrapping, and focus behavior. |
 | The same missing-CSS-selector defect existed beyond RACI in onboarding/auth, workspace states, metric cards, and RACI badges | All deterministic CSS Module references in active JavaScript/JSX were audited and corrected. A reusable verifier now fails on missing dot, quoted-bracket, or static-template selector references. |
 | Task Detail and first-login panels could lose actions or compress controls at shorter/narrower viewports | Panel height now follows the dynamic viewport, content owns the internal scroll, header/footer stay usable, and Subtask/RACI controls wrap predictably at tablet and mobile widths. |
+| A Published Defined Process exposed only Start Process, while the existing detail loader accepted Draft versions only; when Live and Draft coexisted, the Published card branch hid every Draft action | Added an exact-version, read-only Process Definition route that bulk-loads the requested snapshot's steps, RACI, dependencies, and evidence information under existing RLS. Catalog cards now represent Published-only, Draft-only, and Live+Draft states independently; Start remains bound exclusively to the current Published version, while edit/publish actions remain Draft-only and authority-gated. |
 
 No database, RLS, policy, function, trigger, or migration changes were made.
 Supabase Security Advisor was therefore not rerun; the requirement applies only when database or security state changes.
@@ -47,8 +48,9 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Navigation and loading regression | **PASS — 34/34** |
 | Authentication/password lifecycle contracts | **PASS — 30/30** |
 | Foreground auth and loading-performance regression | **PASS — 19 contracts** |
-| CSS Module missing-reference verifier | **PASS — 43 imports / 1,690 static references** |
-| Operational V1 visual-integrity static audit | **PASS — 18 critical surfaces + RACI/responsive/control contracts** |
+| CSS Module missing-reference verifier | **PASS — 45 imports / 1,798 static references** |
+| Operational V1 visual-integrity static audit | **PASS — 19 critical surfaces + RACI/responsive/control contracts** |
+| Process Definition exact-version/access regression | **PASS — 10 required contracts** |
 | Explicit PostgREST relationship embeds | **PASS — 9/9** |
 | Active Milestone terminology | **PASS — 0 matches** |
 | P3-01 hierarchy regression | **PASS** |
@@ -56,16 +58,18 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Production CORS and unauthenticated JWT gate | **PASS — 3/3** |
 | Lint | **PASS — 0 errors; historical warnings unchanged** |
 | Production build | **PASS** |
-| GitHub Pages build and deployment | **PASS — run `32122745668`** |
+| GitHub Pages build and deployment | **PASS — run `32124196769`** |
 | Deployed bundle contract | **PASS — 12/12** |
-| Deployed JavaScript asset | **PASS — `index-vpST-M4-.js`** |
-| Deployed visual-integrity CSS asset | **PASS — `index-swKp5fQZ.css`** |
+| Deployed JavaScript asset | **PASS — `index-DT9haSOp.js`** |
+| Deployed visual-integrity CSS asset | **PASS — `index-sl3wAD-O.css`** |
 
 The deployed asset additionally contains all four auth-performance markers: same-user token-refresh reconciliation, visibility-driven silent revalidation, retained-content background warning, and fail-closed access denial.
 
 The latest 100 production API requests returned HTTP 200, the latest 100 Edge Function requests returned HTTP 200, and the latest 100 Postgres log entries contained no `ERROR`, `FATAL`, or `PANIC` severity.
 
 Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260817142153`.
+
+Read-only Process catalog verification found one Published-only definition, two Draft-only definitions, and no current Live+Draft coexistence record. Coexistence behavior is regression-covered without creating fake production data. The current production Defined Process RACI schema supports user and Process Starter actors; no department actor column or independent schema defect was found.
 
 Production currently contains zero Process Instances. Process Instance visibility and live process-step interaction therefore remain manual acceptance items and must use an intentionally started real Process, not seeded or fake data.
 
@@ -80,9 +84,9 @@ Browser automation could not initialize in the local certification environment b
 3. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
 4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment.
 5. Verify Project creation only with an intended real record; confirm success feedback and that a deliberately rejected/unauthorized action remains visible as an error instead of false success.
-6. View Process definitions and versions. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
+6. On the real Published-only card, confirm View Definition and Start Process are both visible; on Draft-only cards, confirm View Draft plus Edit/Publish only for authorized roles. Verify the viewer shows exact version metadata, ordered steps, RACI/response markers, requirements, and dependency flow with no mutation controls. If a real Live+Draft pair is later created, confirm both version blocks remain visible and Start uses Live only. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
 7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
-8. At approximately 1440, 1024, 768, and 390 CSS-pixel widths, visually inspect Login, Dashboard, My Work, Projects/hierarchy/List/Board, Task Detail/Subtasks/RACI, Process Catalog/Builder/Instance, Departments, Admin Users/Departments, and Workspace Settings for overlap, clipping, unintended page-level horizontal scroll, inaccessible actions, weak dark-theme contrast, and long-name breakage.
+8. At approximately 1440, 1024, 768, and 390 CSS-pixel widths, visually inspect Login, Dashboard, My Work, Projects/hierarchy/List/Board, Task Detail/Subtasks/RACI, Process Catalog/Definition/Builder/Instance, Departments, Admin Users/Departments, and Workspace Settings for overlap, clipping, unintended page-level horizontal scroll, inaccessible actions, weak dark-theme contrast, and long-name breakage.
 9. In Task Detail specifically, confirm A/R/C/I pills and titles are separated, assignment chips contain avatar/name/optional department/remove control without collisions, Add controls align, Subtask inline creation remains usable, content scrolls once, and close/save/delete remain reachable at common laptop heights and mobile width.
 
 ---
