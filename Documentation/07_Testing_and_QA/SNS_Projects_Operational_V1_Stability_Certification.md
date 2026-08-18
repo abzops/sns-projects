@@ -3,7 +3,7 @@
 **Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
 
 **Certification Date**: 2026-08-18  
-**Certified Application Commit**: `23c383bff49914e4e4e133ee1a92992e2138dc77`  
+**Certified Application Commit**: `40b74c11202219bb6b0f14f87d4da8c5ef4259f9`
 **Scope**: Current non-Finance SNS Projects application  
 **Database Migration**: None
 
@@ -27,6 +27,9 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | RACI and notification mutations could reject without user-visible feedback | Failure paths now show actionable toasts and RACI state is revalidated after an Accountable update failure. |
 | Projects, Departments, Processes, and Workspaces could present fetch failures as legitimate empty data | Each surface now renders a distinct load-error state when no cached data is available. |
 | Navigation regression still referenced the removed Milestone hook | The verifier now checks the Phase cache and rejects hash-only internal routing. |
+| Returning to a foreground browser tab could replace the current route with a full-screen auth spinner | Supabase foreground auth events now preserve the same-user identity reference when access claims are unchanged. `ProtectedRoute` keys authorization to stable identity/access values, keeps verified content mounted, and revalidates membership silently with request deduplication. |
+| Authorization fallback treated some membership-check failures or missing memberships as active | Cold authorization now fails closed, missing/revoked membership renders access denied, pending and `must_change_password` still redirect, and a failed background revalidation retains only the last successfully verified view with a non-destructive warning. |
+| Project hierarchy Task loading could repeat its Task/RACI/Subtask query set as Task count, statuses, and members settled | Remote Task loading now depends only on stable Project/user identity; status/member enrichment updates locally, and RACI/Subtask reads execute in parallel. |
 
 No database, RLS, policy, function, trigger, or migration changes were made.
 Supabase Security Advisor was therefore not rerun; the requirement applies only when database or security state changes.
@@ -40,6 +43,7 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Operational V1 route and failure-state regression | **PASS — 14 routes + 16 contracts** |
 | Navigation and loading regression | **PASS — 34/34** |
 | Authentication/password lifecycle contracts | **PASS — 30/30** |
+| Foreground auth and loading-performance regression | **PASS — 19 contracts** |
 | Explicit PostgREST relationship embeds | **PASS — 9/9** |
 | Active Milestone terminology | **PASS — 0 matches** |
 | P3-01 hierarchy regression | **PASS** |
@@ -47,9 +51,11 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Production CORS and unauthenticated JWT gate | **PASS — 3/3** |
 | Lint | **PASS — 0 errors; historical warnings unchanged** |
 | Production build | **PASS** |
-| GitHub Pages build and deployment | **PASS — run `32120210879`** |
+| GitHub Pages build and deployment | **PASS — run `32121648779`** |
 | Deployed bundle contract | **PASS — 12/12** |
-| Deployed Phase-native asset | **PASS — `index-9GcfT5bU.js`** |
+| Deployed Phase-native/auth-performance asset | **PASS — `index-C49tmnUb.js`** |
+
+The deployed asset additionally contains all four auth-performance markers: same-user token-refresh reconciliation, visibility-driven silent revalidation, retained-content background warning, and fail-closed access denial.
 
 The latest 100 production API requests returned HTTP 200, the latest 100 Edge Function requests returned HTTP 200, and the latest 100 Postgres log entries contained no `ERROR`, `FATAL`, or `PANIC` severity.
 
@@ -64,11 +70,12 @@ Production currently contains zero Process Instances. Process Instance visibilit
 Browser automation could not initialize in the local certification environment. Only these interactive checks remain:
 
 1. Sign in with an authorized existing user, refresh a deep-linked route to confirm session restore, then sign out and confirm protected history cannot be reopened.
-2. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
-3. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment.
-4. Verify Project creation only with an intended real record; confirm success feedback and that a deliberately rejected/unauthorized action remains visible as an error instead of false success.
-5. View Process definitions and versions. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
-6. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
+2. On Dashboard, My Work, Projects, hierarchy/List/Board/Task Detail, Departments, and Processes, background and restore the tab. Confirm no full-screen spinner, route replacement, collapsed hierarchy, closed Task Detail, scroll jump, or page-data request storm; the last rendered content must remain visible during silent access revalidation.
+3. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
+4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment.
+5. Verify Project creation only with an intended real record; confirm success feedback and that a deliberately rejected/unauthorized action remains visible as an error instead of false success.
+6. View Process definitions and versions. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
+7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
 
 ---
 
