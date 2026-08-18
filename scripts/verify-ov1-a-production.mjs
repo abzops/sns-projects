@@ -56,8 +56,8 @@ try {
     ORDER BY version DESC
     LIMIT 1
   `);
-  assert.equal(tip.version, '20260818110545');
-  pass('Production migration tip is OV1-A 20260818110545.');
+  assert.equal(tip.version, '20260818120101');
+  pass('Production migration tip is OV1-A ownership hotfix 20260818120101.');
 
   const targetTables = [
     'projects', 'phases', 'task_lists', 'tasks', 'subtasks',
@@ -110,6 +110,9 @@ try {
     'can_view_operational_task',
     'can_view_operational_subtask',
     'can_view_operational_process_instance',
+    'has_owned_project_visibility',
+    'has_owned_project_visibility_for_task',
+    'has_owned_project_visibility_for_process_instance',
   ];
   const { rows: helpers } = await client.query(`
     SELECT p.proname,
@@ -132,6 +135,24 @@ try {
   }
   pass('Production helpers are auth-bound, hardened, and deny anon execution.');
 
+  const ownerPolicyNames = [
+    'projects_select_project_owner', 'phases_select_project_owner',
+    'task_lists_select_project_owner', 'tasks_select_project_owner',
+    'subtasks_select_project_owner', 'task_raci_select_project_owner',
+    'task_statuses_select_project_owner', 'process_instances_select_project_owner',
+    'process_audit_select_project_owner', 'task_approval_select_project_owner',
+    'task_consult_resp_select_project_owner', 'task_evidence_select_project_owner',
+    'task_resp_comp_select_project_owner',
+  ];
+  const { rows: ownerPolicies } = await client.query(`
+    SELECT policyname, qual
+    FROM pg_policies
+    WHERE schemaname = 'public' AND policyname = ANY($1::text[])
+  `, [ownerPolicyNames]);
+  assert.equal(ownerPolicies.length, ownerPolicyNames.length);
+  assert.ok(ownerPolicies.every((row) => /owned_project|owner_id/.test(row.qual)));
+  pass('All 13 Project-owner SELECT branches exist in production.');
+
   const indexNames = [
     'idx_workspace_members_active_user_workspace',
     'idx_projects_workspace_id',
@@ -139,6 +160,7 @@ try {
     'idx_task_raci_user_task',
     'idx_subtasks_assignee_task',
     'idx_department_memberships_active_user_department',
+    'idx_projects_owner',
   ];
   const { rows: indexes } = await client.query(`
     SELECT indexname
@@ -146,7 +168,7 @@ try {
     WHERE schemaname = 'public' AND indexname = ANY($1::text[])
   `, [indexNames]);
   assert.equal(indexes.length, indexNames.length);
-  pass('All six authorization predicate indexes exist in production.');
+  pass('All seven scoped/ownership authorization indexes exist in production.');
 
   const { rows: systemActors } = await client.query(`
     SELECT DISTINCT usr.workspace_id, usr.user_id, usr.role
@@ -200,7 +222,10 @@ try {
       `SELECT id
        FROM public.projects
        WHERE workspace_id = $1
-         AND private.can_view_operational_project(id)
+         AND (
+           private.can_view_operational_project(id)
+           OR private.has_owned_project_visibility(id)
+         )
        ORDER BY id`,
       [actor.workspace_id],
     );
@@ -224,7 +249,10 @@ try {
     `SELECT id
      FROM public.projects
      WHERE workspace_id = $1
-       AND NOT private.can_view_operational_project(id)
+       AND NOT (
+         private.can_view_operational_project(id)
+         OR private.has_owned_project_visibility(id)
+       )
      LIMIT 1`,
     [deepLinkActor.workspace_id],
   );

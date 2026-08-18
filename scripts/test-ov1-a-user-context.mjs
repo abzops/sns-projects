@@ -3,7 +3,10 @@ import { readFile } from 'node:fs/promises';
 
 const read = (file) => readFile(file, 'utf8');
 
-const [context, appLayout, dashboard, projects, tasks, processAccess, migration, schema] = await Promise.all([
+const [
+  context, appLayout, dashboard, projects, tasks, processAccess,
+  migration, ownershipHotfix, schema,
+] = await Promise.all([
   read('src/hooks/useUserContext.js'),
   read('src/components/AppLayout.jsx'),
   read('src/pages/DashboardPage.jsx'),
@@ -11,6 +14,7 @@ const [context, appLayout, dashboard, projects, tasks, processAccess, migration,
   read('src/pages/TasksPage.jsx'),
   read('src/utils/processVersionAccess.js'),
   read('supabase/migrations/20260818110545_ov1_a_operational_visibility_closure.sql'),
+  read('supabase/migrations/20260818120101_ov1_a_project_ownership_bootstrap_hotfix.sql'),
   read('supabase/schema.sql'),
 ]);
 
@@ -40,5 +44,9 @@ assert.doesNotMatch(
 );
 assert.match(schema, /OV1-A operational visibility closure \(canonical post-dump delta\)/);
 assert.match(schema, /private\.can_view_operational_process_instance\(id\)/);
+assert.match(ownershipHotfix, /projects_select_project_owner/);
+assert.match(ownershipHotfix, /private\.has_owned_project_visibility\(project_id\)/);
+assert.match(ownershipHotfix, /process_instances_select_project_owner/);
+assert.match(schema, /OV1-A Project ownership\/bootstrap hotfix \(canonical post-dump delta\)/);
 
 console.log('[PASS] OV1-A frontend capability separation and migration contract verified.');
