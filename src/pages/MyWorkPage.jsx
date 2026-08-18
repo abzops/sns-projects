@@ -29,13 +29,13 @@ export default function MyWorkPage() {
   const { user } = useAuth();
   const userId = user?.id || null;
   const { departments = [] } = useDepartments(workspaceId);
-  const { departmentMemberships = [], isReadOnly } = useUserContext(workspaceId);
+  const { departmentMemberships = [], isReadOnly, loading: userContextLoading, authorizationScopeKey } = useUserContext(workspaceId);
   const departmentIds = useMemo(
     () => departmentMemberships.map((membership) => membership.departments?.id).filter(Boolean),
     [departmentMemberships]
   );
 
-  const cacheKey = `${workspaceId}:${userId || ''}`;
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
   const cachedData = myWorkCache.get(cacheKey) || null;
 
   const [activeTab, setActiveTab] = useState('all'); // RACI role | 'S' (Subtasks) | 'all'
@@ -59,6 +59,14 @@ export default function MyWorkPage() {
         setTasks([]);
         setInitialLoading(false);
         setRefreshing(false);
+        return;
+      }
+
+      if (!authorizationScopeKey) {
+        if (!myWorkCache.has(cacheKey)) {
+          setTasks([]);
+          setInitialLoading(true);
+        }
         return;
       }
 
@@ -474,6 +482,8 @@ export default function MyWorkPage() {
     }
   };
 
+  const isPageLoading = userContextLoading || (initialLoading && tasks.length === 0);
+
   return (
     <div className={styles.container}>
       {/* Page Header (Always Rendered Immediately) */}
@@ -482,9 +492,11 @@ export default function MyWorkPage() {
         subtitle="Operational inbox and tasks assigned to you across the organization"
         badge={
           <div className={styles.headerBadges}>
-            <span className={styles.totalTasksPill}>
-              <CheckSquare size={13} /> {tabCounts.all} Active Tasks
-            </span>
+            {!isPageLoading && (
+              <span className={styles.totalTasksPill}>
+                <CheckSquare size={13} /> {tabCounts.all} Active Tasks
+              </span>
+            )}
             {refreshing && (
               <span className={styles.refreshingPill} title="Revalidating latest assignments...">
                 <RefreshCw size={12} className={styles.spinIcon} /> Refreshing…
@@ -674,7 +686,7 @@ export default function MyWorkPage() {
       )}
 
       {/* Task Content: Skeleton vs Empty vs Loaded */}
-      {initialLoading && tasks.length === 0 ? (
+      {isPageLoading && tasks.length === 0 ? (
         viewMode === 'list' ? (
           <TaskRowSkeleton count={5} />
         ) : (

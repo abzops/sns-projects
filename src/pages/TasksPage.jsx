@@ -996,6 +996,7 @@ export default function TasksPage() {
   );
 
   const isInitialLoading =
+    userContextLoading ||
     (projectsLoading && !project) ||
     (tasksLoading && tasks.length === 0) ||
     (statusesLoading && statuses.length === 0) ||
@@ -1003,7 +1004,7 @@ export default function TasksPage() {
     (taskListsLoading && taskLists.length === 0) ||
     (processInstancesLoading && processInstances.length === 0);
 
-  if (!projectsLoading && !project) {
+  if (!userContextLoading && !projectsLoading && !project) {
     return (
       <div className={styles.page}>
         <EmptyState
@@ -1017,6 +1018,14 @@ export default function TasksPage() {
           actionLabel="Back to Projects"
           onAction={() => navigate(`/workspace/${workspaceId}/projects`)}
         />
+      </div>
+    );
+  }
+
+  if (isInitialLoading && !project) {
+    return (
+      <div className={styles.page}>
+        <TaskRowSkeleton count={5} />
       </div>
     );
   }

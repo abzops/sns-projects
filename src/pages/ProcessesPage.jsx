@@ -67,12 +67,14 @@ export default function ProcessesPage() {
     }
   };
 
+  const isInitialLoading = userContext.loading || (loading && processes.length === 0);
+
   return (
     <div className={styles.page}>
       <PageHeader
         title="Defined Processes"
         subtitle="Standardized, repeatable business workflows with clear ownership and assignments"
-        badge={processes.length > 0 ? `${processes.length} Defined` : null}
+        badge={!isInitialLoading && processes.length > 0 ? `${processes.length} Defined` : null}
         actions={
           <div className={styles.headerActions}>
             {canCreateProcess && (
@@ -97,7 +99,7 @@ export default function ProcessesPage() {
         }
       />
 
-      {loading && processes.length === 0 ? (
+      {isInitialLoading ? (
         <CardGridSkeleton count={3} />
       ) : error && processes.length === 0 ? (
         <EmptyState

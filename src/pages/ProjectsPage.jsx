@@ -146,6 +146,8 @@ export default function ProjectsPage() {
     });
   };
 
+  const isInitialLoading = !authorizationScopeKey || (loading && projects.length === 0);
+
   return (
     <div className={styles.container}>
       <PageHeader
@@ -155,7 +157,7 @@ export default function ProjectsPage() {
             ? `Active initiatives and task execution boards for ${currentWorkspace?.name || 'Workspace'}`
             : `Projects you own or participate in within ${currentWorkspace?.name || 'this workspace'}`
         }
-        badge={<span className={styles.totalBadge}>{projects.length} Projects</span>}
+        badge={!isInitialLoading ? <span className={styles.totalBadge}>{projects.length} Projects</span> : null}
         actions={
           canCreate && (
             <button type="button" className={styles.createBtn} onClick={handleOpenModal}>
@@ -208,7 +210,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Project Grid */}
-      {loading && projects.length === 0 ? (
+      {isInitialLoading ? (
         <CardGridSkeleton count={3} />
       ) : error && projects.length === 0 ? (
         <EmptyState

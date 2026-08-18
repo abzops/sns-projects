@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,25 +8,38 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
   const { user } = useAuth();
   const userId = user?.id || null;
   const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
-  const [processes, setProcesses] = useState(() => (workspaceId ? processesCache.get(cacheKey) || [] : []));
-  const [loading, setLoading] = useState(() => (workspaceId ? !processesCache.has(cacheKey) : false));
+  const cached = processesCache.get(cacheKey);
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey);
+  const [processes, setProcesses] = useState(() => cached || []);
+  const [loading, setLoading] = useState(() => !cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const activeFetchIdRef = useRef(0);
 
   const fetchProcesses = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId || !userId || !authorizationScopeKey) {
+    const fetchId = ++activeFetchIdRef.current;
+
+    if (!workspaceId || !userId) {
       setProcesses([]);
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
-    try {
-      if (!isSilent && !processesCache.has(cacheKey)) {
+    if (!authorizationScopeKey) {
+      if (!processesCache.has(cacheKey)) {
+        setProcesses([]);
         setLoading(true);
-      } else {
+      }
+      return;
+    }
+
+    try {
+      if (isSilent || processesCache.has(cacheKey)) {
         setRefreshing(true);
+      } else {
+        setLoading(true);
       }
       setError(null);
 
@@ -61,6 +74,8 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
 
       if (pErr) throw pErr;
 
+      if (fetchId !== activeFetchIdRef.current) return;
+
       if (!procData || procData.length === 0) {
         processesCache.set(cacheKey, []);
         setProcesses([]);
@@ -89,6 +104,8 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
 
       if (vErr) throw vErr;
 
+      if (fetchId !== activeFetchIdRef.current) return;
+
       const verIds = (verData || []).map((v) => v.id);
 
       // 3. Fetch steps count per version
@@ -105,6 +122,8 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
           });
         }
       }
+
+      if (fetchId !== activeFetchIdRef.current) return;
 
       // Group versions by process
       const enriched = procData.map((proc) => {
@@ -132,17 +151,28 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
       processesCache.set(cacheKey, enriched);
       setProcesses(enriched);
     } catch (err) {
+      if (fetchId !== activeFetchIdRef.current) return;
       console.error('[useDefinedProcesses] Error fetching processes:', err);
       setError(err.message || 'Failed to load defined processes.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (fetchId === activeFetchIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [authorizationScopeKey, cacheKey, workspaceId, userId]);
 
   useEffect(() => {
-    fetchProcesses();
-  }, [fetchProcesses]);
+    const scopedCache = processesCache.get(cacheKey);
+    setActiveCacheKey(cacheKey);
+    setProcesses(scopedCache || []);
+    setLoading(!scopedCache);
+    setError(null);
+    fetchProcesses({ silent: Boolean(scopedCache) });
+  }, [cacheKey, fetchProcesses]);
+
+  const scopeIsCurrent = activeCacheKey === cacheKey;
+  const scopedProcesses = scopeIsCurrent ? processes : processesCache.get(cacheKey) || [];
 
   // RPC: Publish version
   const publishVersion = async (versionId) => {
@@ -179,10 +209,10 @@ export function useDefinedProcesses(workspaceId, authorizationScopeKey = 'defaul
   };
 
   return {
-    processes,
-    loading,
-    refreshing,
-    error,
+    processes: scopedProcesses,
+    loading: !scopeIsCurrent || loading,
+    refreshing: scopeIsCurrent && refreshing,
+    error: scopeIsCurrent ? error : null,
     refetch: fetchProcesses,
     publishVersion,
     startProcess,

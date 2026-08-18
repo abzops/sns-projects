@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,25 +8,38 @@ export function useProcessInstance(taskListId, authorizationScopeKey = 'default'
   const { user } = useAuth();
   const userId = user?.id || null;
   const cacheKey = `${userId || 'anonymous'}:${taskListId || 'none'}:${authorizationScopeKey || 'loading'}`;
-  const [instance, setInstance] = useState(() => (taskListId ? instanceCache.get(cacheKey) || null : null));
-  const [loading, setLoading] = useState(() => (taskListId ? !instanceCache.has(cacheKey) : false));
+  const cached = taskListId ? instanceCache.get(cacheKey) || null : null;
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey);
+  const [instance, setInstance] = useState(() => cached);
+  const [loading, setLoading] = useState(() => !cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const activeFetchIdRef = useRef(0);
 
   const fetchInstance = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!taskListId || !userId || !authorizationScopeKey) {
+    const fetchId = ++activeFetchIdRef.current;
+
+    if (!taskListId || !userId) {
       setInstance(null);
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
-    try {
-      if (!isSilent && !instanceCache.has(cacheKey)) {
+    if (!authorizationScopeKey) {
+      if (!instanceCache.has(cacheKey)) {
+        setInstance(null);
         setLoading(true);
-      } else {
+      }
+      return;
+    }
+
+    try {
+      if (isSilent || instanceCache.has(cacheKey)) {
         setRefreshing(true);
+      } else {
+        setLoading(true);
       }
       setError(null);
 
@@ -376,20 +389,33 @@ export function useProcessInstance(taskListId, authorizationScopeKey = 'default'
         progress_percent: progressPercent,
       };
 
+      if (fetchId !== activeFetchIdRef.current) return;
+
       instanceCache.set(cacheKey, instancePayload);
       setInstance(instancePayload);
     } catch (err) {
+      if (fetchId !== activeFetchIdRef.current) return;
       console.error('[useProcessInstance] Error loading process instance:', err);
       setError(err.message || 'Failed to load process instance.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (fetchId === activeFetchIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [authorizationScopeKey, cacheKey, taskListId, userId]);
 
   useEffect(() => {
-    fetchInstance();
-  }, [fetchInstance]);
+    const scopedCache = taskListId ? instanceCache.get(cacheKey) || null : null;
+    setActiveCacheKey(cacheKey);
+    setInstance(scopedCache);
+    setLoading(!scopedCache);
+    setError(null);
+    fetchInstance({ silent: Boolean(scopedCache) });
+  }, [cacheKey, fetchInstance, taskListId]);
+
+  const scopeIsCurrent = activeCacheKey === cacheKey;
+  const scopedInstance = scopeIsCurrent ? instance : (taskListId ? instanceCache.get(cacheKey) || null : null);
 
   // Workflow RPC actions
   const completeResponsiblePart = async (taskId, note = null) => {
@@ -538,12 +564,12 @@ export function useProcessInstance(taskListId, authorizationScopeKey = 'default'
   };
 
   return {
-    instance,
-    tasks: instance?.tasks || [],
-    auditEvents: instance?.audit_events || [],
-    loading,
-    refreshing,
-    error,
+    instance: scopedInstance,
+    tasks: scopedInstance?.tasks || [],
+    auditEvents: scopedInstance?.audit_events || [],
+    loading: !scopeIsCurrent || loading,
+    refreshing: scopeIsCurrent && refreshing,
+    error: scopeIsCurrent ? error : null,
     refetch: fetchInstance,
     completeResponsiblePart,
     submitEvidence,

@@ -653,7 +653,7 @@ export default function UsersAdminPage() {
           </div>
           <div className={styles.statMeta}>
             <span className={styles.statLabel}>Total Personnel</span>
-            <span className={styles.statVal}>{stats.totalPeople}</span>
+            <span className={styles.statVal}>{membersLoading ? '—' : stats.totalPeople}</span>
           </div>
         </div>
 
@@ -663,7 +663,7 @@ export default function UsersAdminPage() {
           </div>
           <div className={styles.statMeta}>
             <span className={styles.statLabel}>Departments</span>
-            <span className={styles.statVal}>{stats.totalDepts}</span>
+            <span className={styles.statVal}>{membersLoading ? '—' : stats.totalDepts}</span>
           </div>
         </div>
 
@@ -673,7 +673,7 @@ export default function UsersAdminPage() {
           </div>
           <div className={styles.statMeta}>
             <span className={styles.statLabel}>Department Heads</span>
-            <span className={styles.statVal}>{stats.deptHeads}</span>
+            <span className={styles.statVal}>{deptMembershipsLoading ? '—' : stats.deptHeads}</span>
           </div>
         </div>
 
@@ -683,7 +683,7 @@ export default function UsersAdminPage() {
           </div>
           <div className={styles.statMeta}>
             <span className={styles.statLabel}>Project Admins</span>
-            <span className={styles.statVal}>{stats.projectAdmins}</span>
+            <span className={styles.statVal}>{membersLoading ? '—' : stats.projectAdmins}</span>
           </div>
         </div>
 
@@ -693,7 +693,7 @@ export default function UsersAdminPage() {
           </div>
           <div className={styles.statMeta}>
             <span className={styles.statLabel}>System Admins</span>
-            <span className={styles.statVal}>{stats.sysAdmins}</span>
+            <span className={styles.statVal}>{membersLoading ? '—' : stats.sysAdmins}</span>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -36,24 +36,37 @@ export function useProjects(workspaceId, authorizationScopeKey = 'default') {
   const { user } = useAuth()
   const userId = user?.id || null
   const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`
-  const [projects, setProjects] = useState(() => projectsCache.get(cacheKey) || [])
-  const [loading, setLoading] = useState(() => !projectsCache.has(cacheKey))
+  const cached = projectsCache.get(cacheKey)
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey)
+  const [projects, setProjects] = useState(() => cached || [])
+  const [loading, setLoading] = useState(() => !cached)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+  const activeFetchIdRef = useRef(0)
 
   const fetchProjects = useCallback(async (options = {}) => {
-    const isSilent = options?.silent ?? false;
-    if (!workspaceId || !userId || !authorizationScopeKey) {
+    const isSilent = options?.silent ?? false
+    const fetchId = ++activeFetchIdRef.current
+
+    if (!workspaceId || !userId) {
       setProjects([])
       setLoading(false)
       setRefreshing(false)
       return
     }
 
-    if (!isSilent && !projectsCache.has(cacheKey)) {
-      setLoading(true)
-    } else {
+    if (!authorizationScopeKey) {
+      if (!projectsCache.has(cacheKey)) {
+        setProjects([])
+        setLoading(true)
+      }
+      return
+    }
+
+    if (isSilent || projectsCache.has(cacheKey)) {
       setRefreshing(true)
+    } else {
+      setLoading(true)
     }
     setError(null)
 
@@ -83,6 +96,8 @@ export function useProjects(workspaceId, authorizationScopeKey = 'default') {
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
 
+    if (fetchId !== activeFetchIdRef.current) return
+
     if (fetchError) {
       console.error('Error fetching projects:', fetchError)
       setError(fetchError)
@@ -111,6 +126,8 @@ export function useProjects(workspaceId, authorizationScopeKey = 'default') {
       metrics = computeTaskMetrics(taskRows || [])
     }
 
+    if (fetchId !== activeFetchIdRef.current) return
+
     const enriched = (data || []).map((project) => {
       const taskCount = metrics.counts[project.id] || 0
       const completedCount = metrics.completed[project.id] || 0
@@ -133,16 +150,16 @@ export function useProjects(workspaceId, authorizationScopeKey = 'default') {
   }, [authorizationScopeKey, cacheKey, workspaceId, userId])
 
   useEffect(() => {
-    // If workspace changed, pick up cache or set empty
-    if (projectsCache.has(cacheKey)) {
-      setProjects(projectsCache.get(cacheKey))
-      setLoading(false)
-    } else {
-      setProjects([])
-      setLoading(true)
-    }
-    fetchProjects()
+    const scopedCache = projectsCache.get(cacheKey)
+    setActiveCacheKey(cacheKey)
+    setProjects(scopedCache || [])
+    setLoading(!scopedCache)
+    setError(null)
+    fetchProjects({ silent: Boolean(scopedCache) })
   }, [cacheKey, fetchProjects])
+
+  const scopeIsCurrent = activeCacheKey === cacheKey
+  const scopedProjects = scopeIsCurrent ? projects : projectsCache.get(cacheKey) || []
 
   const createProject = async (input) => {
     const supabase = getSupabase()
@@ -250,10 +267,10 @@ export function useProjects(workspaceId, authorizationScopeKey = 'default') {
   }
 
   return {
-    projects,
-    loading,
-    refreshing,
-    error,
+    projects: scopedProjects,
+    loading: !scopeIsCurrent || loading,
+    refreshing: scopeIsCurrent && refreshing,
+    error: scopeIsCurrent ? error : null,
     createProject,
     updateProject,
     deleteProject,

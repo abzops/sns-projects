@@ -1,0 +1,200 @@
+.loaderContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #0f1115;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  user-select: none;
+  overflow: hidden;
+}
+
+.loaderContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.markWrapper {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.ambientGlow {
+  position: absolute;
+  top: -25px;
+  left: -25px;
+  right: -25px;
+  bottom: -25px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(253, 226, 21, 0.28) 0%, rgba(253, 226, 21, 0.08) 45%, transparent 70%);
+  animation: breatheGlow 2.2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.orbitRing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(253, 226, 21, 0.12);
+  border-top-color: #fde215;
+  border-right-color: rgba(253, 226, 21, 0.6);
+  animation: spinOrbit 1.4s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  pointer-events: none;
+}
+
+.orbitRingInner {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  border-radius: 50%;
+  border: 1px dashed rgba(253, 226, 21, 0.22);
+  animation: spinReverse 3.6s linear infinite;
+  pointer-events: none;
+}
+
+.logoImg {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+  z-index: 2;
+}
+
+.textGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.brandTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.statusText {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin: 0;
+  letter-spacing: 0.03em;
+}
+
+.progressBarTrack {
+  width: 140px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  margin-top: 16px;
+}
+
+.progressBarIndeterminate {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, #fde215, #ffffff, #fde215, transparent);
+  border-radius: 999px;
+  animation: indeterminateSlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes spinOrbit {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinReverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes breatheGlow {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes indeterminateSlide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .loaderContent {
+    animation: none;
+  }
+  .orbitRing {
+    animation: none;
+    border-color: rgba(253, 226, 21, 0.4);
+  }
+  .orbitRingInner {
+    animation: none;
+  }
+  .ambientGlow {
+    animation: none;
+    opacity: 0.6;
+  }
+  .progressBarIndeterminate {
+    animation: none;
+    width: 100%;
+    left: 0;
+    background: #fde215;
+  }
+}

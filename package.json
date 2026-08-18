@@ -15,6 +15,8 @@
     "test:ov1-access": "node scripts/test-ov1-a-operational-visibility.mjs && node scripts/test-ov1-a-project-ownership-bootstrap.mjs && node scripts/test-ov1-a-user-context.mjs",
     "test:ov1-frontend": "node scripts/test-ov1-b-frontend-visibility.mjs",
     "test:ov1-dashboard": "node scripts/test-ov1-c-role-aware-dashboard.mjs",
+    "test:loading-stabilization": "node scripts/test-operational-v1-loading-stabilization.mjs",
+    "test:stability": "node scripts/test-operational-v1-stability.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

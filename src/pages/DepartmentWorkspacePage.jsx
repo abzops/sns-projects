@@ -43,16 +43,19 @@ export default function DepartmentWorkspacePage() {
   const [filterType, setFilterType] = useState('all'); // 'all' | 'overdue' | 'blocked'
   const [search, setSearch] = useState('');
   const [deptTasks, setDeptTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
 
   // Fetch department tasks across all projects
   const fetchDeptTasks = useCallback(async () => {
     if (!departmentId || !workspaceId) {
       setDeptTasks([]);
+      setTasksLoading(false);
       return;
     }
 
     try {
+      setTasksLoading(true);
 
       // 1. Get task IDs associated with this department in RACI
       const { data: deptRaci, error: raciErr } = await supabase
@@ -183,6 +186,8 @@ export default function DepartmentWorkspacePage() {
       setDeptTasks(enriched);
     } catch (err) {
       console.error('Error fetching department tasks:', err);
+    } finally {
+      setTasksLoading(false);
     }
   }, [departmentId, workspaceId, deptMembers]);
 
@@ -268,7 +273,7 @@ export default function DepartmentWorkspacePage() {
 
   const departmentHead = deptMembers.find((m) => m.role === 'head');
 
-  if (deptLoading && departments.length === 0) {
+  if (deptLoading && !currentDept) {
     return (
       <div className={styles.container}>
         <PageHeader
@@ -466,7 +471,9 @@ export default function DepartmentWorkspacePage() {
       </div>
 
       {/* Task List / Cards View */}
-      {filteredTasks.length === 0 ? (
+      {tasksLoading && filteredTasks.length === 0 ? (
+        <TaskRowSkeleton count={4} />
+      ) : filteredTasks.length === 0 ? (
         <EmptyState
           icon={CheckSquare}
           title="No tasks in this view"

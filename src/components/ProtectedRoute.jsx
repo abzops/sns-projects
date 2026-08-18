@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAuthAccessFingerprint, getProtectedRouteDecision } from '../lib/authGate';
 import { supabase } from '../lib/supabase';
 import Spinner from './Spinner';
+import AppColdLoader from './AppColdLoader';
 import styles from './ProtectedRoute.module.css';
 
 const DEFAULT_WORKSPACE_ID = 'dbcaddf1-cf02-4bad-8af1-974301cdfbea';
@@ -168,7 +169,7 @@ export default function ProtectedRoute() {
   if (decision === 'cold-loading') {
     return (
       <div className={styles.coldLoading} data-auth-cold-loading>
-        <Spinner size="lg" />
+        <AppColdLoader />
       </div>
     );
   }

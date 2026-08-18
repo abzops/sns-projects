@@ -57,7 +57,7 @@ export default function WorkspaceSettingsPage({ defaultTab = 'general' }) {
     setWorkspaceName(workspace.name);
   }
 
-  if (workspacesLoading && workspaces.length === 0) {
+  if (workspacesLoading && !workspace) {
     return (
       <div className={styles.container}>
         <PageHeader

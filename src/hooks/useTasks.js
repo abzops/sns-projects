@@ -49,17 +49,23 @@ function enrichTasks(tasks, statuses, members, raciRows = [], subtasksByTaskId =
 }
 
 
+const tasksCache = new Map();
+
 export function useTasks(projectId, workspaceId) {
   const { user } = useAuth();
   const userId = user?.id || null;
-  const [tasks, setTasks] = useState([]);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const cacheKey = `${userId || 'anonymous'}:${projectId || 'none'}`;
+  const cached = projectId ? tasksCache.get(cacheKey) || null : null;
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey);
+  const [tasks, setTasks] = useState(() => (cached ? cached.enriched : []));
+  const [initialLoading, setInitialLoading] = useState(() => !cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const activeFetchIdRef = useRef(0);
 
   const { statuses } = useTaskStatuses(projectId);
   const { members } = useMembers(workspaceId);
-  const taskSourceRef = useRef(null);
+  const taskSourceRef = useRef(cached ? cached.source : null);
   const enrichmentInputsRef = useRef({ statuses, members });
 
   useEffect(() => {
@@ -67,21 +73,25 @@ export function useTasks(projectId, workspaceId) {
 
     const source = taskSourceRef.current;
     if (source?.projectId === projectId && source?.userId === userId) {
-      setTasks(
-        enrichTasks(
-          source.rows,
-          statuses,
-          members,
-          source.raciRows,
-          source.subtasksByTaskId
-        )
+      const reEnriched = enrichTasks(
+        source.rows,
+        statuses,
+        members,
+        source.raciRows,
+        source.subtasksByTaskId
       );
+      setTasks(reEnriched);
+      if (tasksCache.has(cacheKey)) {
+        tasksCache.set(cacheKey, { source, enriched: reEnriched });
+      }
     }
-  }, [members, projectId, statuses, userId]);
+  }, [cacheKey, members, projectId, statuses, userId]);
 
   const fetchTasks = useCallback(
     async (options = {}) => {
       const isSilent = options?.silent ?? false;
+      const fetchId = ++activeFetchIdRef.current;
+
       if (!projectId || !userId) {
         taskSourceRef.current = null;
         setTasks([]);
@@ -90,15 +100,11 @@ export function useTasks(projectId, workspaceId) {
         return;
       }
 
-      const hasCurrentSource =
-        taskSourceRef.current?.projectId === projectId &&
-        taskSourceRef.current?.userId === userId;
-      if (!isSilent && !hasCurrentSource) {
-        taskSourceRef.current = null;
-        setTasks([]);
+      if (isSilent || tasksCache.has(cacheKey)) {
+        setRefreshing(true);
+      } else {
         setInitialLoading(true);
       }
-      setRefreshing(true);
 
       setError(null);
 
@@ -222,6 +228,8 @@ export function useTasks(projectId, workspaceId) {
         }
       }
 
+      if (fetchId !== activeFetchIdRef.current) return;
+
       const source = {
         projectId,
         userId,
@@ -232,24 +240,34 @@ export function useTasks(projectId, workspaceId) {
       taskSourceRef.current = source;
 
       const inputs = enrichmentInputsRef.current;
-      setTasks(
-        enrichTasks(
-          source.rows,
-          inputs.statuses,
-          inputs.members,
-          source.raciRows,
-          source.subtasksByTaskId
-        )
+      const enriched = enrichTasks(
+        source.rows,
+        inputs.statuses,
+        inputs.members,
+        source.raciRows,
+        source.subtasksByTaskId
       );
+
+      tasksCache.set(cacheKey, { source, enriched });
+      setTasks(enriched);
       setInitialLoading(false);
       setRefreshing(false);
     },
-    [projectId, userId]
+    [cacheKey, projectId, userId]
   );
 
   useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    const scopedCache = projectId ? tasksCache.get(cacheKey) || null : null;
+    setActiveCacheKey(cacheKey);
+    setTasks(scopedCache ? scopedCache.enriched : []);
+    setInitialLoading(!scopedCache);
+    taskSourceRef.current = scopedCache ? scopedCache.source : null;
+    setError(null);
+    fetchTasks({ silent: Boolean(scopedCache) });
+  }, [cacheKey, fetchTasks, projectId]);
+
+  const scopeIsCurrent = activeCacheKey === cacheKey;
+  const scopedTasks = scopeIsCurrent ? tasks : (projectId && tasksCache.has(cacheKey) ? tasksCache.get(cacheKey).enriched : []);
 
   const createTask = async (taskData) => {
     const supabase = getSupabase();
@@ -506,11 +524,11 @@ export function useTasks(projectId, workspaceId) {
   };
 
   return {
-    tasks,
-    loading: initialLoading,
-    initialLoading,
-    refreshing,
-    error,
+    tasks: scopedTasks,
+    loading: !scopeIsCurrent || initialLoading,
+    initialLoading: !scopeIsCurrent || initialLoading,
+    refreshing: scopeIsCurrent && refreshing,
+    error: scopeIsCurrent ? error : null,
     createTask,
     updateTask,
     deleteTask,

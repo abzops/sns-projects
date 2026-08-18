@@ -21,8 +21,9 @@ export default function DepartmentsPage() {
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
 
-  const { canAdministerWorkspace } = useUserContext(workspaceId);
-  const canAdmin = canAdministerWorkspace;
+  const userContext = useUserContext(workspaceId);
+  const canAdmin = userContext.canAdministerWorkspace;
+  const isInitialLoading = userContext.loading || (loading && departments.length === 0);
 
   return (
     <div className={styles.container}>
@@ -41,7 +42,7 @@ export default function DepartmentsPage() {
         }
       />
 
-      {loading && departments.length === 0 ? (
+      {isInitialLoading ? (
         <CardGridSkeleton count={4} />
       ) : error && departments.length === 0 ? (
         <EmptyState

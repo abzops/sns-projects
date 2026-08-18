@@ -375,7 +375,7 @@ export default function TaskDetailPanel({
       if (accountable) await removeRaci(accountable.id);
       await assignRaci({ raciRole: 'A', userId });
     } catch (err) {
-      showToast(err.message || 'Failed to update Owner', 'error');
+      showToast(err.message || 'Failed to update Accountable assignment', 'error');
       await refetchRaci();
     }
   };
@@ -393,7 +393,7 @@ export default function TaskDetailPanel({
       setSelectedTargetId('');
       setAddRaciRole(null);
     } catch (err) {
-      showToast(err.message || 'Failed to add assignment', 'error');
+      showToast(err.message || 'Failed to add RACI assignment', 'error');
     }
   };
 
