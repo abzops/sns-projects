@@ -687,4 +687,31 @@ public.get_process_instance_permissions(
 
 Failure occurs before task completion, downstream activation, notifications, audit insertion, or Process Instance completion. Direct `EXECUTE` is revoked from `PUBLIC`, `anon`, and `authenticated`; trusted internal execution remains available to `service_role` and `postgres`. The legacy Task-List Defined Process branch is unchanged.
 
+---
+
+### 17. Parent Task and Process Instance Closure (P2-03)
+
+P2-03 adds server-side closure behavior without adding a new public RPC.
+
+#### Parent Task closure
+
+- An ordinary child is exactly `process_instance_id IS NULL AND process_step_id IS NULL`.
+- A directly attached Process Instance is exactly `placement_type = 'task' AND parent_task_id = <host task id>`.
+- An ordinary child is closed only when its status is the host project’s canonical Done status.
+- An attached Process Instance is closed when its status is `completed` or `cancelled`; `running` blocks closure.
+- Materialized Process step Tasks are excluded from the ordinary-child count.
+- A parent auto-completes only when it has a closure dependency and every dependency is closed. Nested ordinary parents propagate upward.
+- Moving the final dependency away reevaluates the old host, while an untouched leaf Task remains manually controlled.
+- Manual Done transitions with open dependencies fail in the database.
+
+Creating, attaching, or reopening an ordinary child under a Done parent fails until the parent is reopened. Starting or moving a running Process Instance onto a Done host fails under the same rule.
+
+#### Process Instance closure
+
+- `running` is the only valid source state for `completed`.
+- Every materialized Process step must have `workflow_state = 'completed'`; cancelled steps never satisfy completion eligibility.
+- A standalone container Task mirrors terminal instance state. Completion sets `workflow_state = 'completed'` and `workflow_completed_at`; cancellation remains `cancelled`.
+- `public.get_process_instance_progress(uuid)` remains equal-weight `completed steps / total materialized steps * 100`, rounded to two decimals. Cancelled steps do not increase completed progress, including for cancelled instances.
+
+Automatic parent completion writes one idempotent `PARENT_TASK_AUTO_COMPLETED` event with ordinary-child and attached-process counts. This database-only path has no Finance or expense-intercept behavior.
 

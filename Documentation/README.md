@@ -20,9 +20,9 @@
 - **Hosting & CI/CD**: GitHub Pages CDN, GitHub Actions Automated Workflows
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
-- **Current Canonical Migration**: `20260817132234_p2_02a_post_cancellation_immutability.sql`
+- **Current Canonical Migration**: `20260817142153_p2_03_parent_completion_runtime.sql`
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
-- **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A VERIFIED` (Phase Rename + Phase Grant Hardening + Movement/Cancellation + Post-Cancellation Immutability)
+- **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -53,7 +53,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | **`03_Security_and_Authentication`** | RLS security policies, role hierarchies, user onboarding | [Security Hardening](03_Security_and_Authentication/Day0_Release1_1_Security_Hardening.md) · [Org Admin & Auth](03_Security_and_Authentication/V1_01_Organization_Admin_and_Auth.md) |
 | **`04_Defined_Processes`** | Defined Process Engine, DAG step execution, RACI contracts | [Engine Architecture Plan](04_Defined_Processes/Defined_Process_Engine_Architecture_Plan.md) · [Runtime API Contract](04_Defined_Processes/Defined_Process_Runtime_API_Contract.md) |
 | **`05_Finance`** | Financial tracking, Base Budget + Safety Buffer model, Expense Ledgers | [Finance Architecture Spec](05_Finance/FINANCE_ARCHITECTURE_SPEC.md) · [Finance Decision Register](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
-| **`06_Implementation_Packages`** | Technical specifications for discrete engineering delivery packages | [P1-01 Foundation](06_Implementation_Packages/Package_01_Core_Foundation/P1-01_Core_Hierarchy_Process_Instance_Foundation.md) · [P1-01A Hardening](06_Implementation_Packages/Package_01_Core_Foundation/P1-01A_Process_Instance_Access_Hardening.md) · [P1-01B Accuracy](06_Implementation_Packages/Package_01_Core_Foundation/P1-01B_Documentation_Accuracy_and_Architecture_Baseline.md) · [P1-02 Runtime](06_Implementation_Packages/Package_01_Core_Foundation/P1-02_Placement_Aware_Process_Runtime_Engine.md) · [P1-02D Parity](06_Implementation_Packages/Package_01_Core_Foundation/P1-02D_Process_Instance_Provenance_and_Schema_Parity.md) · [P1-02E Trigger Security](06_Implementation_Packages/Package_01_Core_Foundation/P1-02E_Legacy_Version_Trigger_Security_Closure.md) · [P2-01 Phase Rename](06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md) · [P2-01A Phase Grant Hardening](06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md) · [P2-02 Movement & Cancellation](06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md) · [P2-02A Immutability Closure](06_Implementation_Packages/Package_02_Process_Runtime/P2-02A_Post_Cancellation_Immutability_Closure.md) |
+| **`06_Implementation_Packages`** | Technical specifications for discrete engineering delivery packages | [P1-01 Foundation](06_Implementation_Packages/Package_01_Core_Foundation/P1-01_Core_Hierarchy_Process_Instance_Foundation.md) · [P1-01A Hardening](06_Implementation_Packages/Package_01_Core_Foundation/P1-01A_Process_Instance_Access_Hardening.md) · [P1-01B Accuracy](06_Implementation_Packages/Package_01_Core_Foundation/P1-01B_Documentation_Accuracy_and_Architecture_Baseline.md) · [P1-02 Runtime](06_Implementation_Packages/Package_01_Core_Foundation/P1-02_Placement_Aware_Process_Runtime_Engine.md) · [P1-02D Parity](06_Implementation_Packages/Package_01_Core_Foundation/P1-02D_Process_Instance_Provenance_and_Schema_Parity.md) · [P1-02E Trigger Security](06_Implementation_Packages/Package_01_Core_Foundation/P1-02E_Legacy_Version_Trigger_Security_Closure.md) · [P2-01 Phase Rename](06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md) · [P2-01A Phase Grant Hardening](06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md) · [P2-02 Movement & Cancellation](06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md) · [P2-02A Immutability Closure](06_Implementation_Packages/Package_02_Process_Runtime/P2-02A_Post_Cancellation_Immutability_Closure.md) · [P2-03 Parent Completion](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) |
 | **`07_Testing_and_QA`** | Verification suites, static contract validation, safety harnesses | [Testing Directory](07_Testing_and_QA/) |
 | **`08_Deployment_and_Operations`** | Data seed operations, migrations deployment, backup runs | [Structured Reseed Report](08_Deployment_and_Operations/Structured_Data_Reseed_Report.md) |
 | **`09_Decision_Records`** | Authoritative Architecture Decision Records (ADRs) | [Master Decision Register](09_Decision_Records/DECISION_REGISTER.md) · [Process Decisions](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md) · [Finance Decisions](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
@@ -79,6 +79,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P2-01A` Phase Grant Hardening & Browser Acceptance | **`VERIFIED`** | Migration `20260817122020` · [P2-01A Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md) |
 | | `P2-02` Process Movement, Cancellation, Authorization & Audit | **`VERIFIED`** | Migration `20260817123556` · [P2-02 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md) |
 | | `P2-02A` Post-Cancellation Immutability Final Closure | **`VERIFIED`** | Migration `20260817132234` · [P2-02A Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-02A_Post_Cancellation_Immutability_Closure.md) |
+| | `P2-03` Parent Task Completion & Runtime Closure | **`VERIFIED`** | Migration `20260817142153` · [P2-03 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) |
 | **Package 3: Hierarchy UI** | Milestone $\to$ Phase cutover, nested task UI | **`PLANNED`** | Upcoming Package 3 |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
@@ -101,7 +102,7 @@ When consulting documentation, the following hierarchy of authority applies:
 
 ## 7. Latest Verified Production State
 
-- **Production Database Migration Chain**: 28 canonical migrations verified in strict sequential order.
+- **Production Database Migration Chain**: 29 canonical migrations verified in strict sequential order.
 - **Process Instance Security Model**:
   - `PUBLIC`: Zero direct privileges (`REVOKE ALL`).
   - `anon`: Zero direct privileges (`REVOKE ALL`).
