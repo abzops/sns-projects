@@ -195,7 +195,6 @@ export default function TaskDetailPanel({
       return;
     }
     onDelete?.(task.id);
-    onClose?.();
   };
 
   // Defined Task RPC Handlers
@@ -322,26 +321,35 @@ export default function TaskDetailPanel({
   // Custom RACI Handlers
   const handleSetAccountable = async (userId) => {
     if (isDefinedTask) return;
-    if (!userId) {
+    try {
+      if (!userId) {
+        if (accountable) await removeRaci(accountable.id);
+        return;
+      }
+      if (accountable && accountable.user_id === userId) return;
       if (accountable) await removeRaci(accountable.id);
-      return;
+      await assignRaci({ raciRole: 'A', userId });
+    } catch (err) {
+      showToast(err.message || 'Failed to update Accountable assignment', 'error');
+      await refetchRaci();
     }
-    if (accountable && accountable.user_id === userId) return;
-    if (accountable) await removeRaci(accountable.id);
-    await assignRaci({ raciRole: 'A', userId });
   };
 
   const handleAddRaciAssignment = async (e) => {
     e.preventDefault();
     if (isDefinedTask || !selectedTargetId || !addRaciRole) return;
     const isUser = selectedTargetType === 'user';
-    await assignRaci({
-      raciRole: addRaciRole,
-      userId: isUser ? selectedTargetId : null,
-      departmentId: !isUser ? selectedTargetId : null,
-    });
-    setSelectedTargetId('');
-    setAddRaciRole(null);
+    try {
+      await assignRaci({
+        raciRole: addRaciRole,
+        userId: isUser ? selectedTargetId : null,
+        departmentId: !isUser ? selectedTargetId : null,
+      });
+      setSelectedTargetId('');
+      setAddRaciRole(null);
+    } catch (err) {
+      showToast(err.message || 'Failed to add RACI assignment', 'error');
+    }
   };
 
   // Subtask creation handler

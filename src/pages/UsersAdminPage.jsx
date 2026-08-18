@@ -999,7 +999,11 @@ export default function UsersAdminPage() {
                             className={styles.removeBtn}
                             onClick={async () => {
                               if (confirm(`Remove ${rawName || email || 'this user'} from this workspace?`)) {
-                                await removeMember(member.id);
+                                const { error: removeError } = await removeMember(member.id);
+                                if (removeError) {
+                                  showToast(removeError.message || 'Failed to remove member', 'error');
+                                  return;
+                                }
                                 showToast('Member removed from workspace', 'success');
                                 await Promise.all([refetchMembers(), fetchDeptMemberships()]);
                               }

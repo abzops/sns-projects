@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   Building2,
   Plus,
@@ -51,13 +51,13 @@ function DepartmentMembersManager({ department, onClose }) {
             Assignments, roles, and primary departments are managed in the Personnel console.
           </p>
         </div>
-        <a
-          href={`#/workspace/${department.workspace_id}/admin/users`}
+        <Link
+          to={`/workspace/${department.workspace_id}/admin/users`}
           className={styles.addBtn}
           style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
         >
           <Users size={14} /> Manage in Personnel
-        </a>
+        </Link>
       </div>
 
       {/* Existing Members List */}

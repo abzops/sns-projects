@@ -13,12 +13,14 @@ import {
   Palette,
   Search,
   ChevronRight,
+  AlertCircle,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import { CardGridSkeleton } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 import styles from './ProjectsPage.module.css';
 
 const PRESET_COLORS = [
@@ -52,8 +54,9 @@ function isOverdue(dateStr, status) {
 export default function ProjectsPage() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
-  const { projects = [], loading, createProject } = useProjects(workspaceId);
+  const { projects = [], loading, error, createProject } = useProjects(workspaceId);
   const { members = [] } = useMembers(workspaceId);
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
@@ -95,7 +98,7 @@ export default function ProjectsPage() {
 
     setCreating(true);
     try {
-      await createProject({
+      const { error: createError } = await createProject({
         name: name.trim(),
         description: description.trim(),
         color,
@@ -105,9 +108,12 @@ export default function ProjectsPage() {
         project_status: projectStatus,
         project_priority: projectPriority,
       });
+      if (createError) throw createError;
       setShowModal(false);
+      showToast('Project created successfully', 'success');
     } catch (err) {
       console.error('Failed to create project:', err);
+      showToast(err.message || 'Failed to create project', 'error');
     } finally {
       setCreating(false);
     }
@@ -196,6 +202,12 @@ export default function ProjectsPage() {
       {/* Project Grid */}
       {loading && projects.length === 0 ? (
         <CardGridSkeleton count={3} />
+      ) : error && projects.length === 0 ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Unable to load projects"
+          description={error.message || 'Please check your access and connection, then retry.'}
+        />
       ) : filteredProjects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}

@@ -1569,7 +1569,12 @@ export default function TasksPage() {
             }
           }}
           onDelete={async (taskId) => {
-            await deleteTask(taskId);
+            const { error: deleteError } = await deleteTask(taskId);
+            if (deleteError) {
+              showToast(deleteError.message || 'Failed to delete task', 'error');
+              return;
+            }
+            showToast('Task deleted', 'success');
             setSelectedTask(null);
           }}
           statuses={statuses}

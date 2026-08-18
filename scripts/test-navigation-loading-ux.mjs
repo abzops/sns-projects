@@ -111,13 +111,20 @@ const useTaskStatusesPath = path.join(rootDir, 'src', 'hooks', 'useTaskStatuses.
 const useTaskStatusesJs = fs.readFileSync(useTaskStatusesPath, 'utf8');
 assert(useTaskStatusesJs.includes('taskStatusesCache'), 'useTaskStatuses hook has module-level session cache');
 
-const useMilestonesPath = path.join(rootDir, 'src', 'hooks', 'useMilestones.js');
-const useMilestonesJs = fs.readFileSync(useMilestonesPath, 'utf8');
-assert(useMilestonesJs.includes('milestonesCache'), 'useMilestones hook has module-level session cache');
+const usePhasesPath = path.join(rootDir, 'src', 'hooks', 'usePhases.js');
+const usePhasesJs = fs.readFileSync(usePhasesPath, 'utf8');
+assert(usePhasesJs.includes('phasesCache'), 'usePhases hook has module-level session cache');
 
 const useTaskListsPath = path.join(rootDir, 'src', 'hooks', 'useTaskLists.js');
 const useTaskListsJs = fs.readFileSync(useTaskListsPath, 'utf8');
 assert(useTaskListsJs.includes('taskListsCache'), 'useTaskLists hook has module-level session cache');
+
+// Test 9: BrowserRouter navigation must not use hash-only internal URLs
+console.log('\n[Test 9] Auditing internal navigation compatibility');
+const departmentsAdminPath = path.join(rootDir, 'src', 'pages', 'DepartmentsAdminPage.jsx');
+const departmentsAdminJsx = fs.readFileSync(departmentsAdminPath, 'utf8');
+assert(!departmentsAdminJsx.includes('href={`#/workspace/'), 'Department Personnel link avoids hash routing under BrowserRouter');
+assert(departmentsAdminJsx.includes('to={`/workspace/${department.workspace_id}/admin/users`}'), 'Department Personnel link uses React Router navigation');
 
 console.log('\n============================================================');
 console.log(`SUMMARY: ${passedTests} passed, ${failedTests} failed`);

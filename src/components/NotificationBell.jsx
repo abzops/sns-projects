@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import Spinner from './Spinner';
+import { useToast } from './Toast';
 import styles from './NotificationBell.module.css';
 
 function formatRelativeTime(dateStr) {
@@ -33,6 +34,7 @@ function formatRelativeTime(dateStr) {
 
 export default function NotificationBell({ workspaceId }) {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -91,6 +93,7 @@ export default function NotificationBell({ workspaceId }) {
       }
     } catch (err) {
       console.error('Error handling notification click:', err);
+      showToast(err.message || 'Failed to open notification', 'error');
     }
   };
 
@@ -100,6 +103,7 @@ export default function NotificationBell({ workspaceId }) {
       await markAllAsRead();
     } catch (err) {
       console.error('Error marking all as read:', err);
+      showToast(err.message || 'Failed to mark notifications as read', 'error');
     }
   };
 
@@ -211,9 +215,13 @@ export default function NotificationBell({ workspaceId }) {
                         <button
                           type="button"
                           className={styles.markReadBtn}
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            markAsRead(notif.id);
+                            try {
+                              await markAsRead(notif.id);
+                            } catch (err) {
+                              showToast(err.message || 'Failed to mark notification as read', 'error');
+                            }
                           }}
                           title="Mark as read"
                           aria-label="Mark as read"

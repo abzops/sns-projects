@@ -3,6 +3,7 @@ import {
   Building2,
   ChevronRight,
   Shield,
+  AlertCircle,
 } from 'lucide-react';
 import { useDepartments } from '../hooks/useDepartments';
 import { useWorkspaces } from '../hooks/useWorkspaces';
@@ -16,7 +17,7 @@ export default function DepartmentsPage() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
 
-  const { departments = [], loading } = useDepartments(workspaceId);
+  const { departments = [], loading, error } = useDepartments(workspaceId);
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
 
@@ -42,6 +43,12 @@ export default function DepartmentsPage() {
 
       {loading && departments.length === 0 ? (
         <CardGridSkeleton count={4} />
+      ) : error && departments.length === 0 ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Unable to load departments"
+          description={typeof error === 'string' ? error : error.message || 'Please check your access and connection, then retry.'}
+        />
       ) : departments.length === 0 ? (
         <EmptyState
           icon={Building2}

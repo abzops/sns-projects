@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkspaces } from '../hooks/useWorkspaces';
-import { Plus, Building2, Users, FolderOpen, Calendar, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Building2, Users, FolderOpen, Calendar, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
 import { CardGridSkeleton } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 import styles from './WorkspacesPage.module.css';
 
 export default function WorkspacesPage() {
-  const { workspaces = [], loading, createWorkspace } = useWorkspaces();
+  const { workspaces = [], loading, error, createWorkspace } = useWorkspaces();
+  const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -20,14 +22,17 @@ export default function WorkspacesPage() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const { data } = await createWorkspace({ name: newName.trim() });
+      const { data, error: createError } = await createWorkspace({ name: newName.trim() });
+      if (createError) throw createError;
       setNewName('');
       setShowModal(false);
+      showToast('Workspace created successfully', 'success');
       if (data?.id) {
         navigate(`/workspace/${data.id}/dashboard`);
       }
     } catch (err) {
       console.error('Failed to create workspace:', err);
+      showToast(err.message || 'Failed to create workspace', 'error');
     } finally {
       setCreating(false);
     }
@@ -57,6 +62,12 @@ export default function WorkspacesPage() {
 
       {loading && workspaces.length === 0 ? (
         <CardGridSkeleton count={2} />
+      ) : error && workspaces.length === 0 ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Unable to load workspaces"
+          description={error.message || 'Please check your connection and retry.'}
+        />
       ) : workspaces.length === 0 ? (
         <EmptyState
           icon={Building2}

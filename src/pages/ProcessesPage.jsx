@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Edit3,
+  AlertCircle,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import StartProcessModal from '../components/StartProcessModal';
@@ -31,6 +32,7 @@ export default function ProcessesPage() {
     processes = [],
     loading,
     refreshing,
+    error,
     publishVersion,
   } = useDefinedProcesses(workspaceId);
 
@@ -90,6 +92,12 @@ export default function ProcessesPage() {
 
       {loading && processes.length === 0 ? (
         <CardGridSkeleton count={3} />
+      ) : error && processes.length === 0 ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Unable to load defined processes"
+          description={typeof error === 'string' ? error : error.message || 'Please check your access and connection, then retry.'}
+        />
       ) : processes.length === 0 ? (
         <EmptyState
           icon={Workflow}
