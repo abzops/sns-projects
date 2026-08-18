@@ -14,6 +14,7 @@
     "test:user-terminology": "node scripts/test-operational-v1-user-terminology.mjs",
     "test:ov1-access": "node scripts/test-ov1-a-operational-visibility.mjs && node scripts/test-ov1-a-project-ownership-bootstrap.mjs && node scripts/test-ov1-a-user-context.mjs",
     "test:ov1-frontend": "node scripts/test-ov1-b-frontend-visibility.mjs",
+    "test:ov1-dashboard": "node scripts/test-ov1-c-role-aware-dashboard.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

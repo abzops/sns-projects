@@ -50,8 +50,11 @@ assert(myWorkJsx.includes('useMemo(() => {') && myWorkJsx.includes('activeTab !=
 console.log('\n[Test 3] Auditing DashboardPage.jsx');
 const dashboardPagePath = path.join(rootDir, 'src', 'pages', 'DashboardPage.jsx');
 const dashboardJsx = fs.readFileSync(dashboardPagePath, 'utf8');
+const dashboardHookPath = path.join(rootDir, 'src', 'hooks', 'useDashboardData.js');
+const dashboardHook = fs.readFileSync(dashboardHookPath, 'utf8');
 
-assert(dashboardJsx.includes('dashboardTasksCache = new Map()'), 'DashboardPage has in-memory tasks cache');
+assert(dashboardHook.includes('dashboardDataCache = new Map()'), 'Dashboard Engine has an in-memory scoped data cache');
+assert(dashboardHook.includes('authorizationScopeKey'), 'Dashboard cache invalidates with authorization scope');
 assert(!dashboardJsx.includes('if (projectsLoading || tasksLoading) {\n    return (\n      <div className={styles.loadingContainer}>'), 'DashboardPage removed full-page blocking spinner');
 assert(dashboardJsx.includes('<PageHeader'), 'DashboardPage renders PageHeader immediately');
 assert(dashboardJsx.includes('MetricCardsSkeleton'), 'DashboardPage renders MetricCardsSkeleton on initial load');

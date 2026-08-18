@@ -67,12 +67,12 @@ async function main() {
   );
 
   assert(
-    countMatches(myWork, /phases:phases!fk_tasks_phase\s*\(/g) === 2,
-    'My Work uses fk_tasks_phase for both task queries',
+    countMatches(myWork, /phases:phases!fk_tasks_phase\s*\(/g) === 3,
+    'My Work uses fk_tasks_phase for RACI, direct-assignee, and Subtask-parent task payloads',
   );
   assert(
-    countMatches(myWork, /task_lists:task_lists!fk_tasks_task_list\s*\(/g) === 2,
-    'My Work disambiguates both task-list embeds with fk_tasks_task_list',
+    countMatches(myWork, /task_lists:task_lists!fk_tasks_task_list\s*\(/g) === 3,
+    'My Work disambiguates all three task-list embeds with fk_tasks_task_list',
   );
   assert(
     countMatches(useTasks, /phases:phases!fk_tasks_phase\s*\(/g) === 1,
