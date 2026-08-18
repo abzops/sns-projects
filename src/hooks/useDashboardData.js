@@ -32,6 +32,7 @@ export function useDashboardData({
   const projectIdsKey = projects.map((project) => project.id).sort().join(',');
   const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
   const cached = dashboardDataCache.get(cacheKey);
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey);
   const [data, setData] = useState(() => cached || EMPTY_DATA);
   const [loading, setLoading] = useState(() => !cached);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,17 +169,21 @@ export function useDashboardData({
 
   useEffect(() => {
     const scopedCache = dashboardDataCache.get(cacheKey);
+    setActiveCacheKey(cacheKey);
     setData(scopedCache || EMPTY_DATA);
     setLoading(!scopedCache);
     setError(null);
     fetchDashboardData({ silent: Boolean(scopedCache) });
   }, [cacheKey, fetchDashboardData]);
 
+  const scopeIsCurrent = activeCacheKey === cacheKey;
+  const scopedData = scopeIsCurrent ? data : dashboardDataCache.get(cacheKey) || EMPTY_DATA;
+
   return {
-    ...data,
-    loading,
-    refreshing,
-    error,
+    ...scopedData,
+    loading: !scopeIsCurrent || loading,
+    refreshing: scopeIsCurrent && refreshing,
+    error: scopeIsCurrent ? error : null,
     refetch: fetchDashboardData,
     cacheKey,
   };

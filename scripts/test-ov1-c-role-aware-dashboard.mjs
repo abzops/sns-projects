@@ -65,6 +65,7 @@ check((app.match(/path="\/workspace\/:workspaceId\/dashboard"/g) || []).length =
 check(page.includes('resolveDashboardPersona({ systemRoles, workspaceRole })'), 'DashboardPage delegates deterministic persona resolution.');
 check(page.includes('useProjects(workspaceId, authorizationScopeKey)'), 'Projects remain keyed to the refreshed authorization scope.');
 check(hook.includes("`${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`"), 'Dashboard cache key includes identity, workspace, and authorizationScopeKey.');
+check(hook.includes('activeCacheKey === cacheKey') && hook.includes('loading: !scopeIsCurrent || loading'), 'Role changes fail closed until the new Dashboard cache scope is current.');
 check(hook.includes(".from('tasks')") && hook.includes(".from('task_raci_assignments')") && hook.includes(".from('subtasks')"), 'Tasks, RACI, and Subtasks are fetched in bounded bulk queries.');
 check(!hook.includes('for (const task') || !hook.includes('await supabase'), 'Dashboard data hook has no per-Task Supabase query loop.');
 check(hook.includes(".from('process_instances')") && hook.includes(".eq('workspace_id', workspaceId)"), 'Process data remains workspace-scoped and RLS-authoritative.');
