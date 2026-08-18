@@ -3,9 +3,12 @@
 **Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
 
 **Certification Date**: 2026-08-18  
-**Certified Application Commit**: `6fdfbbfa9d1f0f8c84a81ac848be75c4294dd8b8`
+
+**Certified Repository Commit**: `76a8320514bff8494e36b9b4e7a46125d9169b7c`
+
 **Scope**: Current non-Finance SNS Projects application  
-**Database Migration**: `20260818110545_ov1_a_operational_visibility_closure.sql`
+
+**Database Migration Tip**: `20260818120101_ov1_a_project_ownership_bootstrap_hotfix.sql`
 
 ---
 
@@ -37,6 +40,7 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | Hierarchy Phase and Task List rows used verbose contextual create buttons, then required users to reselect hierarchy parents already known from the clicked row | Replaced both row actions with a consistent, accessible 32px `+` icon control. The existing Task List and Task modals now receive the clicked hierarchy context, display the locked Project/Phase/Task List path, and resolve mutation parent IDs from that immutable context. Global header creation remains editable, successful inserts still use the existing silent local refresh, and expansion state is untouched. |
 | Active frontend surfaces exposed internal Accountable/Responsible and RACI terminology as primary user language | Completed a presentation-only cutover to Owner, Assignee/Assignees, Consulted, and Informed across Tasks, My Work, Dashboard, hierarchy cards/rows, Process Builder/Definition/runtime, Start Process, Process Instance, validation, help, empty states, and administration copy. A centralized display map fixes Owner→A and Assignee→R while all `raci_role`, A/R codes, backend identifiers, RPCs, authorization, and process-engine behavior remain unchanged. |
 | Any active workspace role could read all Projects and descendant operational rows because broad SELECT policies treated membership as visibility authority | OV1-A replaces workspace-wide operational SELECT with `auth.uid()`-bound private helpers and scoped RLS. Only CEO, CTO, Project Admin, and System Admin retain broad reads; all other users receive involved work plus minimum ancestors, with unrelated siblings and deep links denied server-side. Frontend context now separates workspace administration, global operational visibility, mutation capability, and read-only state. |
+| OV1-A made newly created empty Projects and Task Lists unreadable to their creator during `INSERT ... RETURNING`, because descendant involvement did not exist yet | Production rollback transactions reproduced both SQLSTATE `42501` failures. The acceptance hotfix makes `projects.owner_id = auth.uid()` direct involvement and gives that Owner complete active-member-gated visibility inside only the owned Project. Empty Project, Phase, Task List, Task, and Subtask return reads now succeed without restoring workspace-wide access. |
 
 OV1-A changes SELECT authorization only. It does not alter P1/P2/P3 runtime transitions, RACI codes, process movement/cancellation, post-cancellation immutability, or parent-completion behavior.
 Supabase Security Advisor was rerun after production deployment and remains exactly the accepted six-warning baseline: five historical intentional workflow RPC warnings plus leaked-password protection, with zero new OV1-A warnings.
@@ -56,12 +60,14 @@ Supabase Security Advisor was rerun after production deployment and remains exac
 | Process Definition exact-version/access regression | **PASS — 10 required contracts** |
 | Contextual hierarchy creation regression | **PASS — 8 required contracts** |
 | User-facing operational terminology regression | **PASS — 9 required contracts** |
-| OV1-A clean migration replay | **PASS — 30/30 migrations** |
+| OV1-A clean migration replay | **PASS — 31/31 migrations** |
 | OV1-A authorization matrix | **PASS — 30 assertions** |
+| OV1-A Project ownership/bootstrap matrix | **PASS — 20 assertions** |
 | OV1-A frontend capability separation | **PASS** |
 | P1-02A / P2-02 / P2-03 lifecycle preservation | **PASS — 34/34 · 44/44 · 17/17** |
 | OV1-A production policy/helper/RLS/index verification | **PASS** |
 | OV1-A production System Role/scoped-role/deep-link verification | **PASS** |
+| OV1-A production ownership/bootstrap transaction | **PASS — 5/5 returned rows + full hierarchy read; rolled back** |
 | Supabase Security Advisor | **PASS — accepted 6-warning baseline unchanged** |
 | Explicit PostgREST relationship embeds | **PASS — 9/9** |
 | Active Milestone terminology | **PASS — 0 matches** |
@@ -81,9 +87,9 @@ The deployed asset additionally contains all four auth-performance markers: same
 
 The latest 100 production API requests returned HTTP 200, the latest 100 Edge Function requests returned HTTP 200, and the latest 100 Postgres log entries contained no `ERROR`, `FATAL`, or `PANIC` severity.
 
-Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260818110545`.
+Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260818120101`.
 
-OV1-A production checks additionally confirmed RLS on all 13 operational/runtime tables, exact scoped policy bindings, seven hardened private policy helpers, six predicate indexes, broad visibility for active CEO/CTO/Project Admin/System Admin actors, exact helper-authorized Project sets for no-System-Role actors, and zero rows for an unrelated direct Project query.
+OV1-A production checks additionally confirmed RLS on all 13 operational/runtime tables, exact scoped policy bindings, ten hardened private policy helpers, 13 ownership policy branches, seven relevant predicate/ownership indexes, broad visibility for active CEO/CTO/Project Admin/System Admin actors, exact policy-authorized Project sets for no-System-Role actors, and zero rows for an unrelated direct Project query.
 
 Read-only Process catalog verification found one Published-only definition, two Draft-only definitions, and no current Live+Draft coexistence record. Coexistence behavior is regression-covered without creating fake production data. The current production Defined Process RACI schema supports user and Process Starter actors; no department actor column or independent schema defect was found.
 
@@ -99,7 +105,7 @@ Browser automation could not initialize in the local certification environment b
 2. On Dashboard, My Work, Projects, hierarchy/List/Board/Task Detail, Departments, and Processes, background and restore the tab. Confirm no full-screen spinner, route replacement, collapsed hierarchy, closed Task Detail, scroll jump, or page-data request storm; the last rendered content must remain visible during silent access revalidation.
 3. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
 4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment. In Hierarchy, use two different Phase-row `+` controls and confirm each Task List modal shows and preserves the clicked locked Phase; use two different Task List-row `+` controls and confirm each Task modal shows the current Project plus the clicked locked Phase and Task List. Create only intended real records, confirm each appears immediately under the exact parent, and confirm all existing expansion state remains unchanged. Verify the global `+ Task List` and `Add Task` actions still allow normal parent selection.
-5. Verify Project creation only with an intended real record; confirm success feedback and that a deliberately rejected/unauthorized action remains visible as an error instead of false success.
+5. Reaccept the corrected production bootstrap with intended real records: create a Project owned by the signed-in creator, then create an empty Phase and Task List inside it. Confirm each success response returns normally and the new hierarchy remains visible. Confirm a workspace-only Owner/Admin without a System Role still cannot open an unrelated Project.
 6. On the real Published-only card, confirm View Definition and Start Process are both visible; on Draft-only cards, confirm View Draft plus Edit/Publish only for authorized roles. Verify the viewer shows exact version metadata, ordered steps, RACI/response markers, requirements, and dependency flow with no mutation controls. If a real Live+Draft pair is later created, confirm both version blocks remain visible and Start uses Live only. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
 7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
 8. At approximately 1440, 1024, 768, and 390 CSS-pixel widths, visually inspect Login, Dashboard, My Work, Projects/hierarchy/List/Board, Task Detail/Subtasks/assignments, Process Catalog/Definition/Builder/Instance, Departments, Admin Users/Departments, and Workspace Settings for overlap, clipping, unintended page-level horizontal scroll, inaccessible actions, weak dark-theme contrast, and long-name breakage. Confirm normal users see Owner, Assignee/Assignees, Consulted, and Informed throughout; small A/R/C/I badges may remain only as secondary context.

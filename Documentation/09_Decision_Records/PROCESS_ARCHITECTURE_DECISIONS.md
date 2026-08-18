@@ -149,4 +149,5 @@
 - **Status**: APPROVED / IMPLEMENTED
 - **Rule**: Broad operational visibility is granted only by the active System Roles CEO, CTO, Project Admin, and System Admin. Workspace Owner, Admin, Member, and Viewer roles are tenancy/administration roles and do not independently expose all Projects or work.
 - Users without a System Role see only direct Task participation (RACI A/R/C/I, active department-targeted RACI, or legacy direct assignee), assigned Subtasks, Process runtime participation, and the minimum parent Task, Task List, Phase, and Project ancestors required for context.
+- Project ownership (`projects.owner_id`) is direct operational involvement. An active Project Owner sees the complete Phase, Task List, Task/Child Task, Subtask, and attached/runtime Process hierarchy inside that owned Project only. This rule also supplies the SELECT side of empty-container `INSERT ... RETURNING`; it does not grant access to Projects owned by others.
 - Unrelated sibling work is not inherited through ancestor visibility. Viewer receives the same scoped SELECT model but no mutation authority. RLS is the security boundary; frontend filtering is presentation only.

@@ -20,7 +20,7 @@
 - **Hosting & CI/CD**: GitHub Pages CDN, GitHub Actions Automated Workflows
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
-- **Current Canonical Migration**: `20260818110545_ov1_a_operational_visibility_closure.sql`
+- **Current Canonical Migration**: `20260818120101_ov1_a_project_ownership_bootstrap_hotfix.sql`
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
 - **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
 - **Package 3 Status**: **`COMPLETE / VERIFIED`** (`P3-01` and `P3-02` verified; manual signed-in production acceptance passed)
@@ -85,7 +85,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P2-03` Parent Task Completion & Runtime Closure | **`VERIFIED`** | Migration `20260817142153` · [P2-03 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) |
 | **Package 3: Hierarchy UI** | `P3-01` Operational Hierarchy UI Cutover | **`VERIFIED`** | [P3-01 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — manual signed-in production acceptance passed |
 | | `P3-02` Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
-| **Operational V1** | `OV1-A` Server-Enforced Operational Visibility | **`VERIFIED`** | Migration `20260818110545` · [OV1-A Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
+| **Operational V1** | `OV1-A` Server-Enforced Operational Visibility | **`VERIFIED`** | Ownership/bootstrap hotfix `20260818120101` · [OV1-A Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
@@ -108,7 +108,7 @@ When consulting documentation, the following hierarchy of authority applies:
 
 ## 7. Latest Verified Production State
 
-- **Production Database Migration Chain**: 30 canonical migrations verified in strict sequential order; current tip `20260818110545`.
+- **Production Database Migration Chain**: 31 canonical migrations verified in strict sequential order; current tip `20260818120101`.
 - **Process Instance Security Model**:
   - `PUBLIC`: Zero direct privileges (`REVOKE ALL`).
   - `anon`: Zero direct privileges (`REVOKE ALL`).
