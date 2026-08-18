@@ -27,6 +27,7 @@
 - **Operational V1 Certification**: **`READY FOR MANUAL FINAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 - **Operational V1 Access Closure**: **`OV1-A VERIFIED`** ([Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md))
 - **Operational V1 Frontend Visibility**: **`OV1-B READY FOR MANUAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Role-Aware Dashboards**: **`OV1-C READY FOR MANUAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -88,6 +89,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P3-02` Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
 | **Operational V1** | `OV1-A` Server-Enforced Operational Visibility | **`VERIFIED`** | Ownership/bootstrap hotfix `20260818120101` · [OV1-A Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
 | | `OV1-B` Frontend Visibility Alignment | **`READY FOR MANUAL ACCEPTANCE`** | Frontend commit `c176835` · deployment run `32138145503` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
+| | `OV1-C` Role-Aware Dashboard Engine | **`READY FOR MANUAL ACCEPTANCE`** | Frontend tip `e518350` · deployment run `32145048624` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
