@@ -3,7 +3,7 @@
 **Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
 
 **Certification Date**: 2026-08-18  
-**Certified Application Commit**: `e6ade4787d89158e4410c7ac75d6407287858ceb`
+**Certified Application Commit**: `7006d349257e8d5d7575b23d407d3c3787a8cb04`
 **Scope**: Current non-Finance SNS Projects application  
 **Database Migration**: None
 
@@ -34,6 +34,7 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | The same missing-CSS-selector defect existed beyond RACI in onboarding/auth, workspace states, metric cards, and RACI badges | All deterministic CSS Module references in active JavaScript/JSX were audited and corrected. A reusable verifier now fails on missing dot, quoted-bracket, or static-template selector references. |
 | Task Detail and first-login panels could lose actions or compress controls at shorter/narrower viewports | Panel height now follows the dynamic viewport, content owns the internal scroll, header/footer stay usable, and Subtask/RACI controls wrap predictably at tablet and mobile widths. |
 | A Published Defined Process exposed only Start Process, while the existing detail loader accepted Draft versions only; when Live and Draft coexisted, the Published card branch hid every Draft action | Added an exact-version, read-only Process Definition route that bulk-loads the requested snapshot's steps, RACI, dependencies, and evidence information under existing RLS. Catalog cards now represent Published-only, Draft-only, and Live+Draft states independently; Start remains bound exclusively to the current Published version, while edit/publish actions remain Draft-only and authority-gated. |
+| Hierarchy Phase and Task List rows used verbose contextual create buttons, then required users to reselect hierarchy parents already known from the clicked row | Replaced both row actions with a consistent, accessible 32px `+` icon control. The existing Task List and Task modals now receive the clicked hierarchy context, display the locked Project/Phase/Task List path, and resolve mutation parent IDs from that immutable context. Global header creation remains editable, successful inserts still use the existing silent local refresh, and expansion state is untouched. |
 
 No database, RLS, policy, function, trigger, or migration changes were made.
 Supabase Security Advisor was therefore not rerun; the requirement applies only when database or security state changes.
@@ -48,9 +49,10 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Navigation and loading regression | **PASS — 34/34** |
 | Authentication/password lifecycle contracts | **PASS — 30/30** |
 | Foreground auth and loading-performance regression | **PASS — 19 contracts** |
-| CSS Module missing-reference verifier | **PASS — 45 imports / 1,798 static references** |
+| CSS Module missing-reference verifier | **PASS — 45 imports / 1,808 static references** |
 | Operational V1 visual-integrity static audit | **PASS — 19 critical surfaces + RACI/responsive/control contracts** |
 | Process Definition exact-version/access regression | **PASS — 10 required contracts** |
+| Contextual hierarchy creation regression | **PASS — 8 required contracts** |
 | Explicit PostgREST relationship embeds | **PASS — 9/9** |
 | Active Milestone terminology | **PASS — 0 matches** |
 | P3-01 hierarchy regression | **PASS** |
@@ -58,10 +60,11 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Production CORS and unauthenticated JWT gate | **PASS — 3/3** |
 | Lint | **PASS — 0 errors; historical warnings unchanged** |
 | Production build | **PASS** |
-| GitHub Pages build and deployment | **PASS — run `32124196769`** |
+| GitHub Pages build and deployment | **PASS — run `32124911897`** |
 | Deployed bundle contract | **PASS — 12/12** |
-| Deployed JavaScript asset | **PASS — `index-DT9haSOp.js`** |
-| Deployed visual-integrity CSS asset | **PASS — `index-sl3wAD-O.css`** |
+| Deployed hierarchy context markers | **PASS — 4/4** |
+| Deployed JavaScript asset | **PASS — `index-D_R8RPEH.js`** |
+| Deployed visual-integrity CSS asset | **PASS — `index-O1SIsU9n.css`** |
 
 The deployed asset additionally contains all four auth-performance markers: same-user token-refresh reconciliation, visibility-driven silent revalidation, retained-content background warning, and fail-closed access denial.
 
@@ -82,7 +85,7 @@ Browser automation could not initialize in the local certification environment b
 1. Sign in with an authorized existing user, refresh a deep-linked route to confirm session restore, then sign out and confirm protected history cannot be reopened.
 2. On Dashboard, My Work, Projects, hierarchy/List/Board/Task Detail, Departments, and Processes, background and restore the tab. Confirm no full-screen spinner, route replacement, collapsed hierarchy, closed Task Detail, scroll jump, or page-data request storm; the last rendered content must remain visible during silent access revalidation.
 3. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
-4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment.
+4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment. In Hierarchy, use two different Phase-row `+` controls and confirm each Task List modal shows and preserves the clicked locked Phase; use two different Task List-row `+` controls and confirm each Task modal shows the current Project plus the clicked locked Phase and Task List. Create only intended real records, confirm each appears immediately under the exact parent, and confirm all existing expansion state remains unchanged. Verify the global `+ Task List` and `Add Task` actions still allow normal parent selection.
 5. Verify Project creation only with an intended real record; confirm success feedback and that a deliberately rejected/unauthorized action remains visible as an error instead of false success.
 6. On the real Published-only card, confirm View Definition and Start Process are both visible; on Draft-only cards, confirm View Draft plus Edit/Publish only for authorized roles. Verify the viewer shows exact version metadata, ordered steps, RACI/response markers, requirements, and dependency flow with no mutation controls. If a real Live+Draft pair is later created, confirm both version blocks remain visible and Start uses Live only. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
 7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
