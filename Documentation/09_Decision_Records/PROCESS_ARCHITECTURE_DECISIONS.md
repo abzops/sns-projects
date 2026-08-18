@@ -4,7 +4,7 @@
 - **Domain**: Process Engine, Hierarchy & Runtime Workflows
 - **Status**: `APPROVED / ACTIVE`
 - **Master Register**: [DECISION_REGISTER.md](DECISION_REGISTER.md)
-- **Last Verified**: 2026-08-17
+- **Last Verified**: 2026-08-18
 
 ---
 
@@ -104,12 +104,12 @@
   - CEO / CTO
 
 ### Decision 38 — Standalone Process Visibility
-- **Status**: APPROVED
+- **Status**: APPROVED / AMENDED BY DECISION 71
 - **Rule**: Standalone Process Instances are visible strictly to:
   - Process Starter
   - Assigned Process Owner
   - RACI Participants on constituent steps
-  - Executive Oversight (Workspace Owner, CEO, CTO, System Admin)
+  - System Role Oversight (CEO, CTO, Project Admin, System Admin)
 - Standalone processes are **NOT** visible workspace-wide.
 
 ### Decision 39 — Independent Process RACI
@@ -144,3 +144,9 @@
   - Completed steps remain in `completed` state.
   - Incurred expenses and audit logs are permanently preserved.
   - The cancelled Process counts as closed for parent Task auto-completion evaluation.
+
+### Decision 71 — Operational Visibility Is System-Role or Involvement Based
+- **Status**: APPROVED / IMPLEMENTED
+- **Rule**: Broad operational visibility is granted only by the active System Roles CEO, CTO, Project Admin, and System Admin. Workspace Owner, Admin, Member, and Viewer roles are tenancy/administration roles and do not independently expose all Projects or work.
+- Users without a System Role see only direct Task participation (RACI A/R/C/I, active department-targeted RACI, or legacy direct assignee), assigned Subtasks, Process runtime participation, and the minimum parent Task, Task List, Phase, and Project ancestors required for context.
+- Unrelated sibling work is not inherited through ancestor visibility. Viewer receives the same scoped SELECT model but no mutation authority. RLS is the security boundary; frontend filtering is presentation only.

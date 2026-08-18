@@ -20,11 +20,12 @@
 - **Hosting & CI/CD**: GitHub Pages CDN, GitHub Actions Automated Workflows
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
-- **Current Canonical Migration**: `20260817142153_p2_03_parent_completion_runtime.sql`
+- **Current Canonical Migration**: `20260818110545_ov1_a_operational_visibility_closure.sql`
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
 - **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
 - **Package 3 Status**: **`COMPLETE / VERIFIED`** (`P3-01` and `P3-02` verified; manual signed-in production acceptance passed)
 - **Operational V1 Certification**: **`READY FOR MANUAL FINAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Access Closure**: **`OV1-A VERIFIED`** ([Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md))
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -52,7 +53,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | **`00_Governance`** | Documentation standards, roadmaps, implementation workflow | [Documentation Standard](00_Governance/DOCUMENTATION_STANDARD.md) · [Implementation Roadmap](00_Governance/IMPLEMENTATION_ROADMAP.md) |
 | **`01_Product_Architecture`** | Target architecture blueprints and system audit reports | [Architecture Blueprint](01_Product_Architecture/SNS_Projects_V2_Architecture_Blueprint.md) · [Current State Audit](01_Product_Architecture/SNS_Projects_Current_State_Audit.md) |
 | **`02_Database_and_Data_Architecture`** | Database schema designs, hierarchy alignment, migration chains | [Hierarchy Alignment](02_Database_and_Data_Architecture/Day0_Release2_5_Hierarchy_Alignment.md) · [Migration History](02_Database_and_Data_Architecture/Migration_History_Reconciliation.md) |
-| **`03_Security_and_Authentication`** | RLS security policies, role hierarchies, user onboarding | [Security Hardening](03_Security_and_Authentication/Day0_Release1_1_Security_Hardening.md) · [Org Admin & Auth](03_Security_and_Authentication/V1_01_Organization_Admin_and_Auth.md) |
+| **`03_Security_and_Authentication`** | RLS security policies, role hierarchies, user onboarding | [Security Hardening](03_Security_and_Authentication/Day0_Release1_1_Security_Hardening.md) · [Org Admin & Auth](03_Security_and_Authentication/V1_01_Organization_Admin_and_Auth.md) · [OV1-A Access Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
 | **`04_Defined_Processes`** | Defined Process Engine, DAG step execution, RACI contracts | [Engine Architecture Plan](04_Defined_Processes/Defined_Process_Engine_Architecture_Plan.md) · [Runtime API Contract](04_Defined_Processes/Defined_Process_Runtime_API_Contract.md) |
 | **`05_Finance`** | Financial tracking, Base Budget + Safety Buffer model, Expense Ledgers | [Finance Architecture Spec](05_Finance/FINANCE_ARCHITECTURE_SPEC.md) · [Finance Decision Register](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
 | **`06_Implementation_Packages`** | Technical specifications for discrete engineering delivery packages | [P1-01 Foundation](06_Implementation_Packages/Package_01_Core_Foundation/P1-01_Core_Hierarchy_Process_Instance_Foundation.md) · [P1-01A Hardening](06_Implementation_Packages/Package_01_Core_Foundation/P1-01A_Process_Instance_Access_Hardening.md) · [P1-01B Accuracy](06_Implementation_Packages/Package_01_Core_Foundation/P1-01B_Documentation_Accuracy_and_Architecture_Baseline.md) · [P1-02 Runtime](06_Implementation_Packages/Package_01_Core_Foundation/P1-02_Placement_Aware_Process_Runtime_Engine.md) · [P1-02D Parity](06_Implementation_Packages/Package_01_Core_Foundation/P1-02D_Process_Instance_Provenance_and_Schema_Parity.md) · [P1-02E Trigger Security](06_Implementation_Packages/Package_01_Core_Foundation/P1-02E_Legacy_Version_Trigger_Security_Closure.md) · [P2-01 Phase Rename](06_Implementation_Packages/Package_02_Process_Runtime/P2-01_Controlled_Milestone_to_Phase_Rename.md) · [P2-01A Phase Grant Hardening](06_Implementation_Packages/Package_02_Process_Runtime/P2-01A_Phase_Grant_Hardening_and_Browser_Acceptance.md) · [P2-02 Movement & Cancellation](06_Implementation_Packages/Package_02_Process_Runtime/P2-02_Process_Instance_Movement_Cancellation_Authorization.md) · [P2-02A Immutability Closure](06_Implementation_Packages/Package_02_Process_Runtime/P2-02A_Post_Cancellation_Immutability_Closure.md) · [P2-03 Parent Completion](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) · [P3-01 Operational Hierarchy](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) · [P3-02 Subtask Hierarchy](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) |
@@ -84,6 +85,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `P2-03` Parent Task Completion & Runtime Closure | **`VERIFIED`** | Migration `20260817142153` · [P2-03 Spec](06_Implementation_Packages/Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md) |
 | **Package 3: Hierarchy UI** | `P3-01` Operational Hierarchy UI Cutover | **`VERIFIED`** | [P3-01 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — manual signed-in production acceptance passed |
 | | `P3-02` Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
+| **Operational V1** | `OV1-A` Server-Enforced Operational Visibility | **`VERIFIED`** | Migration `20260818110545` · [OV1-A Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
 | **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
@@ -97,7 +99,8 @@ When consulting documentation, the following hierarchy of authority applies:
 - **[Decision 1–4, 26–44](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: 5-Level Work Hierarchy, Temporary Phase Compatibility, Full Tasks as Process Steps, Single Process Due Date, Intra-Project Movement.
 - **[Decision 32 (PARKED)](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md#decision-32--overall-process-business-status-model--parked)**: Overall Process Business Status Model is **PARKED** (Technical states `running`, `completed`, `cancelled` only).
 - **[Decision 33 & 42](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: Contractual Due Dates on Process Instance only (`process_instances.due_date`); step tasks receive `due_date = NULL`.
-- **[Decision 38](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: Standalone Process Visibility is restricted to Starter, Owner, RACI Assignees, and Workspace Executives (Admin/CEO/CTO).
+- **[Decision 38](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: Standalone Process Visibility is restricted to Starter, Process Owner, RACI participants, and the four broad System Roles.
+- **[Decision 71](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md)**: Broad operational visibility is System-Role based; workspace-only roles receive involved work plus minimum ancestor context.
 - **[Decision 5–25, 45–70](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md)**: Base Budget + Safety Buffer Model, Deterministic Risk Bands (`GREEN`, `YELLOW`, `ORANGE`, `RED`), No Task Budgets, No Financial Double Counting, Finance Operator Role, Sibling Reallocation, Expense Voids/Tombstones.
 - **Explicit Scope Boundaries**: ERP/Accounting modules (Cost Centers, GL accounts, Purchase Orders, AP/AR, Invoice Management) are strictly excluded from V1.
 
@@ -105,11 +108,11 @@ When consulting documentation, the following hierarchy of authority applies:
 
 ## 7. Latest Verified Production State
 
-- **Production Database Migration Chain**: 29 canonical migrations verified in strict sequential order.
+- **Production Database Migration Chain**: 30 canonical migrations verified in strict sequential order; current tip `20260818110545`.
 - **Process Instance Security Model**:
   - `PUBLIC`: Zero direct privileges (`REVOKE ALL`).
   - `anon`: Zero direct privileges (`REVOKE ALL`).
-  - `authenticated`: Selective `SELECT` via `process_instances_select_policy` (`private.can_read_process_instance`), zero direct client DML (`REVOKE INSERT, UPDATE, DELETE`).
+  - `authenticated`: Selective `SELECT` via `process_instances_select_policy` (`private.can_view_operational_process_instance`), zero direct client DML (`REVOKE INSERT, UPDATE, DELETE`).
   - `service_role`: Dedicated backend execution role for trusted RPC operations.
   - `postgres`: Superuser / Administrative Owner.
   - **RLS State**: Enabled on `public.process_instances` with selective read policy and fail-closed direct mutations.

@@ -21,6 +21,7 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Package 2** | `P2-03` | Parent Task Completion + Runtime Closure | **`VERIFIED`** | `20260817142153_p2_03_parent_completion_runtime.sql` |
 | **Package 3** | `P3-01` | Operational Hierarchy UI Cutover | **`VERIFIED`** | [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — manual signed-in production acceptance passed |
 | **Package 3** | `P3-02` | Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
+| **Operational V1** | `OV1-A` | Server-Enforced Operational Visibility Access Closure | **`VERIFIED`** | [OV1-A Security Closure](../03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) · Migration `20260818110545` |
 | **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Buffers, Expense Ledger) | **`PLANNED`** | Financial schemas, RLS, audit logs |
 | **Package 5** | `P5-01..` | Expense Execution Integration (Atomic Intercept, Reallocations) | **`PLANNED`** | Task/Process Expense attachments & audit |
 | **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
@@ -77,6 +78,9 @@ graph TD
 - **P3-01 (`VERIFIED`)**: Phase-only operational hierarchy with recursive Task/Child Task chevrons, exact-placement Process Instance groups, separated Process steps, multi-process support, backend-derived progress, responsive states, and preserved List/Board/Task Detail behavior. GitHub Pages and deployed bundle checks pass; manual signed-in production acceptance passed after the earlier browser-controller limitation. [P3-01 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md).
 - **P3-02 (`VERIFIED`)**: Bulk-loaded real Subtasks now participate in Task expansion without becoming Child Tasks, with four-state presentation, deterministic Subtasks/Processes/Child Tasks grouping, and immediate hierarchy refresh after Task Detail Subtask mutations. GitHub Pages and deployed bundle checks pass; no database migration was required, and manual signed-in production acceptance passed. [P3-02 Spec](../06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md).
 - **Package 3 Status**: **`COMPLETE / VERIFIED`**.
+
+### Operational V1 Access Closure
+- **OV1-A (`VERIFIED`)**: Replaces workspace-wide operational SELECT access with server-enforced involvement and ancestor visibility. CEO, CTO, Project Admin, and System Admin retain broad visibility; workspace-only Owner/Admin/Member/Viewer users receive only RACI/direct-assignee/Subtask/Process participation plus required ancestors. Private hardened helpers, scoped runtime policies, predicate indexes, frontend capability separation, production deep-link denial, lifecycle preservation, and the accepted six-warning Security Advisor baseline are verified. [OV1-A Security Closure](../03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md).
 
 ### Package 4: Finance Database Foundation
 - Schemas for Base Budgets, fixed Safety Buffers, and hierarchical allocation tracking on Projects, Phases, and Task Lists.

@@ -3,15 +3,15 @@
 **Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
 
 **Certification Date**: 2026-08-18  
-**Certified Application Commit**: `bf07711972cbdba69d2017475861681e6948dca7`
+**Certified Application Commit**: `6fdfbbfa9d1f0f8c84a81ac848be75c4294dd8b8`
 **Scope**: Current non-Finance SNS Projects application  
-**Database Migration**: None
+**Database Migration**: `20260818110545_ov1_a_operational_visibility_closure.sql`
 
 ---
 
 ## 1. Certification Boundary
 
-This certification covers the existing authentication, Dashboard, My Work, Projects, operational hierarchy, List, Board, Task Detail, Subtasks, Child Tasks, RACI, Departments, permission-gated administration, Process Catalog, process definition/version views, exposed process start/runtime surfaces, notifications, navigation, deep-link contracts, and the mandatory Operational V1 Visual Integrity / Cosmetic QA gate.
+This certification covers the existing authentication, Dashboard, My Work, Projects, operational hierarchy, List, Board, Task Detail, Subtasks, Child Tasks, RACI, Departments, permission-gated administration, Process Catalog, process definition/version views, exposed process start/runtime surfaces, notifications, navigation, deep-link contracts, the mandatory Operational V1 Visual Integrity / Cosmetic QA gate, and the OV1-A server-enforced operational visibility boundary.
 
 It preserves all verified P1, P2, and P3 behavior. It does not include Finance, Package 4, speculative features, fake production data, or a declaration of **FULL V1**.
 
@@ -36,9 +36,10 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | A Published Defined Process exposed only Start Process, while the existing detail loader accepted Draft versions only; when Live and Draft coexisted, the Published card branch hid every Draft action | Added an exact-version, read-only Process Definition route that bulk-loads the requested snapshot's steps, RACI, dependencies, and evidence information under existing RLS. Catalog cards now represent Published-only, Draft-only, and Live+Draft states independently; Start remains bound exclusively to the current Published version, while edit/publish actions remain Draft-only and authority-gated. |
 | Hierarchy Phase and Task List rows used verbose contextual create buttons, then required users to reselect hierarchy parents already known from the clicked row | Replaced both row actions with a consistent, accessible 32px `+` icon control. The existing Task List and Task modals now receive the clicked hierarchy context, display the locked Project/Phase/Task List path, and resolve mutation parent IDs from that immutable context. Global header creation remains editable, successful inserts still use the existing silent local refresh, and expansion state is untouched. |
 | Active frontend surfaces exposed internal Accountable/Responsible and RACI terminology as primary user language | Completed a presentation-only cutover to Owner, Assignee/Assignees, Consulted, and Informed across Tasks, My Work, Dashboard, hierarchy cards/rows, Process Builder/Definition/runtime, Start Process, Process Instance, validation, help, empty states, and administration copy. A centralized display map fixes Owner→A and Assignee→R while all `raci_role`, A/R codes, backend identifiers, RPCs, authorization, and process-engine behavior remain unchanged. |
+| Any active workspace role could read all Projects and descendant operational rows because broad SELECT policies treated membership as visibility authority | OV1-A replaces workspace-wide operational SELECT with `auth.uid()`-bound private helpers and scoped RLS. Only CEO, CTO, Project Admin, and System Admin retain broad reads; all other users receive involved work plus minimum ancestors, with unrelated siblings and deep links denied server-side. Frontend context now separates workspace administration, global operational visibility, mutation capability, and read-only state. |
 
-No database, RLS, policy, function, trigger, or migration changes were made.
-Supabase Security Advisor was therefore not rerun; the requirement applies only when database or security state changes.
+OV1-A changes SELECT authorization only. It does not alter P1/P2/P3 runtime transitions, RACI codes, process movement/cancellation, post-cancellation immutability, or parent-completion behavior.
+Supabase Security Advisor was rerun after production deployment and remains exactly the accepted six-warning baseline: five historical intentional workflow RPC warnings plus leaked-password protection, with zero new OV1-A warnings.
 
 ---
 
@@ -55,6 +56,13 @@ Supabase Security Advisor was therefore not rerun; the requirement applies only 
 | Process Definition exact-version/access regression | **PASS — 10 required contracts** |
 | Contextual hierarchy creation regression | **PASS — 8 required contracts** |
 | User-facing operational terminology regression | **PASS — 9 required contracts** |
+| OV1-A clean migration replay | **PASS — 30/30 migrations** |
+| OV1-A authorization matrix | **PASS — 30 assertions** |
+| OV1-A frontend capability separation | **PASS** |
+| P1-02A / P2-02 / P2-03 lifecycle preservation | **PASS — 34/34 · 44/44 · 17/17** |
+| OV1-A production policy/helper/RLS/index verification | **PASS** |
+| OV1-A production System Role/scoped-role/deep-link verification | **PASS** |
+| Supabase Security Advisor | **PASS — accepted 6-warning baseline unchanged** |
 | Explicit PostgREST relationship embeds | **PASS — 9/9** |
 | Active Milestone terminology | **PASS — 0 matches** |
 | P3-01 hierarchy regression | **PASS** |
@@ -73,7 +81,9 @@ The deployed asset additionally contains all four auth-performance markers: same
 
 The latest 100 production API requests returned HTTP 200, the latest 100 Edge Function requests returned HTTP 200, and the latest 100 Postgres log entries contained no `ERROR`, `FATAL`, or `PANIC` severity.
 
-Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260817142153`.
+Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260818110545`.
+
+OV1-A production checks additionally confirmed RLS on all 13 operational/runtime tables, exact scoped policy bindings, seven hardened private policy helpers, six predicate indexes, broad visibility for active CEO/CTO/Project Admin/System Admin actors, exact helper-authorized Project sets for no-System-Role actors, and zero rows for an unrelated direct Project query.
 
 Read-only Process catalog verification found one Published-only definition, two Draft-only definitions, and no current Live+Draft coexistence record. Coexistence behavior is regression-covered without creating fake production data. The current production Defined Process RACI schema supports user and Process Starter actors; no department actor column or independent schema defect was found.
 
@@ -94,6 +104,7 @@ Browser automation could not initialize in the local certification environment b
 7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
 8. At approximately 1440, 1024, 768, and 390 CSS-pixel widths, visually inspect Login, Dashboard, My Work, Projects/hierarchy/List/Board, Task Detail/Subtasks/assignments, Process Catalog/Definition/Builder/Instance, Departments, Admin Users/Departments, and Workspace Settings for overlap, clipping, unintended page-level horizontal scroll, inaccessible actions, weak dark-theme contrast, and long-name breakage. Confirm normal users see Owner, Assignee/Assignees, Consulted, and Informed throughout; small A/R/C/I badges may remain only as secondary context.
 9. In Task Detail specifically, confirm A/R/C/I pills and the Owner/Assignees/Consulted/Informed titles are separated, assignment chips contain avatar/name/optional department/remove control without collisions, Add controls align, Subtask inline creation remains usable, content scrolls once, and close/save/delete remain reachable at common laptop heights and mobile width.
+10. Exercise representative users for each System Role and each workspace-only role. Confirm CEO/CTO/Project Admin/System Admin retain their expected portfolio visibility; workspace-only Owner/Admin/Member/Viewer see only involved work and ancestor context; unrelated sibling Tasks and deep links remain absent; and Viewer has no mutation controls.
 
 ---
 
