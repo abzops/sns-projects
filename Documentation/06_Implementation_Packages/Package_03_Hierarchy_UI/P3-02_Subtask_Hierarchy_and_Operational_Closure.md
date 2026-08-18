@@ -1,6 +1,6 @@
 # Package 3 / P3-02 — Subtask Hierarchy and Operational Closure
 
-**Status**: `IMPLEMENTED` — production deployment pending
+**Status**: `DEPLOYED` — Package 3 verification remains open
 
 **Preceding Deliverable**: [P3-01 Operational Hierarchy UI Cutover](./P3-01_Operational_Hierarchy_UI_Cutover.md)
 
@@ -63,12 +63,23 @@ Task Detail continues to own Subtask CRUD through `useSubtasks`. Successful crea
 | `npm run lint` | **PASS — 0 errors; historical warnings unchanged** |
 | `npm run build` | **PASS** |
 | Documentation links | **PASS** |
+| GitHub Pages build and deployment | **PASS** |
+| Deployed bundle contract and P3-02 markers | **PASS** |
 
 The focused P3-02 suite proves Subtask-only chevrons, true leaf behavior, correct ownership grouping, separation from Child Tasks, all required mixed descendant combinations, deterministic ordering, cancelled semantics, bulk query structure, preserved Task Detail CRUD ownership, and zero active Milestone terminology.
 
 ---
 
-## 6. Scope Boundaries
+## 6. Production Deployment
+
+- Git commit `db1320b` was pushed to `main`.
+- GitHub Pages workflow run `32115634545` completed successfully for that exact commit.
+- Production serves `index-C8OWED_2.js` with the Subtasks group, cancelled-state guard, explicit `subtasks_assignee_id_fkey` relationship, and Child Tasks grouping markers.
+- The established deployed-bundle regression completed **7/7 PASS**.
+
+---
+
+## 7. Scope Boundaries
 
 - Package 3 is not marked `VERIFIED`; broader signed-in acceptance remains a later closure gate.
 - No database migration or production data mutation.
