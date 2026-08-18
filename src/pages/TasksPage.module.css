@@ -17,6 +17,28 @@
   color: var(--muted);
 }
 
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(232, 97, 74, 0.38);
+  border-radius: var(--radius-xs);
+  background: rgba(232, 97, 74, 0.08);
+  color: var(--red);
+}
+
+.errorBanner div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.errorBanner span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 /* ───── Command Header ───── */
 .header {
   display: flex;
@@ -313,6 +335,29 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.placementProcessSection,
+.nestedProcessSection {
+  border: 1px solid rgba(253, 226, 21, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.nestedProcessSection {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.placementProcessHeading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px 0;
+  color: var(--yellow);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .phasesList {
@@ -1084,4 +1129,3 @@
   opacity: 0.9;
   transform: translateY(-1px);
 }
-

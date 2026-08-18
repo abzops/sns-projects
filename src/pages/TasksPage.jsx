@@ -7,6 +7,7 @@ import { useProjects } from '../hooks/useProjects';
 import { useDepartments } from '../hooks/useDepartments';
 import { usePhases } from '../hooks/usePhases';
 import { useTaskLists } from '../hooks/useTaskLists';
+import { useProjectProcessInstances } from '../hooks/useProjectProcessInstances';
 import { useUserContext } from '../hooks/useUserContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
@@ -51,9 +52,11 @@ import {
 import TaskRow from '../components/TaskRow';
 import TaskCard from '../components/TaskCard';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import HierarchyTaskTree, { HierarchyProcessGroups } from '../components/HierarchyTaskTree';
 import Modal from '../components/Modal';
 import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
+import { getPlacementProcesses } from '../lib/hierarchy';
 
 import styles from './TasksPage.module.css';
 
@@ -76,6 +79,11 @@ function getStatusSystemCode(status) {
   if (name.includes('blocked') || name.includes('hold')) return 'blocked';
   if (name.includes('done') || name.includes('complete')) return 'done';
   return 'todo';
+}
+
+function getErrorMessage(error) {
+  if (!error) return null;
+  return error.message || error.details || String(error);
 }
 
 /* ───── Canonical Board State Builder ───── */
@@ -238,8 +246,15 @@ export default function TasksPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const { tasks = [], loading: tasksLoading, createTask, updateTask, deleteTask, reorderTask } =
-    useTasks(projectId, workspaceId);
+  const {
+    tasks = [],
+    loading: tasksLoading,
+    error: tasksError,
+    createTask,
+    updateTask,
+    deleteTask,
+    reorderTask,
+  } = useTasks(projectId, workspaceId);
   const { statuses = [], loading: statusesLoading } = useTaskStatuses(projectId);
   const { members = [] } = useMembers(workspaceId);
   const { projects = [] } = useProjects(workspaceId);
@@ -247,15 +262,22 @@ export default function TasksPage() {
   const {
     phases = [],
     loading: phasesLoading,
+    error: phasesError,
     createPhase,
     deletePhase,
   } = usePhases(projectId);
   const {
     taskLists = [],
     loading: taskListsLoading,
+    error: taskListsError,
     createTaskList,
     deleteTaskList,
   } = useTaskLists(projectId);
+  const {
+    processInstances = [],
+    loading: processInstancesLoading,
+    error: processInstancesError,
+  } = useProjectProcessInstances(projectId);
 
   const project = projects?.find((p) => p.id === projectId);
 
@@ -434,8 +456,25 @@ export default function TasksPage() {
 
   /* ── Legacy Uncategorized Tasks ── */
   const uncategorizedTasks = useMemo(() => {
-    return tasks.filter((t) => !t.phase_id && !t.task_list_id);
+    return tasks.filter(
+      (task) =>
+        !task.phase_id &&
+        !task.task_list_id &&
+        !task.process_instance_id &&
+        !task.process_step_id
+    );
   }, [tasks]);
+
+  const projectProcesses = useMemo(
+    () => getPlacementProcesses(processInstances, 'project', projectId),
+    [processInstances, projectId]
+  );
+
+  const hierarchyError =
+    getErrorMessage(tasksError) ||
+    getErrorMessage(phasesError) ||
+    getErrorMessage(taskListsError) ||
+    getErrorMessage(processInstancesError);
 
   /* ── Handlers ── */
   const handleSort = (col) => {
@@ -915,7 +954,8 @@ export default function TasksPage() {
     (tasksLoading && tasks.length === 0) ||
     (statusesLoading && statuses.length === 0) ||
     (phasesLoading && phases.length === 0) ||
-    (taskListsLoading && taskLists.length === 0);
+    (taskListsLoading && taskLists.length === 0) ||
+    (processInstancesLoading && processInstances.length === 0);
 
   return (
     <div className={styles.page}>
@@ -1111,6 +1151,16 @@ export default function TasksPage() {
         </div>
       )}
 
+      {hierarchyError && (
+        <div className={styles.errorBanner} role="alert">
+          <AlertCircle size={18} />
+          <div>
+            <strong>Some project data could not be loaded.</strong>
+            <span>{hierarchyError}</span>
+          </div>
+        </div>
+      )}
+
       {isInitialLoading ? (
         view === 'kanban' ? <CardGridSkeleton count={5} /> : <TaskRowSkeleton count={5} />
       ) : (
@@ -1120,6 +1170,22 @@ export default function TasksPage() {
           {/* ═════════════════════════════════════════════════════════════════ */}
           {view === 'hierarchy' && (
         <div className={styles.hierarchyView}>
+          {projectProcesses.length > 0 && (
+            <section className={styles.placementProcessSection}>
+              <div className={styles.placementProcessHeading}>
+                <Workflow size={15} />
+                <span>Project Processes</span>
+              </div>
+              <HierarchyProcessGroups
+                processes={projectProcesses}
+                tasks={tasks.filter(
+                  (task) => task.process_instance_id && projectProcesses.some((item) => item.id === task.process_instance_id)
+                )}
+                onTaskOpen={setSelectedTask}
+              />
+            </section>
+          )}
+
           {/* Phases Tree */}
           {phases.length === 0 && uncategorizedTasks.length === 0 ? (
             <EmptyState
@@ -1134,6 +1200,10 @@ export default function TasksPage() {
               {phases.map((phase) => {
                 const isPhaseCollapsed = collapsedPhases.has(phase.id);
                 const phaseTaskLists = taskLists.filter((tl) => tl.phase_id === phase.id);
+                const phaseProcesses = getPlacementProcesses(processInstances, 'phase', phase.id);
+                const phaseProcessTasks = tasks.filter(
+                  (task) => task.process_instance_id && phaseProcesses.some((item) => item.id === task.process_instance_id)
+                );
 
                 return (
                   <div key={phase.id} className={styles.phaseCard}>
@@ -1207,6 +1277,19 @@ export default function TasksPage() {
                     {/* Phase Body: Task Lists */}
                     {!isPhaseCollapsed && (
                       <div className={styles.phaseBody}>
+                        {phaseProcesses.length > 0 && (
+                          <section className={styles.nestedProcessSection}>
+                            <div className={styles.placementProcessHeading}>
+                              <Workflow size={14} />
+                              <span>Phase Processes</span>
+                            </div>
+                            <HierarchyProcessGroups
+                              processes={phaseProcesses}
+                              tasks={phaseProcessTasks}
+                              onTaskOpen={setSelectedTask}
+                            />
+                          </section>
+                        )}
                         {phaseTaskLists.length === 0 ? (
                           <div className={styles.emptyTaskListNotice}>
                             <span>No task lists in this phase.</span>
@@ -1225,6 +1308,11 @@ export default function TasksPage() {
                           phaseTaskLists.map((taskList) => {
                             const isTaskListCollapsed = collapsedTaskLists.has(taskList.id);
                             const listTasks = tasks.filter((t) => t.task_list_id === taskList.id);
+                            const taskListProcesses = getPlacementProcesses(
+                              processInstances,
+                              'task_list',
+                              taskList.id
+                            );
 
                             return (
                               <div key={taskList.id} className={styles.taskListCard}>
@@ -1314,32 +1402,21 @@ export default function TasksPage() {
                                 {/* Task List Tasks Table */}
                                 {!isTaskListCollapsed && (
                                   <div className={styles.taskListBody}>
-                                    {listTasks.length === 0 ? (
-                                      <p className={styles.emptyTasksNotice}>
-                                        No tasks in this list. Click <strong>+ Add Task</strong> above.
-                                      </p>
-                                    ) : (
-                                      <table className={styles.hierarchyTable}>
-                                        <thead>
-                                          <tr>
-                                            <th>Task Name</th>
-                                            <th>Status</th>
-                                            <th>Priority</th>
-                                            <th>RACI Responsibility</th>
-                                            <th>Due Date</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {listTasks.map((task) => (
-                                            <TaskRow
-                                              key={task.id}
-                                              task={task}
-                                              onClick={() => setSelectedTask(task)}
-                                            />
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    )}
+                                    <HierarchyProcessGroups
+                                      processes={taskListProcesses}
+                                      tasks={listTasks}
+                                      onTaskOpen={setSelectedTask}
+                                    />
+                                    <HierarchyTaskTree
+                                      tasks={listTasks}
+                                      processInstances={processInstances}
+                                      onTaskOpen={setSelectedTask}
+                                      emptyMessage={
+                                        taskListProcesses.length > 0
+                                          ? 'No ordinary tasks in this list.'
+                                          : 'No tasks in this list. Use + Add Task above to create one.'
+                                      }
+                                    />
                                   </div>
                                 )}
                               </div>
@@ -1372,26 +1449,11 @@ export default function TasksPage() {
                 </p>
               </div>
 
-              <table className={styles.hierarchyTable}>
-                <thead>
-                  <tr>
-                    <th>Task Name</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>RACI Responsibility</th>
-                    <th>Due Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {uncategorizedTasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onClick={() => setSelectedTask(task)}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              <HierarchyTaskTree
+                tasks={tasks.filter((task) => !task.phase_id && !task.task_list_id)}
+                processInstances={processInstances}
+                onTaskOpen={setSelectedTask}
+              />
             </div>
           )}
         </div>

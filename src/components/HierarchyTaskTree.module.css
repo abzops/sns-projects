@@ -1,0 +1,280 @@
+.tree,
+.placementProcesses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+.taskBranch {
+  min-width: 0;
+}
+
+.taskNode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 7px 10px 7px calc(10px + (var(--tree-depth, 0) * 16px));
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.taskNode:hover {
+  border-color: var(--line-light);
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.processStepBranch > .taskNode {
+  border-color: rgba(253, 226, 21, 0.16);
+  background: rgba(253, 226, 21, 0.025);
+}
+
+.chevronButton,
+.chevronSpacer {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+}
+
+.chevronButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chevronButton:hover,
+.chevronButton:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.taskIcon,
+.stepIcon,
+.processIcon {
+  flex: 0 0 auto;
+}
+
+.taskIcon {
+  color: var(--muted-2);
+}
+
+.stepIcon,
+.processIcon {
+  color: var(--yellow);
+}
+
+.taskTitle {
+  min-width: 140px;
+  flex: 1;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.taskTitle:hover,
+.taskTitle:focus-visible {
+  color: var(--yellow);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.stepTag,
+.otherGroupLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stepTag {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid rgba(253, 226, 21, 0.26);
+  border-radius: var(--radius-pill);
+  color: var(--yellow);
+  background: rgba(253, 226, 21, 0.08);
+}
+
+.taskMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.branchChildren {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 7px 0 8px 18px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line-light);
+}
+
+.otherGroupLabel {
+  padding: 3px 8px;
+  color: var(--muted-2);
+}
+
+.processGroup {
+  overflow: hidden;
+  border: 1px solid rgba(253, 226, 21, 0.24);
+  border-radius: var(--radius-xs);
+  background: rgba(253, 226, 21, 0.035);
+}
+
+.processHeader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 8px 10px;
+}
+
+.processIdentity {
+  display: flex;
+  flex: 1;
+  min-width: 150px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.processIdentity strong {
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.processIdentity span,
+.processProgress span,
+.dueDate {
+  color: var(--muted-2);
+  font-size: 0.69rem;
+}
+
+.processStatus {
+  padding: 3px 7px;
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-pill);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.processStatus_running {
+  color: var(--yellow);
+  border-color: rgba(253, 226, 21, 0.32);
+}
+
+.processStatus_completed {
+  color: var(--good);
+  border-color: rgba(96, 211, 148, 0.35);
+}
+
+.processStatus_cancelled {
+  color: var(--muted-2);
+}
+
+.processProgress {
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progressTrack {
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--yellow);
+}
+
+.dueDate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.processSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 0 9px 9px 38px;
+}
+
+.emptyTree,
+.emptyProcess {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted-2);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.emptyProcess {
+  padding: 10px;
+  text-align: left;
+}
+
+@media (max-width: 800px) {
+  .taskNode,
+  .processHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .taskTitle {
+    min-width: calc(100% - 88px);
+  }
+
+  .taskMeta {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 34px;
+  }
+
+  .stepTag {
+    margin-left: 34px;
+  }
+
+  .processIdentity {
+    min-width: calc(100% - 92px);
+  }
+
+  .processProgress {
+    width: min(180px, 52vw);
+    margin-left: 35px;
+  }
+
+  .processSteps {
+    padding-left: 16px;
+  }
+
+  .branchChildren {
+    margin-left: 10px;
+    padding-left: 8px;
+  }
+}

@@ -1,0 +1,70 @@
+# Package 3 / P3-01 — Operational Hierarchy UI Cutover
+
+**Status**: `IMPLEMENTED` — production browser acceptance pending
+
+**Preceding Deliverable**: [P2-03 Parent Task Completion and Runtime Closure](../Package_02_Process_Runtime/P2-03_Parent_Task_Completion_and_Runtime_Closure.md)
+
+**Database Migration**: None
+
+---
+
+## 1. Scope
+
+P3-01 makes the existing hierarchy operational as Workspace → Project → Phase → Task List → Task → Child Task. It is a frontend-only cutover that preserves every verified P1/P2 database rule, including P2-03 parent and Process Instance closure behavior.
+
+The active frontend uses Phase terminology only. List, Board, My Work, and the existing Task Detail save path remain in place.
+
+---
+
+## 2. Delivered Behavior
+
+- Phase and Task List accordions continue to use accessible chevrons.
+- Task nodes recursively expand through ordinary Child Tasks; selecting a task title opens the existing Task Detail panel.
+- Task-attached Process Instances render under their exact host Task. Multiple instances remain separate groups.
+- Materialized Process steps render only inside their Process Instance group and never as ordinary Child Tasks.
+- When a host has both Process Instances and ordinary Child Tasks, ordinary children appear beneath an explicit **Other** label.
+- Project-, Phase-, and Task-List-placed Process Instances render at their exact placement without synthetic hierarchy containers.
+- Process name/version, technical status, contractual due date, and progress are displayed. Progress comes from the existing `public.get_process_instance_progress(uuid)` RPC and is not reimplemented in the client.
+- Explicit PostgREST foreign-key names are used for ambiguous or renamed relationships.
+- Loading, partial-error, no-Phase, no-Task-List, no-task, and no-visible-step states are explicit.
+- The hierarchy adapts to narrow screens while the established visual system, List table, and Board drag-and-drop remain intact.
+
+---
+
+## 3. Implementation
+
+| Area | Canonical implementation |
+| :--- | :--- |
+| Hierarchy model | `src/lib/hierarchy.js` |
+| Task / Process tree | `src/components/HierarchyTaskTree.jsx` |
+| Responsive styling | `src/components/HierarchyTaskTree.module.css` |
+| Project Process data | `src/hooks/useProjectProcessInstances.js` |
+| Project hierarchy integration | `src/pages/TasksPage.jsx` |
+| Task runtime fields | `src/hooks/useTasks.js` |
+| Regression gate | `scripts/test-p3-01-hierarchy-ui.mjs` |
+
+Production was read-only inspected before implementation. It contained 30 Tasks, zero ordinary Child Tasks, and zero Process Instances. P3-01 therefore does not create demonstration data; populated child/process states are covered by deterministic fixtures, while production acceptance uses the real empty states.
+
+---
+
+## 4. Verification
+
+| Gate | Result |
+| :--- | :---: |
+| Focused hierarchy/process regression | **PASS** |
+| Active frontend Milestone terminology | **PASS — 0 matches** |
+| `npm run lint` | **PASS — 0 errors; historical warnings unchanged** |
+| `npm run build` | **PASS** |
+| Signed-in production browser acceptance | **PENDING** |
+
+The in-app browser controller was unavailable during the first acceptance attempt because its persistent Node kernel could not initialize its assets. This is an acceptance-tool blocker, not an application error. P3-01 must not be marked `VERIFIED` until the deployed signed-in Projects, hierarchy, Task Detail, List, Board, and My Work routes are exercised.
+
+---
+
+## 5. Scope Boundaries
+
+- No database schema or migration changes.
+- No changes to P2-03 runtime functions, triggers, RLS, or closure semantics.
+- No Finance or Package 4 work.
+- No P3-02 work.
+- No fake production data.
