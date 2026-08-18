@@ -280,6 +280,15 @@
   color: var(--muted);
 }
 
+.subtaskCancelled {
+  opacity: 0.65;
+}
+
+.subtaskCancelled .subtaskTitle {
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
+
 .subtaskCheckBtn {
   background: transparent;
   border: none;
@@ -298,15 +307,47 @@
   color: var(--muted-2);
 }
 
+.cancelledIcon {
+  color: var(--muted-2);
+}
+
 .subtaskMain {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
 }
 
 .subtaskTitle {
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.subtaskState {
+  padding: 1px 5px;
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-pill);
+  color: var(--muted-2);
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.subtaskState_in_progress {
+  color: var(--yellow);
+  border-color: rgba(253, 226, 21, 0.3);
+}
+
+.subtaskState_done {
+  color: var(--good);
+  border-color: rgba(96, 211, 148, 0.34);
+}
+
+.subtaskState_cancelled {
+  color: var(--muted-2);
 }
 
 .subtaskMeta {
@@ -1008,4 +1049,3 @@
   cursor: pointer;
   align-self: flex-end;
 }
-

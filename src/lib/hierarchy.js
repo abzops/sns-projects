@@ -18,12 +18,16 @@ export function buildHierarchyModel(tasks = [], processInstances = []) {
   const ordinaryChildrenByParent = new Map();
   const processStepsByInstance = new Map();
   const processesByHostTask = new Map();
+  const subtasksByTaskId = new Map();
 
   for (const task of ordinaryTasks) {
     append(ordinaryChildrenByParent, task.parent_task_id, task);
   }
 
   for (const task of orderedTasks) {
+    const taskSubtasks = [...(task.subtasks || [])].sort(compareByPosition);
+    if (taskSubtasks.length > 0) subtasksByTaskId.set(task.id, taskSubtasks);
+
     if (task.process_instance_id && task.process_step_id) {
       append(processStepsByInstance, task.process_instance_id, task);
     }
@@ -50,6 +54,26 @@ export function buildHierarchyModel(tasks = [], processInstances = []) {
     ordinaryChildrenByParent,
     processStepsByInstance,
     processesByHostTask,
+    subtasksByTaskId,
+  };
+}
+
+export function getTaskDescendants(taskId, model) {
+  const subtasks = model?.subtasksByTaskId?.get(taskId) || [];
+  const attachedProcesses = model?.processesByHostTask?.get(taskId) || [];
+  const ordinaryChildren = model?.ordinaryChildrenByParent?.get(taskId) || [];
+
+  return {
+    subtasks,
+    attachedProcesses,
+    ordinaryChildren,
+    hasDescendants:
+      subtasks.length > 0 || attachedProcesses.length > 0 || ordinaryChildren.length > 0,
+    groupOrder: [
+      ...(subtasks.length > 0 ? ['subtasks'] : []),
+      ...(attachedProcesses.length > 0 ? ['processes'] : []),
+      ...(ordinaryChildren.length > 0 ? ['child_tasks'] : []),
+    ],
   };
 }
 

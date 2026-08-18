@@ -11,6 +11,7 @@ import {
   Building,
   CheckCircle2,
   Circle,
+  XCircle,
   Calendar,
   Layers,
   ListTodo,
@@ -48,6 +49,7 @@ export default function TaskDetailPanel({
   members = [],
   departments = [],
   onWorkflowUpdated,
+  onSubtasksChange,
 }) {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -348,17 +350,41 @@ export default function TaskDetailPanel({
     if (!newSubtaskTitle.trim()) return;
     setIsAddingSubtask(true);
     try {
-      await createSubtask({
+      const { error } = await createSubtask({
         title: newSubtaskTitle.trim(),
         assignee_id: newSubtaskAssignee || null,
         due_date: newSubtaskDue || null,
       });
+      if (error) {
+        showToast(error.message || 'Failed to create subtask', 'error');
+        return;
+      }
       setNewSubtaskTitle('');
       setNewSubtaskAssignee('');
       setNewSubtaskDue('');
+      await onSubtasksChange?.();
     } finally {
       setIsAddingSubtask(false);
     }
+  };
+
+  const handleToggleSubtask = async (subtask) => {
+    if (subtask.status === 'cancelled') return;
+    const { error } = await toggleSubtask(subtask.id, subtask.status);
+    if (error) {
+      showToast(error.message || 'Failed to update subtask', 'error');
+      return;
+    }
+    await onSubtasksChange?.();
+  };
+
+  const handleDeleteSubtask = async (subtaskId) => {
+    const { error } = await deleteSubtask(subtaskId);
+    if (error) {
+      showToast(error.message || 'Failed to delete subtask', 'error');
+      return;
+    }
+    await onSubtasksChange?.();
   };
 
   if (!isOpen || !task) return null;
@@ -754,18 +780,28 @@ export default function TaskDetailPanel({
             <div className={styles.subtaskList}>
               {subtasks.map((st) => {
                 const isDone = st.status === 'done';
+                const isCancelled = st.status === 'cancelled';
                 return (
                   <div
                     key={st.id}
-                    className={`${styles.subtaskRow} ${isDone ? styles.subtaskDone : ''}`}
+                    className={`${styles.subtaskRow} ${isDone ? styles.subtaskDone : ''} ${isCancelled ? styles.subtaskCancelled : ''}`}
                   >
                     <button
                       type="button"
                       className={styles.subtaskCheckBtn}
-                      onClick={() => toggleSubtask(st.id, st.status)}
-                      aria-label={isDone ? 'Mark uncompleted' : 'Mark completed'}
+                      onClick={() => handleToggleSubtask(st)}
+                      aria-label={
+                        isCancelled
+                          ? 'Cancelled subtask'
+                          : isDone
+                            ? 'Mark uncompleted'
+                            : 'Mark completed'
+                      }
+                      disabled={isCancelled}
                     >
-                      {isDone ? (
+                      {isCancelled ? (
+                        <XCircle size={16} className={styles.cancelledIcon} />
+                      ) : isDone ? (
                         <CheckCircle2 size={16} className={styles.checkedIcon} />
                       ) : (
                         <Circle size={16} className={styles.uncheckedIcon} />
@@ -774,6 +810,15 @@ export default function TaskDetailPanel({
 
                     <div className={styles.subtaskMain}>
                       <span className={styles.subtaskTitle}>{st.title}</span>
+                      <span className={`${styles.subtaskState} ${styles[`subtaskState_${st.status}`]}`}>
+                        {st.status === 'in_progress'
+                          ? 'In progress'
+                          : st.status === 'done'
+                            ? 'Done'
+                            : st.status === 'cancelled'
+                              ? 'Cancelled'
+                              : 'To do'}
+                      </span>
                     </div>
 
                     <div className={styles.subtaskMeta}>
@@ -793,7 +838,7 @@ export default function TaskDetailPanel({
                       <button
                         type="button"
                         className={styles.subtaskDeleteBtn}
-                        onClick={() => deleteSubtask(st.id)}
+                        onClick={() => handleDeleteSubtask(st.id)}
                         title="Delete subtask"
                       >
                         <Trash2 size={12} />

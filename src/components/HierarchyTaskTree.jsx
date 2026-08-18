@@ -1,16 +1,22 @@
 import { useMemo, useState } from 'react';
 import {
   Calendar,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Circle,
   CircleDot,
+  Clock,
   Layers3,
+  ListTodo,
+  User,
   Workflow,
+  XCircle,
 } from 'lucide-react';
 import PriorityIcon from './PriorityIcon';
 import RaciBadge from './RaciBadge';
 import StatusBadge from './StatusBadge';
-import { buildHierarchyModel } from '../lib/hierarchy';
+import { buildHierarchyModel, getTaskDescendants } from '../lib/hierarchy';
 import styles from './HierarchyTaskTree.module.css';
 
 function formatDate(value) {
@@ -23,6 +29,69 @@ function statusLabel(status) {
   if (status === 'completed') return 'Completed';
   if (status === 'cancelled') return 'Cancelled';
   return 'Running';
+}
+
+function getSubtaskStatus(status) {
+  switch (status) {
+    case 'in_progress':
+      return { label: 'In progress', icon: Clock };
+    case 'done':
+      return { label: 'Done', icon: CheckCircle2 };
+    case 'cancelled':
+      return { label: 'Cancelled', icon: XCircle };
+    default:
+      return { label: 'To do', icon: Circle };
+  }
+}
+
+function SubtaskGroup({ subtasks }) {
+  const eligibleSubtasks = subtasks.filter((subtask) => subtask.status !== 'cancelled');
+  const doneCount = eligibleSubtasks.filter((subtask) => subtask.status === 'done').length;
+  const cancelledCount = subtasks.length - eligibleSubtasks.length;
+
+  return (
+    <section className={styles.subtaskGroup} aria-label="Subtasks">
+      <div className={styles.descendantGroupLabel}>
+        <ListTodo size={13} />
+        <span>Subtasks</span>
+        <span className={styles.groupCount}>
+          {doneCount}/{eligibleSubtasks.length} complete
+          {cancelledCount > 0 ? ` · ${cancelledCount} cancelled` : ''}
+        </span>
+      </div>
+      <div className={styles.subtaskList}>
+        {subtasks.map((subtask) => {
+          const status = getSubtaskStatus(subtask.status);
+          const StatusIcon = status.icon;
+          const dueDate = formatDate(subtask.due_date);
+          const assigneeName = subtask.assignee?.full_name;
+
+          return (
+            <div
+              key={subtask.id}
+              className={`${styles.subtaskRow} ${styles[`subtaskStatus_${subtask.status}`]}`}
+            >
+              <StatusIcon size={14} className={styles.subtaskStatusIcon} aria-hidden="true" />
+              <span className={styles.subtaskTitle}>{subtask.title}</span>
+              <span className={styles.subtaskStatusLabel}>{status.label}</span>
+              <div className={styles.subtaskMeta}>
+                {assigneeName && (
+                  <span className={styles.subtaskMetaItem}>
+                    <User size={12} /> {assigneeName}
+                  </span>
+                )}
+                {dueDate && (
+                  <span className={styles.subtaskMetaItem}>
+                    <Calendar size={12} /> {dueDate}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set() }) {
@@ -93,9 +162,12 @@ function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Se
 
 function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false }) {
   const [expanded, setExpanded] = useState(true);
-  const ordinaryChildren = model.ordinaryChildrenByParent.get(task.id) || [];
-  const attachedProcesses = model.processesByHostTask.get(task.id) || [];
-  const hasChildren = ordinaryChildren.length > 0 || attachedProcesses.length > 0;
+  const {
+    subtasks,
+    attachedProcesses,
+    ordinaryChildren,
+    hasDescendants,
+  } = getTaskDescendants(task.id, model);
   const status = task.task_statuses;
   const dueDate = formatDate(task.due_date);
   const nextLineage = new Set(lineage);
@@ -104,7 +176,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
   return (
     <div className={`${styles.taskBranch} ${processStep ? styles.processStepBranch : ''}`}>
       <div className={styles.taskNode} style={{ '--tree-depth': Math.min(depth, 8) }}>
-        {hasChildren ? (
+        {hasDescendants ? (
           <button
             type="button"
             className={styles.chevronButton}
@@ -136,8 +208,18 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
         </div>
       </div>
 
-      {expanded && hasChildren && (
+      {expanded && hasDescendants && (
         <div className={styles.branchChildren}>
+          {subtasks.length > 0 && <SubtaskGroup subtasks={subtasks} />}
+
+          {attachedProcesses.length > 0 && (
+            <div className={styles.descendantGroupLabel}>
+              <Workflow size={13} />
+              <span>Processes</span>
+              <span className={styles.groupCount}>{attachedProcesses.length}</span>
+            </div>
+          )}
+
           {attachedProcesses.map((instance) => (
             <ProcessGroup
               key={instance.id}
@@ -151,6 +233,10 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
 
           {ordinaryChildren.length > 0 && attachedProcesses.length > 0 && (
             <div className={styles.otherGroupLabel}>Other</div>
+          )}
+
+          {ordinaryChildren.length > 0 && attachedProcesses.length === 0 && subtasks.length > 0 && (
+            <div className={styles.otherGroupLabel}>Child Tasks</div>
           )}
 
           {ordinaryChildren.map((child) => (

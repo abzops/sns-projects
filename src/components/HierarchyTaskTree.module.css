@@ -133,6 +133,117 @@
   color: var(--muted-2);
 }
 
+.descendantGroupLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  color: var(--muted-2);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.groupCount {
+  color: var(--muted-2);
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.subtaskGroup,
+.subtaskList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subtaskGroup {
+  padding: 7px;
+  border: 1px solid rgba(114, 153, 214, 0.22);
+  border-radius: var(--radius-xs);
+  background: rgba(114, 153, 214, 0.035);
+}
+
+.subtaskRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.subtaskStatusIcon {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+}
+
+.subtaskTitle {
+  min-width: 120px;
+  flex: 1;
+  color: var(--text);
+  font-size: 0.79rem;
+  font-weight: 650;
+}
+
+.subtaskStatusLabel {
+  padding: 2px 6px;
+  border: 1px solid var(--line-light);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 0.63rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.subtaskMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subtaskMetaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.subtaskStatus_in_progress .subtaskStatusIcon,
+.subtaskStatus_in_progress .subtaskStatusLabel {
+  color: var(--yellow);
+  border-color: rgba(253, 226, 21, 0.3);
+}
+
+.subtaskStatus_done .subtaskStatusIcon,
+.subtaskStatus_done .subtaskStatusLabel {
+  color: var(--good);
+  border-color: rgba(96, 211, 148, 0.34);
+}
+
+.subtaskStatus_done .subtaskTitle {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.subtaskStatus_cancelled {
+  opacity: 0.68;
+}
+
+.subtaskStatus_cancelled .subtaskTitle {
+  color: var(--muted-2);
+  text-decoration: line-through;
+}
+
 .processGroup {
   overflow: hidden;
   border: 1px solid rgba(253, 226, 21, 0.24);
@@ -276,5 +387,23 @@
   .branchChildren {
     margin-left: 10px;
     padding-left: 8px;
+  }
+
+  .subtaskRow {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .subtaskTitle {
+    min-width: calc(100% - 32px);
+  }
+
+  .subtaskStatusLabel {
+    margin-left: 22px;
+  }
+
+  .subtaskMeta {
+    flex: 1;
+    justify-content: flex-start;
   }
 }

@@ -254,6 +254,7 @@ export default function TasksPage() {
     updateTask,
     deleteTask,
     reorderTask,
+    refetch: refetchTasks,
   } = useTasks(projectId, workspaceId);
   const { statuses = [], loading: statusesLoading } = useTaskStatuses(projectId);
   const { members = [] } = useMembers(workspaceId);
@@ -1574,6 +1575,7 @@ export default function TasksPage() {
           statuses={statuses}
           members={members}
           departments={departments}
+          onSubtasksChange={() => refetchTasks({ silent: true })}
         />
       )}
 

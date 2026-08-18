@@ -43,6 +43,7 @@ function enrichTasks(tasks, statuses, members, raciRows = [], subtasksByTaskId =
       },
       subtask_count: subtaskStats.total,
       subtasks_completed_count: subtaskStats.completed,
+      subtasks: subtaskStats.items || [],
     };
   });
 }
@@ -161,15 +162,30 @@ export function useTasks(projectId, workspaceId) {
         // 2. Fetch Subtask stats
         const { data: subtaskData } = await supabase
           .from('subtasks')
-          .select('id, task_id, status')
+          .select(`
+            id,
+            task_id,
+            title,
+            status,
+            assignee_id,
+            due_date,
+            position,
+            created_at,
+            assignee:profiles!subtasks_assignee_id_fkey (
+              id,
+              full_name,
+              avatar_url
+            )
+          `)
           .in('task_id', taskIds);
 
         if (subtaskData) {
           for (const st of subtaskData) {
             if (!subtasksByTaskId.has(st.task_id)) {
-              subtasksByTaskId.set(st.task_id, { total: 0, completed: 0 });
+              subtasksByTaskId.set(st.task_id, { total: 0, completed: 0, items: [] });
             }
             const s = subtasksByTaskId.get(st.task_id);
+            s.items.push(st);
             if (st.status !== 'cancelled') {
               s.total += 1;
               if (st.status === 'done') {
