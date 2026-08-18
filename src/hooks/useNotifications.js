@@ -4,13 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 
 export function useNotifications(workspaceId = null) {
   const { user } = useAuth();
+  const userId = user?.id || null;
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const channelRef = useRef(null);
 
   const fetchNotifications = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setNotifications([]);
       setLoading(false);
       return;
@@ -23,7 +24,7 @@ export function useNotifications(workspaceId = null) {
       let query = supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -41,7 +42,7 @@ export function useNotifications(workspaceId = null) {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId]);
+  }, [userId, workspaceId]);
 
   useEffect(() => {
     fetchNotifications();
@@ -49,9 +50,9 @@ export function useNotifications(workspaceId = null) {
 
   // Realtime subscription
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
-    const channelName = `user-notifs-${user.id}-${workspaceId || 'all'}`;
+    const channelName = `user-notifs-${userId}-${workspaceId || 'all'}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -60,7 +61,7 @@ export function useNotifications(workspaceId = null) {
           event: '*',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${userId}`,
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -91,7 +92,7 @@ export function useNotifications(workspaceId = null) {
         channelRef.current = null;
       }
     };
-  }, [user, workspaceId]);
+  }, [userId, workspaceId]);
 
   const markAsRead = async (id) => {
     try {
@@ -116,7 +117,7 @@ export function useNotifications(workspaceId = null) {
   };
 
   const markAllAsRead = async () => {
-    if (!user) return;
+    if (!userId) return;
     try {
       const now = new Date().toISOString();
       let query = supabase
@@ -125,7 +126,7 @@ export function useNotifications(workspaceId = null) {
           is_read: true,
           read_at: now,
         })
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_read', false);
 
       if (workspaceId) {

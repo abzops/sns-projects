@@ -6,6 +6,7 @@ const taskStatusesCache = new Map(); // projectId -> statuses[]
 
 export function useTaskStatuses(projectId) {
   const { user } = useAuth()
+  const userId = user?.id || null
   const [statuses, setStatuses] = useState(() => taskStatusesCache.get(projectId) || [])
   const [loading, setLoading] = useState(() => !taskStatusesCache.has(projectId))
   const [refreshing, setRefreshing] = useState(false)
@@ -13,7 +14,7 @@ export function useTaskStatuses(projectId) {
 
   const fetchStatuses = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!projectId || !user) {
+    if (!projectId || !userId) {
       setStatuses([])
       setLoading(false)
       setRefreshing(false)
@@ -40,7 +41,7 @@ export function useTaskStatuses(projectId) {
     setError(fetchError)
     setLoading(false)
     setRefreshing(false)
-  }, [projectId, user])
+  }, [projectId, userId])
 
   useEffect(() => {
     if (taskStatusesCache.has(projectId)) {

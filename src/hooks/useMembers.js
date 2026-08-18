@@ -42,6 +42,7 @@ function normalizeMemberProfiles(members) {
 
 export function useMembers(workspaceId) {
   const { user } = useAuth();
+  const userId = user?.id || null;
   const [members, setMembers] = useState(() => membersCache.get(workspaceId) || []);
   const [loading, setLoading] = useState(() => !membersCache.has(workspaceId));
   const [refreshing, setRefreshing] = useState(false);
@@ -49,7 +50,7 @@ export function useMembers(workspaceId) {
 
   const fetchMembers = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId || !user) {
+    if (!workspaceId || !userId) {
       setMembers([]);
       setLoading(false);
       setRefreshing(false);
@@ -111,7 +112,7 @@ export function useMembers(workspaceId) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [workspaceId, user]);
+  }, [workspaceId, userId]);
 
   useEffect(() => {
     if (membersCache.has(workspaceId)) {

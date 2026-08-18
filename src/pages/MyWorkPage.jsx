@@ -26,9 +26,10 @@ const myWorkCache = new Map();
 export default function MyWorkPage() {
   const { workspaceId } = useParams();
   const { user } = useAuth();
+  const userId = user?.id || null;
   const { departments = [] } = useDepartments(workspaceId);
 
-  const cacheKey = `${workspaceId}:${user?.id || ''}`;
+  const cacheKey = `${workspaceId}:${userId || ''}`;
   const cachedData = myWorkCache.get(cacheKey) || null;
 
   const [activeTab, setActiveTab] = useState('R'); // 'R' | 'A' | 'C' | 'I' | 'all'
@@ -48,7 +49,7 @@ export default function MyWorkPage() {
   const fetchMyWork = useCallback(
     async (options = {}) => {
       const isSilent = options?.silent ?? false;
-      if (!workspaceId || !user) {
+      if (!workspaceId || !userId) {
         setTasks([]);
         setInitialLoading(false);
         setRefreshing(false);
@@ -113,7 +114,7 @@ export default function MyWorkPage() {
                 )
               )
             `)
-            .eq('user_id', user.id),
+            .eq('user_id', userId),
 
           supabase
             .from('tasks')
@@ -156,7 +157,7 @@ export default function MyWorkPage() {
                 avatar_url
               )
             `)
-            .eq('assignee_id', user.id),
+            .eq('assignee_id', userId),
         ]);
 
         if (raciRes.error) throw raciRes.error;
@@ -288,7 +289,7 @@ export default function MyWorkPage() {
         setRefreshing(false);
       }
     },
-    [cacheKey, user, workspaceId]
+    [cacheKey, userId, workspaceId]
   );
 
   useEffect(() => {

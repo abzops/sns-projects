@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTaskStatuses } from './useTaskStatuses';
@@ -51,6 +51,7 @@ function enrichTasks(tasks, statuses, members, raciRows = [], subtasksByTaskId =
 
 export function useTasks(projectId, workspaceId) {
   const { user } = useAuth();
+  const userId = user?.id || null;
   const [tasks, setTasks] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,21 +59,46 @@ export function useTasks(projectId, workspaceId) {
 
   const { statuses } = useTaskStatuses(projectId);
   const { members } = useMembers(workspaceId);
+  const taskSourceRef = useRef(null);
+  const enrichmentInputsRef = useRef({ statuses, members });
+
+  useEffect(() => {
+    enrichmentInputsRef.current = { statuses, members };
+
+    const source = taskSourceRef.current;
+    if (source?.projectId === projectId && source?.userId === userId) {
+      setTasks(
+        enrichTasks(
+          source.rows,
+          statuses,
+          members,
+          source.raciRows,
+          source.subtasksByTaskId
+        )
+      );
+    }
+  }, [members, projectId, statuses, userId]);
 
   const fetchTasks = useCallback(
     async (options = {}) => {
       const isSilent = options?.silent ?? false;
-      if (!projectId || !user) {
+      if (!projectId || !userId) {
+        taskSourceRef.current = null;
         setTasks([]);
         setInitialLoading(false);
         setRefreshing(false);
         return;
       }
 
-      if (!isSilent) {
-        setInitialLoading((prev) => (tasks.length === 0 ? true : prev));
-        setRefreshing(true);
+      const hasCurrentSource =
+        taskSourceRef.current?.projectId === projectId &&
+        taskSourceRef.current?.userId === userId;
+      if (!isSilent && !hasCurrentSource) {
+        taskSourceRef.current = null;
+        setTasks([]);
+        setInitialLoading(true);
       }
+      setRefreshing(true);
 
       setError(null);
 
@@ -130,54 +156,54 @@ export function useTasks(projectId, workspaceId) {
       const subtasksByTaskId = new Map();
 
       if (taskIds.length > 0) {
-        // 1. Fetch RACI assignments
-        const { data: raciData, error: raciError } = await supabase
-          .from('task_raci_assignments')
-          .select(`
-            id,
-            task_id,
-            raci_role,
-            user_id,
-            department_id,
-            created_by,
-            created_at,
-            profiles:user_id (
-              id,
-              full_name,
-              avatar_url
-            ),
-            departments:department_id (
-              id,
-              code,
-              name,
-              color
-            )
-          `)
-          .in('task_id', taskIds);
+        const [{ data: raciData, error: raciError }, { data: subtaskData }] =
+          await Promise.all([
+            supabase
+              .from('task_raci_assignments')
+              .select(`
+                id,
+                task_id,
+                raci_role,
+                user_id,
+                department_id,
+                created_by,
+                created_at,
+                profiles:user_id (
+                  id,
+                  full_name,
+                  avatar_url
+                ),
+                departments:department_id (
+                  id,
+                  code,
+                  name,
+                  color
+                )
+              `)
+              .in('task_id', taskIds),
+            supabase
+              .from('subtasks')
+              .select(`
+                id,
+                task_id,
+                title,
+                status,
+                assignee_id,
+                due_date,
+                position,
+                created_at,
+                assignee:profiles!subtasks_assignee_id_fkey (
+                  id,
+                  full_name,
+                  avatar_url
+                )
+              `)
+              .in('task_id', taskIds),
+          ]);
 
         if (!raciError) {
           raciRows = raciData || [];
         }
-
-        // 2. Fetch Subtask stats
-        const { data: subtaskData } = await supabase
-          .from('subtasks')
-          .select(`
-            id,
-            task_id,
-            title,
-            status,
-            assignee_id,
-            due_date,
-            position,
-            created_at,
-            assignee:profiles!subtasks_assignee_id_fkey (
-              id,
-              full_name,
-              avatar_url
-            )
-          `)
-          .in('task_id', taskIds);
 
         if (subtaskData) {
           for (const st of subtaskData) {
@@ -196,11 +222,29 @@ export function useTasks(projectId, workspaceId) {
         }
       }
 
-      setTasks(enrichTasks(data || [], statuses, members, raciRows, subtasksByTaskId));
+      const source = {
+        projectId,
+        userId,
+        rows: data || [],
+        raciRows,
+        subtasksByTaskId,
+      };
+      taskSourceRef.current = source;
+
+      const inputs = enrichmentInputsRef.current;
+      setTasks(
+        enrichTasks(
+          source.rows,
+          inputs.statuses,
+          inputs.members,
+          source.raciRows,
+          source.subtasksByTaskId
+        )
+      );
       setInitialLoading(false);
       setRefreshing(false);
     },
-    [projectId, user, statuses, members, tasks.length]
+    [projectId, userId]
   );
 
   useEffect(() => {
@@ -226,8 +270,8 @@ export function useTasks(projectId, workspaceId) {
     }
 
     // Determine Accountable and Responsible users
-    const accountableUserId = taskData.accountable_id || taskData.assignee_id || user.id;
-    const responsibleUserId = taskData.responsible_id || taskData.assignee_id || user.id;
+    const accountableUserId = taskData.accountable_id || taskData.assignee_id || userId;
+    const responsibleUserId = taskData.responsible_id || taskData.assignee_id || userId;
 
     if (!accountableUserId || !responsibleUserId) {
       return {
@@ -250,7 +294,7 @@ export function useTasks(projectId, workspaceId) {
         assignee_id: accountableUserId || null,
         due_date: taskData.due_date || null,
         position: maxPosition + 1,
-        created_by: user.id,
+        created_by: userId,
       })
       .select(`
         id,
@@ -281,7 +325,7 @@ export function useTasks(projectId, workspaceId) {
       task_id: createdTask.id,
       raci_role: 'A',
       user_id: accountableUserId,
-      created_by: user.id,
+      created_by: userId,
     });
 
     // 2. Responsible (R) - at least 1
@@ -290,26 +334,26 @@ export function useTasks(projectId, workspaceId) {
         task_id: createdTask.id,
         raci_role: 'R',
         user_id: responsibleUserId,
-        created_by: user.id,
+        created_by: userId,
       });
     } else {
       raciInserts.push({
         task_id: createdTask.id,
         raci_role: 'R',
         user_id: responsibleUserId,
-        created_by: user.id,
+        created_by: userId,
       });
     }
 
     // 3. Additional Consulted / Informed if provided
     if (Array.isArray(taskData.consulted_ids)) {
       for (const cId of taskData.consulted_ids) {
-        if (cId) raciInserts.push({ task_id: createdTask.id, raci_role: 'C', user_id: cId, created_by: user.id });
+        if (cId) raciInserts.push({ task_id: createdTask.id, raci_role: 'C', user_id: cId, created_by: userId });
       }
     }
     if (Array.isArray(taskData.informed_ids)) {
       for (const iId of taskData.informed_ids) {
-        if (iId) raciInserts.push({ task_id: createdTask.id, raci_role: 'I', user_id: iId, created_by: user.id });
+        if (iId) raciInserts.push({ task_id: createdTask.id, raci_role: 'I', user_id: iId, created_by: userId });
       }
     }
 

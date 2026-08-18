@@ -1,0 +1,74 @@
+.coldLoading,
+.blockedPage {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-primary, #0f1115);
+}
+
+.blockedCard {
+  display: grid;
+  width: min(100%, 480px);
+  gap: 14px;
+  justify-items: start;
+  padding: 28px;
+  border: 1px solid var(--border-color, #30343b);
+  border-radius: 16px;
+  background: var(--bg-secondary, #181b21);
+  color: var(--text-primary, #f5f7fa);
+}
+
+.blockedCard h1,
+.blockedCard p {
+  margin: 0;
+}
+
+.blockedCard p {
+  color: var(--text-secondary, #a9b0bb);
+  line-height: 1.55;
+}
+
+.blockedActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.blockedActions button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color, #30343b);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.blockedActions button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.backgroundWarning {
+  position: fixed;
+  z-index: 1000;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  max-width: min(420px, calc(100vw - 32px));
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning, #f5a524) 55%, transparent);
+  border-radius: 10px;
+  background: var(--bg-secondary, #181b21);
+  color: var(--text-primary, #f5f7fa);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
+  font-size: 13px;
+  line-height: 1.4;
+}

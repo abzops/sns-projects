@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export function useUserContext(workspaceId) {
   const { user } = useAuth();
+  const userId = user?.id || null;
   const [workspaceRole, setWorkspaceRole] = useState(null);
   const [systemRoles, setSystemRoles] = useState([]);
   const [departmentMemberships, setDepartmentMemberships] = useState([]);
@@ -12,7 +13,7 @@ export function useUserContext(workspaceId) {
   const [error, setError] = useState(null);
 
   const fetchContext = useCallback(async () => {
-    if (!user || !workspaceId) {
+    if (!userId || !workspaceId) {
       setWorkspaceRole(null);
       setSystemRoles([]);
       setDepartmentMemberships([]);
@@ -30,7 +31,7 @@ export function useUserContext(workspaceId) {
         .from('workspace_members')
         .select('role, status')
         .eq('workspace_id', workspaceId)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('status', 'active')
         .maybeSingle();
 
@@ -42,7 +43,7 @@ export function useUserContext(workspaceId) {
         .from('user_system_roles')
         .select('role')
         .eq('workspace_id', workspaceId)
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (rolesError) throw rolesError;
       const roles = (rolesData || []).map((r) => r.role);
@@ -64,7 +65,7 @@ export function useUserContext(workspaceId) {
           )
         `)
         .eq('workspace_id', workspaceId)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true);
 
       if (deptError) throw deptError;
@@ -80,7 +81,7 @@ export function useUserContext(workspaceId) {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId]);
+  }, [userId, workspaceId]);
 
   useEffect(() => {
     fetchContext();

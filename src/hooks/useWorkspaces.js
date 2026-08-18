@@ -13,6 +13,7 @@ function countByWorkspace(rows = []) {
 
 export function useWorkspaces() {
   const { user } = useAuth()
+  const userId = user?.id || null
   const [workspaces, setWorkspaces] = useState(() => workspacesCache || [])
   const [loading, setLoading] = useState(() => workspacesCache === null)
   const [refreshing, setRefreshing] = useState(false)
@@ -20,7 +21,7 @@ export function useWorkspaces() {
 
   const fetchWorkspaces = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!user) {
+    if (!userId) {
       setWorkspaces([])
       setLoading(false)
       setRefreshing(false)
@@ -77,7 +78,7 @@ export function useWorkspaces() {
     setWorkspaces(enriched)
     setLoading(false)
     setRefreshing(false)
-  }, [user])
+  }, [userId])
 
   useEffect(() => {
     if (workspacesCache !== null) {
@@ -101,7 +102,7 @@ export function useWorkspaces() {
       .insert({
         id,
         name: name.trim(),
-        created_by: user.id,
+        created_by: userId,
       })
 
     if (workspaceError) {
@@ -112,10 +113,10 @@ export function useWorkspaces() {
       .from('workspace_members')
       .insert({
         workspace_id: id,
-        user_id: user.id,
+        user_id: userId,
         role: 'owner',
         status: 'active',
-        invited_by: user.id,
+        invited_by: userId,
       })
 
     if (memberError) {

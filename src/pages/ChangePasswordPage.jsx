@@ -21,6 +21,8 @@ const DEFAULT_WORKSPACE_ID = 'dbcaddf1-cf02-4bad-8af1-974301cdfbea';
 
 export default function ChangePasswordPage() {
   const { user, loading: authLoading, signOut } = useAuth();
+  const userId = user?.id || null;
+  const mustChangePassword = user?.app_metadata?.must_change_password === true;
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -41,7 +43,7 @@ export default function ChangePasswordPage() {
     let active = true;
 
     async function fetchStatus() {
-      if (!user || passwordChangeInProgress) {
+      if (!userId || passwordChangeInProgress) {
         setStatusLoading(false);
         return;
       }
@@ -65,13 +67,13 @@ export default function ChangePasswordPage() {
             .from('workspace_members')
             .select('status')
             .eq('workspace_id', DEFAULT_WORKSPACE_ID)
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .maybeSingle();
 
           setOnboardingStatus({
             membership_status: memberRow ? memberRow.status : 'pending',
             must_change_password:
-              user.app_metadata?.must_change_password === true,
+              mustChangePassword,
           });
         } else {
           setOnboardingStatus({
@@ -84,7 +86,7 @@ export default function ChangePasswordPage() {
           setOnboardingStatus({
             membership_status: 'pending',
             must_change_password:
-              user.app_metadata?.must_change_password === true,
+              mustChangePassword,
           });
         }
       } finally {
@@ -97,7 +99,7 @@ export default function ChangePasswordPage() {
     return () => {
       active = false;
     };
-  }, [user, passwordChangeInProgress]);
+  }, [mustChangePassword, passwordChangeInProgress, userId]);
 
   // Password requirement checks (min 12 chars, uppercase, lowercase, number, symbol)
   const checks = useMemo(() => {

@@ -66,7 +66,10 @@ async function runTests() {
     'Test 8: passwordChangeInProgress state is implemented to prevent race conditions.');
 
   // Test 9: useEffect guards against passwordChangeInProgress
-  assert(cpSrc.includes('passwordChangeInProgress') && cpSrc.includes('!user || passwordChangeInProgress'),
+  assert(
+    cpSrc.includes('passwordChangeInProgress') &&
+      (cpSrc.includes('!user || passwordChangeInProgress') ||
+        cpSrc.includes('!userId || passwordChangeInProgress')),
     'Test 9: Onboarding status useEffect is guarded by passwordChangeInProgress flag.');
 
   // Test 10: refreshSession not destructured from useAuth

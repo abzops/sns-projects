@@ -4,12 +4,13 @@ import { getSupabase } from '../lib/supabase';
 
 export function useProjectProcessInstances(projectId) {
   const { user } = useAuth();
+  const userId = user?.id || null;
   const [processInstances, setProcessInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchProcessInstances = useCallback(async () => {
-    if (!projectId || !user) {
+    if (!projectId || !userId) {
       setProcessInstances([]);
       setLoading(false);
       return;
@@ -81,7 +82,7 @@ export function useProjectProcessInstances(projectId) {
       }))
     );
     setLoading(false);
-  }, [projectId, user]);
+  }, [projectId, userId]);
 
   useEffect(() => {
     fetchProcessInstances();

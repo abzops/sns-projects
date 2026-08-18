@@ -34,6 +34,7 @@ function computeTaskMetrics(taskRows = []) {
 
 export function useProjects(workspaceId) {
   const { user } = useAuth()
+  const userId = user?.id || null
   const [projects, setProjects] = useState(() => projectsCache.get(workspaceId) || [])
   const [loading, setLoading] = useState(() => !projectsCache.has(workspaceId))
   const [refreshing, setRefreshing] = useState(false)
@@ -41,7 +42,7 @@ export function useProjects(workspaceId) {
 
   const fetchProjects = useCallback(async (options = {}) => {
     const isSilent = options?.silent ?? false;
-    if (!workspaceId || !user) {
+    if (!workspaceId || !userId) {
       setProjects([])
       setLoading(false)
       setRefreshing(false)
@@ -128,7 +129,7 @@ export function useProjects(workspaceId) {
     setProjects(enriched)
     setLoading(false)
     setRefreshing(false)
-  }, [workspaceId, user])
+  }, [workspaceId, userId])
 
   useEffect(() => {
     // If workspace changed, pick up cache or set empty
@@ -146,12 +147,12 @@ export function useProjects(workspaceId) {
       name: input?.name?.trim(),
       description: input?.description?.trim() || null,
       color: input?.color || '#FDE215',
-      owner_id: input?.owner_id || user.id,
+      owner_id: input?.owner_id || userId,
       start_date: input?.start_date || null,
       target_end_date: input?.target_end_date || null,
       project_status: input?.project_status || 'active',
       project_priority: input?.project_priority || 'medium',
-      created_by: user.id,
+      created_by: userId,
     }
 
     if (!payload.name) {

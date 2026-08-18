@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { getSupabase, supabaseConfigError } from '../lib/supabase'
+import { reconcileAuthUser } from '../lib/authGate'
 
 const AuthContext = createContext({})
 
@@ -25,9 +26,11 @@ export function AuthProvider({ children }) {
       setLoading(false)
     })
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
-      setUser(nextSession?.user ?? null)
+      setUser((currentUser) =>
+        reconcileAuthUser(currentUser, nextSession?.user ?? null, event)
+      )
       setLoading(false)
     })
 
@@ -82,7 +85,9 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.refreshSession()
     if (data?.session) {
       setSession(data.session)
-      setUser(data.session.user ?? null)
+      setUser((currentUser) =>
+        reconcileAuthUser(currentUser, data.session.user ?? null, 'TOKEN_REFRESHED')
+      )
     }
     return { data, error }
   }

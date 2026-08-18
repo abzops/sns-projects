@@ -1021,7 +1021,8 @@ async function runTempPasswordOnboardingTests() {
 
   // 13: active + metadata false can enter app
   tpoAssert(
-    protectedRouteSrc.includes('return <Outlet />;') &&
+    protectedRouteSrc.includes('<Outlet />') &&
+    protectedRouteSrc.includes("decision === 'access-denied'") &&
     changePasswordSrc.includes("onboardingStatus?.membership_status === 'active'") &&
     changePasswordSrc.includes("onboardingStatus?.must_change_password !== true"),
     '13: active user with must_change_password=false can enter the main app (<Outlet />)',
@@ -1348,6 +1349,5 @@ runTempPasswordOnboardingTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
 
 
