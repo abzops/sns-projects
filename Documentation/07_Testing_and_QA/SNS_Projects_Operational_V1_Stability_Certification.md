@@ -70,11 +70,11 @@ Supabase Security Advisor was rerun after production deployment and remains exac
 | Production CORS and unauthenticated JWT gate | **PASS — 3/3** |
 | Lint | **PASS — 0 errors; historical warnings unchanged** |
 | Production build | **PASS** |
-| GitHub Pages build and deployment | **PASS — run `32127373575`** |
+| GitHub Pages build and deployment | **PASS — OV1-A run `32132293731`** |
 | Deployed bundle contract | **PASS — 12/12** |
 | Deployed hierarchy context markers | **PASS — 4/4** |
 | Deployed terminology markers | **PASS — 6 required present / 6 retired absent** |
-| Deployed JavaScript asset | **PASS — `index-5SLktsKk.js`** |
+| Deployed JavaScript asset | **PASS — `index-CPTCwjtK.js`** |
 | Deployed visual-integrity CSS asset | **PASS — `index-O1SIsU9n.css`** |
 
 The deployed asset additionally contains all four auth-performance markers: same-user token-refresh reconciliation, visibility-driven silent revalidation, retained-content background warning, and fail-closed access denial.

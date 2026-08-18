@@ -60,6 +60,8 @@ Administration navigation and Process draft governance continue using workspace-
 | Production helper/policy/RLS/index verification | **PASS** |
 | Production System Role and scoped-role reads | **PASS** |
 | Production unrelated deep-link denial | **PASS** |
+| GitHub Pages deployment | **PASS — run `32132293731`** |
+| Deployed bundle/access capability markers | **PASS — 12/12 + 4/4** |
 
 Supabase Security Advisor remains exactly the accepted six-warning baseline: five intentional signed-in workflow `SECURITY DEFINER` RPC warnings and one leaked-password-protection warning. OV1-A introduced no new Security Advisor warning. See the [function lint guidance](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) and [password protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
