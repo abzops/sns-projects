@@ -61,8 +61,8 @@ export default function ProjectsPage() {
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
 
-  const { isOwner, isSystemAdmin, isProjectAdmin, isAdmin, user } = useUserContext(workspaceId);
-  const canCreate = isOwner || isSystemAdmin || isProjectAdmin || isAdmin;
+  const { canAdministerWorkspace, isProjectAdmin, user } = useUserContext(workspaceId);
+  const canCreate = canAdministerWorkspace || isProjectAdmin;
 
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState('');

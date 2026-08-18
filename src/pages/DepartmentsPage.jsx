@@ -21,8 +21,8 @@ export default function DepartmentsPage() {
   const { workspaces = [] } = useWorkspaces();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
 
-  const { isOwner, isSystemAdmin, isAdmin } = useUserContext(workspaceId);
-  const canAdmin = isOwner || isSystemAdmin || isAdmin;
+  const { canAdministerWorkspace } = useUserContext(workspaceId);
+  const canAdmin = canAdministerWorkspace;
 
   return (
     <div className={styles.container}>

@@ -35,8 +35,8 @@ export default function DepartmentWorkspacePage() {
 
   const currentDept = departments.find((d) => d.id === departmentId);
 
-  const { isOwner, isSystemAdmin, isAdmin } = useUserContext(workspaceId);
-  const canAdmin = isOwner || isSystemAdmin || isAdmin;
+  const { canAdministerWorkspace } = useUserContext(workspaceId);
+  const canAdmin = canAdministerWorkspace;
 
   // View state
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'cards'

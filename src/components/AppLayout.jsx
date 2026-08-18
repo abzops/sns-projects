@@ -44,11 +44,11 @@ export default function AppLayout() {
     workspaceRole,
     primaryDepartment,
     isOwner,
-    isAdmin,
     isCEO,
     isCTO,
     isProjectAdmin,
     isSystemAdmin,
+    canAdministerWorkspace,
   } = useUserContext(activeWorkspaceId);
 
   // Fetch departments for navigation
@@ -81,9 +81,9 @@ export default function AppLayout() {
     ? 'owner'
     : workspaceRole || 'member';
 
-  const canAdminUsers = isOwner || isSystemAdmin;
-  const canAdminDepts = isOwner || isSystemAdmin || isAdmin;
-  const canAdminSettings = isOwner || isAdmin;
+  const canAdminUsers = canAdministerWorkspace;
+  const canAdminDepts = canAdministerWorkspace;
+  const canAdminSettings = canAdministerWorkspace;
   const hasAdminSection = canAdminUsers || canAdminDepts || canAdminSettings || isProjectAdmin;
 
   return (

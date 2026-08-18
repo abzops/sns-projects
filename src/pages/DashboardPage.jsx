@@ -78,11 +78,12 @@ export default function DashboardPage() {
   const userContext = useUserContext(workspaceId);
   const {
     isOwner,
-    isAdmin,
     isCEO,
     isCTO,
     isProjectAdmin,
     isSystemAdmin,
+    canAdministerWorkspace,
+    hasGlobalOperationalVisibility,
     workspaceRole,
   } = userContext;
 
@@ -308,7 +309,7 @@ export default function DashboardPage() {
   } else if (isOwner) {
     personaTitle = 'Workspace Operations';
     personaRole = 'owner';
-  } else if (!isAdmin && !isProjectAdmin) {
+  } else if (!hasGlobalOperationalVisibility && !canAdministerWorkspace) {
     personaTitle = 'Team Operations';
     personaRole = workspaceRole || 'member';
   }
@@ -328,7 +329,7 @@ export default function DashboardPage() {
             >
               <CheckSquare size={16} /> My Work
             </Link>
-            {(isOwner || isAdmin || isProjectAdmin) && (
+            {(canAdministerWorkspace || isProjectAdmin) && (
               <Link
                 to={`/workspace/${workspaceId}/projects`}
                 className={styles.newProjectBtn}

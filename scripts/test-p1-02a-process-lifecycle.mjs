@@ -46,9 +46,11 @@ async function getConnectionConfig() {
 
   const connectionString = process.env.DATABASE_URL || envAdmin.SUPABASE_DB_URL;
   if (connectionString) {
+    const hostname = new URL(connectionString).hostname;
+    const isLocal = hostname === '127.0.0.1' || hostname === 'localhost';
     return {
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: isLocal ? false : { rejectUnauthorized: false },
     };
   }
 
@@ -748,4 +750,3 @@ runRealDatabaseLifecycleE2E().catch(err => {
   console.error('Unhandled test suite error:', err);
   process.exit(1);
 });
-

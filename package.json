@@ -12,6 +12,7 @@
     "test:process-definition": "node scripts/test-operational-v1-process-definition-access.mjs",
     "test:hierarchy-context": "node scripts/test-operational-v1-contextual-hierarchy-create.mjs",
     "test:user-terminology": "node scripts/test-operational-v1-user-terminology.mjs",
+    "test:ov1-access": "node scripts/test-ov1-a-operational-visibility.mjs && node scripts/test-ov1-a-user-context.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

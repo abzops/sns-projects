@@ -93,8 +93,17 @@ export function useUserContext(workspaceId) {
   const isCTO = systemRoles.includes('cto');
   const isProjectAdmin = systemRoles.includes('project_admin');
   const isSystemAdmin = systemRoles.includes('system_admin');
-  const isAdmin = isOwner || isWorkspaceAdmin || isSystemAdmin;
   const isViewer = workspaceRole === 'viewer';
+  const hasSystemRole = isCEO || isCTO || isProjectAdmin || isSystemAdmin;
+  const hasGlobalOperationalVisibility = hasSystemRole;
+  const canAdministerWorkspace = isOwner || isWorkspaceAdmin || isSystemAdmin;
+  const canMutateOperationalData =
+    isProjectAdmin ||
+    isSystemAdmin ||
+    workspaceRole === 'owner' ||
+    workspaceRole === 'admin' ||
+    workspaceRole === 'member';
+  const isReadOnly = !canMutateOperationalData;
 
   return {
     user,
@@ -104,12 +113,16 @@ export function useUserContext(workspaceId) {
     primaryDepartment,
     isOwner,
     isWorkspaceAdmin,
-    isAdmin,
     isCEO,
     isCTO,
     isProjectAdmin,
     isSystemAdmin,
+    hasSystemRole,
+    hasGlobalOperationalVisibility,
+    canAdministerWorkspace,
+    canMutateOperationalData,
     isViewer,
+    isReadOnly,
     loading,
     error,
     refetch: fetchContext,

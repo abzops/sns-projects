@@ -291,23 +291,13 @@ export default function TasksPage() {
 
   // User context & task mutation permissions
   const {
-    workspaceRole,
-    isAdmin,
-    isProjectAdmin,
-    isCEO,
-    isCTO,
+    canMutateOperationalData,
     loading: userContextLoading,
   } = useUserContext(workspaceId);
 
   const canMutateTasks =
     !userContextLoading &&
-    (isAdmin ||
-      isProjectAdmin ||
-      isCEO ||
-      isCTO ||
-      workspaceRole === 'member' ||
-      workspaceRole === 'owner' ||
-      workspaceRole === 'admin');
+    canMutateOperationalData;
 
   // View state: 'hierarchy' | 'kanban' | 'list'
   const [view, setView] = useState('hierarchy');

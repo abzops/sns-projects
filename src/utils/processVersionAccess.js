@@ -10,8 +10,7 @@ export function canManageProcessDraft(process, userContext = {}) {
   const {
     user,
     workspaceRole,
-    isOwner,
-    isAdmin,
+    canAdministerWorkspace,
     isProjectAdmin,
     isSystemAdmin,
     departmentMemberships = [],
@@ -19,7 +18,7 @@ export function canManageProcessDraft(process, userContext = {}) {
 
   if (!user?.id || workspaceRole === 'viewer') return false;
 
-  const hasAdminAuthority = isOwner || isAdmin || isProjectAdmin || isSystemAdmin;
+  const hasAdminAuthority = canAdministerWorkspace || isProjectAdmin || isSystemAdmin;
   if (!process) {
     return hasAdminAuthority || departmentMemberships.some((membership) => (
       membership?.is_active !== false && membership?.role === 'head'
@@ -37,8 +36,7 @@ export function canPublishProcessDraft(process, userContext = {}) {
   const {
     user,
     workspaceRole,
-    isOwner,
-    isAdmin,
+    canAdministerWorkspace,
     isProjectAdmin,
     isSystemAdmin,
     departmentMemberships = [],
@@ -47,8 +45,7 @@ export function canPublishProcessDraft(process, userContext = {}) {
   if (!user?.id || workspaceRole === 'viewer') return false;
 
   return Boolean(
-    isOwner ||
-    isAdmin ||
+    canAdministerWorkspace ||
     isProjectAdmin ||
     isSystemAdmin ||
     isDepartmentHeadForProcess(process, departmentMemberships)
