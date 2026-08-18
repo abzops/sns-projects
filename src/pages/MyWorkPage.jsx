@@ -92,11 +92,11 @@ export default function MyWorkPage() {
                   color,
                   workspace_id
                 ),
-                phases:phase_id (
+                phases:phases!fk_tasks_phase (
                   id,
                   name
                 ),
-                task_lists:task_list_id (
+                task_lists:task_lists!fk_tasks_task_list (
                   id,
                   name
                 ),
@@ -136,11 +136,11 @@ export default function MyWorkPage() {
                 color,
                 workspace_id
               ),
-              phases:phase_id (
+              phases:phases!fk_tasks_phase (
                 id,
                 name
               ),
-              task_lists:task_list_id (
+              task_lists:task_lists!fk_tasks_task_list (
                 id,
                 name
               ),

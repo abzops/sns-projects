@@ -52,7 +52,7 @@ export function useProcessInstance(taskListId) {
             workspace_id,
             color
           ),
-          phases:phase_id (
+          phases:phases!fk_task_lists_phase (
             id,
             name,
             status

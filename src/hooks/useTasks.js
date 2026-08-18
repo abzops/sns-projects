@@ -93,13 +93,13 @@ export function useTasks(projectId, workspaceId) {
           created_by,
           created_at,
           updated_at,
-          phases:phase_id (
+          phases:phases!fk_tasks_phase (
             id,
             name,
             start_date,
             end_date
           ),
-          task_lists:task_list_id (
+          task_lists:task_lists!fk_tasks_task_list (
             id,
             name
           )
