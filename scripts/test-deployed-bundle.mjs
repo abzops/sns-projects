@@ -38,6 +38,12 @@ async function runDeployedTests() {
     const completeFirstLoginIndex = bundleText.indexOf('complete_first_login');
     const completeFirstLoginSlice = bundleText.slice(completeFirstLoginIndex, completeFirstLoginIndex + 1500);
     assert(!completeFirstLoginSlice.includes('refreshSession'), '7. complete_first_login handler does NOT invoke refreshSession().');
+
+    assert(bundleText.includes('Unable to load projects'), '8. Deployed bundle contains explicit Projects load-error state.');
+    assert(bundleText.includes('Unable to load defined processes'), '9. Deployed bundle contains explicit Process Catalog load-error state.');
+    assert(bundleText.includes('Failed to delete task'), '10. Deployed bundle contains Task deletion failure handling.');
+    assert(bundleText.includes('Failed to remove member'), '11. Deployed bundle contains personnel removal failure handling.');
+    assert(bundleText.includes('Failed to mark notification as read'), '12. Deployed bundle contains notification mutation failure handling.');
   } catch (err) {
     console.error('Bundle test error:', err.message);
     failed++;
