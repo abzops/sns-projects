@@ -184,7 +184,7 @@ export default function TaskDetailPanel({
       setNewSubtaskTitle('');
       setNewSubtaskAssignee('');
       setNewSubtaskDue('');
-      setShowCompleteForm(false);
+      setShowCompletionModal(false);
       setShowEvidenceForm(false);
       setShowConsultForm(false);
       setShowRejectForm(false);

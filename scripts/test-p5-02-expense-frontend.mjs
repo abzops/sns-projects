@@ -40,7 +40,7 @@ function check(value, message) {
 }
 
 console.log('======================================================================');
-console.log('SNS Projects — Package 5 / P5-02B: Closure Model Parity & UI Hardening');
+console.log('SNS Projects — Package 5 / P5-02C: Completion Modal Visual & Theme Hotfix');
 console.log('======================================================================\n');
 
 // ── Suite 1: Expense Validation, Local Date & Currency Engine ───────────────
@@ -240,10 +240,18 @@ check(
 // ── Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B) ─────
 console.log('\n--- Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B) ---');
 
-// 18. TaskDetailPanel: Elimination of Second Completion Write (P5-02A)
+// 18. TaskDetailPanel: Elimination of Second Completion Write & Stale State Fix (P5-02C)
 check(
   taskDetailPanel.includes('<TaskCompletionModal'),
   'TaskDetailPanel renders TaskCompletionModal'
+);
+check(
+  !taskDetailPanel.includes('setShowCompleteForm'),
+  'TaskDetailPanel has 0 stale references to setShowCompleteForm (P5-02C runtime crash fix)'
+);
+check(
+  taskDetailPanel.includes('setShowCompletionModal(false)'),
+  'TaskDetailPanel properly resets showCompletionModal on task change'
 );
 check(
   !taskDetailPanel.includes('handleCompletionSuccess = () => {\n    if (isDefinedTask) {\n      onWorkflowUpdated?.();\n    } else {\n      const doneStatus = statuses.find((s) => s.system_code === \'done\' || s.name?.toLowerCase() === \'done\');\n      if (doneStatus) {\n        setForm((prev) => ({ ...prev, status_id: doneStatus.id }));\n      }\n      onWorkflowUpdated?.();\n      onSave?.('),
@@ -255,7 +263,6 @@ check(
 );
 
 // 19. TaskDetailPanel: Canonical Parent / Host Detection (P5-02B)
-// Evaluates closure definition parity: child tasks & attached processes participate, subtasks DO NOT participate
 const simulateTaskDetailParentCheck = (task) => {
   return Boolean(
     task?.child_task_count > 0 ||
@@ -359,10 +366,65 @@ check(
   'useProcessInstance hook calls complete_responsible_step_with_expense RPC'
 );
 
-// ── Suite 4: Security & Financial Ledger Immutability ────────────────────────
-console.log('\n--- Suite 4: Security & Financial Ledger Immutability ---');
+// ── Suite 4: Visual Polish, Theme Tokens & Design System Parity (P5-02C) ─────
+console.log('\n--- Suite 4: Visual Polish, Theme Tokens & Design System Parity (P5-02C) ---');
 
-// 24. No direct DML from frontend
+// 24. Zero undefined --brand tokens in TaskCompletionModal.module.css
+const undefinedBrandMatches = taskCompletionModalCss.match(/var\(--brand(?![a-zA-Z0-9_-])/g) ||
+  taskCompletionModalCss.match(/var\(--brand-hover(?![a-zA-Z0-9_-])/g);
+check(
+  undefinedBrandMatches === null,
+  'TaskCompletionModal.module.css contains 0 undefined var(--brand) or var(--brand-hover) tokens'
+);
+check(
+  taskCompletionModalCss.includes('var(--accent)'),
+  'TaskCompletionModal.module.css uses canonical var(--accent) for primary yellow'
+);
+check(
+  taskCompletionModalCss.includes('var(--accent-hover)'),
+  'TaskCompletionModal.module.css uses canonical var(--accent-hover) for hover state'
+);
+
+// 25. Choice card selected state: clean single border, no double ring
+check(
+  taskCompletionModalCss.includes('.choiceCardActive') &&
+    !taskCompletionModalCss.includes('box-shadow: 0 0 0 1px var(--brand)') &&
+    !taskCompletionModalCss.includes('box-shadow: 0 0 0 1px var(--accent)'),
+  'Choice card active state uses a single clean yellow border without visual double rings'
+);
+check(
+  taskCompletionModalCss.includes('.choiceCardActive .choiceIconWrap {\n  background: var(--accent);\n  color: #000;\n}'),
+  'Selected choice card icon receives solid yellow background with black icon for high contrast'
+);
+
+// 26. Primary CTA Button Contrast & Disabled Treatment
+check(
+  taskCompletionModalCss.includes('.submitBtn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 8px 18px;\n  font-size: 0.88rem;\n  font-weight: 700;\n  color: #000;\n  background: var(--accent);'),
+  'Submit CTA is styled with yellow background and black bold text in enabled state'
+);
+check(
+  taskCompletionModalCss.includes('.submitBtn:disabled {\n  background: rgba(255, 255, 255, 0.08);\n  border-color: rgba(255, 255, 255, 0.12);\n  color: var(--muted);'),
+  'Submit CTA disabled state renders visible neutral button shape with readable text (no black-on-black)'
+);
+
+// 27. Sticky Footer Actions Inside Modal Body
+check(
+  taskCompletionModalCss.includes('position: sticky') &&
+    taskCompletionModalCss.includes('bottom:') &&
+    taskCompletionModalCss.includes('backdrop-filter: blur'),
+  'Modal footer actions are sticky at the bottom with backdrop blur, preventing CTA disappearance during scrolling'
+);
+
+// 28. Mode Toggle Styling
+check(
+  taskCompletionModalCss.includes('.modeBtnActive {\n  background: var(--panel-strong);\n  color: var(--accent);\n  font-weight: 700;'),
+  'Mode toggle active state uses panel-strong background and accent text for clear visual hierarchy'
+);
+
+// ── Suite 5: Security & Financial Ledger Immutability ────────────────────────
+console.log('\n--- Suite 5: Security & Financial Ledger Immutability ---');
+
+// 29. No direct DML from frontend
 check(
   !taskCompletionModal.includes(".from('expense_transactions')") &&
     !taskDetailPanel.includes(".from('expense_transactions')") &&
@@ -378,7 +440,7 @@ check(
   'Zero direct INSERT/UPDATE/DELETE queries to expense_items from frontend (100% RPC-only)'
 );
 
-// 25. Subtask Entity Boundaries (P5-02B)
+// 30. Subtask Entity Boundaries (P5-02B)
 check(
   !expenseExecutionLib.includes('subtask_id') &&
     !taskCompletionModal.includes('subtask_id') &&
@@ -386,12 +448,12 @@ check(
   'E. Subtasks are not converted into Finance execution entities (zero expense coupling)'
 );
 
-// 26. Responsive CSS Contracts
+// 31. Responsive CSS Contracts
 check(
   taskCompletionModalCss.includes('@media (max-width: 768px)') && taskCompletionModalCss.includes('@media (max-width: 390px)'),
   'TaskCompletionModal CSS module contains responsive breakpoints for tablet (768px) and mobile (390px)'
 );
 
 console.log('\n======================================================================');
-console.log(`P5-02B Closure Model Parity & UI Hardening: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
+console.log(`P5-02C Visual Polish & Hardening: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
 console.log('======================================================================\n');
