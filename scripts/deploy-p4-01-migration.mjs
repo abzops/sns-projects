@@ -21,20 +21,24 @@ function parseEnv(content) {
     }, {});
 }
 
-async function testDbPushDryRun() {
+async function deployMigration() {
   const envAdmin = parseEnv(await readFile(envAdminPath, 'utf8'));
   const dbUrl = envAdmin.SUPABASE_DB_URL;
 
-  console.log('Testing npx supabase db push --dry-run with --db-url:');
+  console.log('Deploying P4-01 migration to remote Supabase project:');
   try {
-    const out = execSync(`npx supabase db push --dry-run --db-url "${dbUrl}"`, {
+    const out = execSync(`npx supabase db push --db-url "${dbUrl}"`, {
       cwd: repoRoot,
       encoding: 'utf8',
     });
     console.log(out);
   } catch (err) {
-    console.log('Push dry-run output / error:', err.stdout || err.message);
+    console.error('Deployment error:', err.stdout || err.message);
+    process.exit(1);
   }
 }
 
-testDbPushDryRun().catch(console.error);
+deployMigration().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

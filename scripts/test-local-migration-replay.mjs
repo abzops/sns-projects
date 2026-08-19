@@ -32,6 +32,7 @@ async function testMigrationReplay() {
   files.forEach((f, i) => console.log(`  ${i + 1}. ${f}`));
 
   const pgClient = new Client({
+    connectionString: envAdmin.SUPABASE_DB_URL,
     host: envAdmin.SUPABASE_DB_HOST || 'db.gqerfixdmgbqahgslzsq.supabase.co',
     port: Number(envAdmin.SUPABASE_DB_PORT || '5432'),
     database: envAdmin.SUPABASE_DB_NAME || 'postgres',

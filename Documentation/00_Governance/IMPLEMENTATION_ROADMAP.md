@@ -89,9 +89,8 @@ graph TD
 - **OV1-D (`VERIFIED`)**: Operational V1 Final Production Acceptance & Stability Closure. Replaced transient loading flashes with an atomic, session-cached `useUserContext` (`userId:workspaceId`) and fail-closed scoped hooks (`useProjects`, `useDefinedProcesses`, `useProcessInstance`, `useTasks`). Replaced generic unstyled cold loader with branded `AppColdLoader` component with ambient breathing glow, orbital rotation, and `@media (prefers-reduced-motion: reduce)` support. Corrected `DepartmentWorkspacePage` task loading state. All 24 loading-stabilization regression assertions, 37 OV1-B assertions, 43 OV1-C assertions, 35 navigation UX contracts, and full signed-in manual production acceptance across 1440/1024/768/390 CSS px passed. GitHub Pages deployment run `32150807393` serves verified bundle `index-D9yNtP1g.js` / `index-CVDxZAOV.css`. Operational V1 is certified STABLE. [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md).
 
 ### Package 4: Finance Database Foundation
-- Schemas for Base Budgets, fixed Safety Buffers, and hierarchical allocation tracking on Projects, Phases, and Task Lists.
-- Core Expense Ledger table, financial audit schemas, and deterministic risk band calculations (`GREEN`, `YELLOW`, `ORANGE`, `RED`).
-- RLS policies protecting financial data (Finance Operator vs Admin / Executive roles).
+- **P4-01 (`VERIFIED`)**: Complete Finance database foundation with Base Budgets, nominal Safety Buffers, strict Project $\to$ Phase $\to$ Task List hierarchy validation triggers, immutable audit logging, sibling-only budget reallocations, itemized leaf expense transactions with automatic tenancy derivation, fail-closed DML protection on direct browser expense mutation, deterministic risk engine (`calculate_financial_risk_band`), scoped financial visibility avoiding sibling container leaks, and zero new Security Advisor warnings. [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md).
+- **Package 4 Status**: **`P4-01 VERIFIED / FOUNDATION DEPLOYED`**.
 
 ### Package 5: Expense Execution Integration
 - Atomic task completion expense intercept dialog (*Complete without Expense* vs *Add Expense & Complete*).
