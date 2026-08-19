@@ -250,8 +250,7 @@ export default function TaskDetailPanel({
     task?.is_parent ||
     task?.attached_process_count > 0 ||
     task?.attached_processes?.length > 0 ||
-    task?.process_instances?.length > 0 ||
-    (subtasks && subtasks.length > 0 && subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'))
+    task?.process_instances?.length > 0
   );
 
   const handleStatusChange = (e) => {
@@ -261,7 +260,7 @@ export default function TaskDetailPanel({
 
     if (isDone && !isDefinedTask) {
       if (isParentOrHostTask) {
-        showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
+        showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
         return;
       }
       setShowCompletionModal(true);
@@ -596,7 +595,7 @@ export default function TaskDetailPanel({
                   style={{ marginTop: '8px', width: 'fit-content' }}
                   onClick={() => {
                     if (isParentOrHostTask) {
-                      showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
+                      showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
                       return;
                     }
                     setShowCompletionModal(true);

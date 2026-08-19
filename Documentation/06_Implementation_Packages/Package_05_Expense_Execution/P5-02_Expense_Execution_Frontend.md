@@ -11,7 +11,7 @@
 
 ## 1. Overview
 
-**P5-02 / P5-02A** integrates the work completion user experience across all SNS Projects operational surfaces with the atomic, transactional PostgreSQL expense runtime established in P5-01.
+**P5-02 / P5-02A / P5-02B** integrates the work completion user experience across all SNS Projects operational surfaces with the atomic, transactional PostgreSQL expense runtime established in P5-01.
 
 Eligible users completing an ordinary task, a child task, or an active Defined Process Responsible step are presented with a unified, accessible completion modal (`TaskCompletionModal`). Users can complete their work without direct expenses or record single/split operational expenses atomically with task completion.
 
@@ -70,7 +70,7 @@ Eligible users completing an ordinary task, a child task, or an active Defined P
 
 1. **Zero Direct Frontend DML**: No direct `insert()`, `update()`, or `delete()` on `public.expense_transactions` or `public.expense_items`. All mutations route through authoritative P5 PostgreSQL RPCs.
 2. **Single Completion Write**: `complete_task_with_expense` / `complete_responsible_step_with_expense` is the sole completion mutation. No secondary generic task `onSave` or status UPDATE is issued.
-3. **Parent Task Invariant (Server & Frontend)**: Parent tasks with child tasks or attached processes cannot capture direct expenses or be directly completed. Direct completion fails closed server-side (`20260819214046`). Parent auto-completion is owned exclusively by canonical P2-03 trigger `trg_tasks_parent_completion_reevaluate`.
+3. **Parent Task Invariant (Server & Frontend)**: Parent tasks with child tasks or attached processes cannot capture direct expenses or be directly completed. Direct completion fails closed server-side (`20260819214046`). `public.subtasks` do not participate in Parent Task closure. Parent auto-completion is owned exclusively by canonical P2-03 trigger `trg_tasks_parent_completion_reevaluate`.
 4. **Local Date Semantics**: Default expense date is determined using local browser calendar date (`getLocalDateString()`), preventing timezone date shifts near UTC midnight.
 5. **Accountable Approval Isolation**: Accountable approval in Defined Processes does not open an expense modal (expenses are strictly captured during Responsible work execution).
 6. **Rework Cycle Support**: Rejection and rework cycles allow new expenses to be recorded under the incremented `current_cycle_number`.
@@ -81,7 +81,7 @@ Eligible users completing an ordinary task, a child task, or an active Defined P
 
 ## 4. Verification & Test Evidence
 
-- **Automated Frontend Test Suite**: `scripts/test-p5-02-expense-frontend.mjs` (53/53 assertions PASSED).
+- **Automated Frontend Test Suite**: `scripts/test-p5-02-expense-frontend.mjs` (60/60 assertions PASSED).
 - **Automated Backend & Security Suite**: `scripts/test-p5-01-expense-execution.mjs` (39/39 assertions PASSED).
 - **CSS Module Contract Audit**: `scripts/verify-css-module-contracts.mjs` (49 modules, 1915 static references PASSED).
 - **Documentation Link Integrity**: `scripts/verify-doc-links.mjs` (260/260 links verified).

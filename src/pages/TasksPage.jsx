@@ -863,7 +863,6 @@ export default function TasksPage() {
             const hasDependencies =
               tasks.some((t) => t.parent_task_id === activeTaskId) ||
               (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === activeTaskId && p.status === 'running')) ||
-              (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled')) ||
               Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
 
             if (hasDependencies) {
@@ -985,7 +984,6 @@ export default function TasksPage() {
         const hasDependencies =
           tasks.some((t) => t.parent_task_id === taskId) ||
           (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === taskId && p.status === 'running')) ||
-          (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled')) ||
           Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
 
         if (hasDependencies) {
