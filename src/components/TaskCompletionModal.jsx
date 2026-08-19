@@ -17,6 +17,7 @@ import {
   formatCurrency,
   parseExpenseAmount,
   validateExpenseForm,
+  getLocalDateString,
   completeTaskWithExpense,
   completeResponsibleStepWithExpense,
   EXPENSE_CATEGORIES,
@@ -43,7 +44,7 @@ export default function TaskCompletionModal({
   // Form State
   const [hasExpense, setHasExpense] = useState(false);
   const [mode, setMode] = useState('single'); // 'single' | 'itemized'
-  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = useState(() => getLocalDateString());
   const [singleAmount, setSingleAmount] = useState('');
   const [singleCategory, setSingleCategory] = useState('');
   const [singleDescription, setSingleDescription] = useState('');
@@ -62,7 +63,7 @@ export default function TaskCompletionModal({
     if (isOpen) {
       setHasExpense(false);
       setMode('single');
-      setExpenseDate(new Date().toISOString().split('T')[0]);
+      setExpenseDate(getLocalDateString());
       setSingleAmount('');
       setSingleCategory('');
       setSingleDescription('');
@@ -152,17 +153,27 @@ export default function TaskCompletionModal({
 
       // Success feedback
       if (isDefined) {
-        if (res.data?.completed) {
-          showToast(`Step "${task.title}" completed successfully!`, 'success');
-        } else if (res.data?.remaining_responsible > 0) {
+        const stepStatus = res.data?.status || res.data?.step_result?.status;
+        const remainingResp = res.data?.step_result?.remaining_responsible;
+
+        if (remainingResp && remainingResp > 0) {
           showToast(
-            `Contribution saved (${res.data.remaining_responsible} Assignees remaining).`,
+            `Contribution recorded (${remainingResp} Assignee${remainingResp > 1 ? 's' : ''} remaining).`,
             'success'
           );
-        } else if (res.data?.workflow_state) {
-          showToast(`Step advanced to ${res.data.workflow_state}.`, 'success');
+        } else if (stepStatus === 'in_review' || stepStatus === 'awaiting_approval') {
+          showToast(`Step "${task.title}" submitted for review.`, 'success');
+        } else if (stepStatus === 'awaiting_consultation') {
+          showToast(`Step "${task.title}" submitted for consultation.`, 'success');
+        } else if (stepStatus === 'completed' || res.data?.success) {
+          showToast(
+            hasExpense
+              ? `Step "${task.title}" completed with expense recorded!`
+              : `Step "${task.title}" completed successfully!`,
+            'success'
+          );
         } else {
-          showToast('Step completed successfully!', 'success');
+          showToast(`Step "${task.title}" advanced.`, 'success');
         }
       } else {
         showToast(

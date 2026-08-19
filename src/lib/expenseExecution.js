@@ -1,6 +1,20 @@
 import { supabase } from './supabase.js';
 
 /**
+ * Returns YYYY-MM-DD using the browser's LOCAL calendar date
+ * (avoids UTC timezone shift around midnight)
+ * @param {Date|string|number} [date]
+ * @returns {string}
+ */
+export function getLocalDateString(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Currency formatter for SNS Projects (INR / ₹)
  * @param {number|string} amount
  * @param {boolean} includeDecimals

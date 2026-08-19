@@ -109,6 +109,13 @@ async function runTests() {
     await client.query(p5HotfixCSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
     console.log('[SETUP] Applied P5-01C closure migration 20260819190058');
 
+    const p5_02aSql = await readFile(
+      path.join('supabase', 'migrations', '20260819214046_p5_02a_parent_direct_completion_guard.sql'),
+      'utf8',
+    );
+    await client.query(p5_02aSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P5-02A migration 20260819214046');
+
     // 2. Set up test entities
     const ids = {
       ws: randomUUID(),
@@ -161,6 +168,9 @@ async function runTests() {
       consultStepTask: randomUUID(),
       viewerStepTask: randomUUID(),
       viewerProcInst: randomUUID(),
+      hostTaskWithProc: randomUUID(),
+      procAttachedToTask: randomUUID(),
+      stepTaskAttached: randomUUID(),
     };
 
     await client.query('SET LOCAL session_replication_role = replica');
@@ -358,6 +368,22 @@ async function runTests() {
       VALUES ($1, 'R', $2), ($1, 'A', $3),
              ($4, 'R', $2), ($4, 'A', $3)
     `, [ids.stepTask1, ids.member, ids.admin, ids.stepTask2]);
+
+    // Host Task with Process Instance attached to Task
+    await client.query(`
+      INSERT INTO public.tasks (id, project_id, phase_id, task_list_id, title, status_id, assignee_id, owner_id, created_by)
+      VALUES ($1, $2, $3, $4, 'Host Task with Process Attached', $5, $6, $6, $7)
+    `, [ids.hostTaskWithProc, ids.proj1, ids.phase1, ids.list1, ids.statusTodo, ids.member, ids.owner]);
+
+    await client.query(`
+      INSERT INTO public.process_instances (id, workspace_id, defined_process_id, defined_process_version_id, instance_name, placement_type, project_id, phase_id, task_list_id, parent_task_id, started_by, owner_id, status)
+      VALUES ($1, $2, $3, $4, 'Task Attached Process', 'task', $5, $6, $7, $8, $9, $9, 'running')
+    `, [ids.procAttachedToTask, ids.ws, ids.defProc, ids.procVer, ids.proj1, ids.phase1, ids.list1, ids.hostTaskWithProc, ids.owner]);
+
+    await client.query(`
+      INSERT INTO public.tasks (id, project_id, phase_id, task_list_id, parent_task_id, process_instance_id, process_step_id, defined_process_version_id, title, workflow_state, current_cycle_number, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Attached Step 1 Task', 'ready', 1, $9)
+    `, [ids.stepTaskAttached, ids.proj1, ids.phase1, ids.list1, ids.hostTaskWithProc, ids.procAttachedToTask, ids.step1, ids.procVer, ids.owner]);
 
     await client.query('SET LOCAL session_replication_role = DEFAULT');
     pass('Initial P5 test fixtures and entities created successfully');
@@ -583,13 +609,38 @@ async function runTests() {
     assert.equal(Number(t3Items[1].amount), 3000.00);
     pass('5. Ordinary leaf Task completes atomically with itemized split expenses (Mode B)');
 
-    // 6. Parent Task direct expense capture is strictly REJECTED (Decision 17)
+    // 6. Parent Task / Host Task direct completion is strictly REJECTED (P5-02A fail-closed guard)
+    // 6a. Parent with child tasks WITHOUT expense is REJECTED
+    await expectError(client, async () => {
+      await asUser(client, ids.member, `
+        SELECT public.complete_task_with_expense($1) AS res
+      `, [ids.parentTask]);
+    }, 'Parent tasks with child dependencies cannot be directly completed');
+    pass('6a. Parent Task direct completion WITHOUT expense is strictly REJECTED (P5-02A)');
+
+    // 6b. Parent with child tasks WITH expense is REJECTED
     await expectError(client, async () => {
       await asUser(client, ids.member, `
         SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
       `, [ids.parentTask, JSON.stringify({ amount: 5000.00, category: 'Hardware' })]);
-    }, 'Parent tasks with child dependencies cannot capture direct expenses');
-    pass('6. Parent Task direct expense capture is strictly REJECTED (Decision 17)');
+    }, 'Parent tasks with child dependencies cannot be directly completed');
+    pass('6b. Parent Task direct completion WITH expense is strictly REJECTED (P5-02A)');
+
+    // 6c. Host task with attached running process WITHOUT expense is REJECTED
+    await expectError(client, async () => {
+      await asUser(client, ids.member, `
+        SELECT public.complete_task_with_expense($1) AS res
+      `, [ids.hostTaskWithProc]);
+    }, 'Parent tasks with child dependencies cannot be directly completed');
+    pass('6c. Host Task with attached running Process WITHOUT expense is strictly REJECTED (P5-02A)');
+
+    // 6d. Host task with attached running process WITH expense is REJECTED
+    await expectError(client, async () => {
+      await asUser(client, ids.member, `
+        SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+      `, [ids.hostTaskWithProc, JSON.stringify({ amount: 3000.00, category: 'Services' })]);
+    }, 'Parent tasks with child dependencies cannot be directly completed');
+    pass('6d. Host Task with attached running Process WITH expense is strictly REJECTED (P5-02A)');
 
     // 7. Parent Task auto-completion: P5-01C Exactly-Once & Expense-Free Trigger Verification
     // Step 1: Complete Child 1 via complete_task_with_expense

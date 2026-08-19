@@ -120,12 +120,22 @@ export default function ProcessInstancePage() {
     try {
       const res = await completeResponsiblePart(task.id, note);
       if (res.success) {
-        if (res.data?.completed) {
+        const stepStatus = res.data?.status || res.data?.step_result?.status;
+        const remainingResp = res.data?.step_result?.remaining_responsible;
+
+        if (remainingResp && remainingResp > 0) {
+          showToast(
+            `Your contribution was recorded. (${remainingResp} Assignee${remainingResp > 1 ? 's' : ''} remaining)`,
+            'success'
+          );
+        } else if (stepStatus === 'in_review' || stepStatus === 'awaiting_approval') {
+          showToast(`Step "${task.title}" submitted for review.`, 'success');
+        } else if (stepStatus === 'awaiting_consultation') {
+          showToast(`Step "${task.title}" submitted for consultation.`, 'success');
+        } else if (stepStatus === 'completed' || res.data?.success) {
           showToast(`Step "${task.title}" completed!`, 'success');
-        } else if (res.data?.remaining_responsible > 0) {
-          showToast(`Your contribution was recorded. (${res.data.remaining_responsible} Assignees remaining)`, 'success');
         } else {
-          showToast(`Task advanced to ${res.data?.workflow_state || 'next state'}!`, 'success');
+          showToast(`Step advanced to ${stepStatus || 'next state'}!`, 'success');
         }
       } else {
         showToast(res.error || 'Failed to complete part.', 'error');

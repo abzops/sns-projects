@@ -4,6 +4,7 @@ import {
   formatCurrency,
   parseExpenseAmount,
   validateExpenseForm,
+  getLocalDateString,
   EXPENSE_CATEGORIES,
 } from '../src/lib/expenseExecution.js';
 
@@ -39,11 +40,11 @@ function check(value, message) {
 }
 
 console.log('======================================================================');
-console.log('SNS Projects — Package 5 / P5-02: Expense Completion UI & Contracts');
+console.log('SNS Projects — Package 5 / P5-02A: Completion UI Acceptance Hardening');
 console.log('======================================================================\n');
 
-// ── Suite 1: Expense Validation & Currency Engine ───────────────────────────
-console.log('--- Suite 1: Expense Form Validation & Normalization Engine ---');
+// ── Suite 1: Expense Validation, Local Date & Currency Engine ───────────────
+console.log('--- Suite 1: Expense Form Validation, Local Date & Currency Engine ---');
 
 // 1. Complete without expense
 const noExpenseRes = validateExpenseForm({ hasExpense: false });
@@ -144,7 +145,24 @@ const invalidDate = validateExpenseForm({
 });
 check(invalidDate.isValid === false && invalidDate.error.includes('valid expense date'), 'Form validation rejects invalid date string');
 
-// 10. Currency formatter check
+// 10. Local Calendar Date Helper (P5-02A)
+const sampleDate1 = new Date(2026, 7, 20, 0, 15, 0); // Aug 20, 2026 00:15 local
+const sampleDate2 = new Date(2026, 7, 19, 23, 45, 0); // Aug 19, 2026 23:45 local
+const sampleDateNewYear = new Date(2027, 0, 1, 0, 0, 0); // Jan 1, 2027 00:00 local
+
+check(getLocalDateString(sampleDate1) === '2026-08-20', 'getLocalDateString uses local year, month, and day for early morning dates');
+check(getLocalDateString(sampleDate2) === '2026-08-19', 'getLocalDateString uses local year, month, and day for late evening dates');
+check(getLocalDateString(sampleDateNewYear) === '2027-01-01', 'getLocalDateString handles month and year rollovers with proper 0-padding');
+check(
+  !taskCompletionModal.includes('new Date().toISOString().split(\'T\')[0]'),
+  'TaskCompletionModal does NOT use UTC toISOString() for default expense date'
+);
+check(
+  taskCompletionModal.includes('getLocalDateString()'),
+  'TaskCompletionModal uses getLocalDateString() for initial and reset date state'
+);
+
+// 11. Currency formatter & parser
 check(formatCurrency(5000).includes('5,000.00'), 'formatCurrency formats standard monetary amounts');
 check(formatCurrency(0).includes('0.00'), 'formatCurrency handles zero');
 check(parseExpenseAmount('1500.75') === 1500.75, 'parseExpenseAmount parses string decimal amounts');
@@ -154,12 +172,12 @@ check(Array.isArray(EXPENSE_CATEGORIES) && EXPENSE_CATEGORIES.includes('Hardware
 // ── Suite 2: TaskCompletionModal Component Architecture ─────────────────────
 console.log('\n--- Suite 2: TaskCompletionModal Component Architecture ---');
 
-// 11. Modal Heading & Structure
+// 12. Modal Heading & Structure
 check(taskCompletionModal.includes('title="Complete Task"'), 'TaskCompletionModal sets primary title to "Complete Task"');
 check(taskCompletionModal.includes('Complete without Expense'), 'TaskCompletionModal provides "Complete without Expense" option');
 check(taskCompletionModal.includes('Add Expense & Complete'), 'TaskCompletionModal provides "Add Expense & Complete" option');
 
-// 12. RPC Invocations
+// 13. RPC Invocations
 check(
   taskCompletionModal.includes('completeTaskWithExpense('),
   'TaskCompletionModal invokes completeTaskWithExpense for ordinary tasks'
@@ -173,7 +191,7 @@ check(
   'TaskCompletionModal passes current cycle number for Defined Process steps'
 );
 
-// 13. Submitting Protection & Idempotency
+// 14. Submitting Protection & Idempotency
 check(
   taskCompletionModal.includes('setSubmitting(true)') && taskCompletionModal.includes('disabled={submitting'),
   'TaskCompletionModal disables actions and prevents double submissions while processing'
@@ -183,7 +201,7 @@ check(
   'TaskCompletionModal displays explicit progress status during RPC execution'
 );
 
-// 14. Error Handling & Form Retention
+// 15. Error Handling & Form Retention
 check(
   taskCompletionModal.includes('setErrorMessage(res.error') && taskCompletionModal.includes('setSubmitting(false)'),
   'TaskCompletionModal keeps modal open and re-enables controls on RPC failure'
@@ -193,7 +211,7 @@ check(
   'TaskCompletionModal renders accessible error notice on failure'
 );
 
-// 15. Itemized Mode Controls & Derived Total
+// 16. Itemized Mode Controls & Derived Total
 check(
   taskCompletionModal.includes('handleAddItem') && taskCompletionModal.includes('handleRemoveItem'),
   'TaskCompletionModal provides Add Line and Remove Line controls for itemized expenses'
@@ -203,24 +221,52 @@ check(
   'Calculated Total is purely derived/read-only and cannot be manually overridden'
 );
 
-// ── Suite 3: Integration with Task Surfaces ─────────────────────────────────
+// 17. Process Response Interpretation (P5-02A)
+check(
+  taskCompletionModal.includes("stepStatus === 'in_review' || stepStatus === 'awaiting_approval'") &&
+    taskCompletionModal.includes('submitted for review'),
+  'TaskCompletionModal informs user when step moves to in_review / awaiting_approval without claiming full completion'
+);
+check(
+  taskCompletionModal.includes("stepStatus === 'awaiting_consultation'") &&
+    taskCompletionModal.includes('submitted for consultation'),
+  'TaskCompletionModal informs user when step requires consultation'
+);
+check(
+  taskCompletionModal.includes("stepStatus === 'completed' || res.data?.success"),
+  'TaskCompletionModal recognizes canonical completed status'
+);
+
+// ── Suite 3: Integration Across Task Surfaces ─────────────────────────────────
 console.log('\n--- Suite 3: Integration Across Task Surfaces ---');
 
-// 16. TaskDetailPanel Integration
+// 18. TaskDetailPanel: Elimination of Second Completion Write (P5-02A)
 check(
   taskDetailPanel.includes('<TaskCompletionModal'),
   'TaskDetailPanel renders TaskCompletionModal'
 );
 check(
-  taskDetailPanel.includes('handleStatusChange') && taskDetailPanel.includes('setShowCompletionModal(true)'),
-  'TaskDetailPanel intercepts Done status change and routes to TaskCompletionModal'
+  !taskDetailPanel.includes('handleCompletionSuccess = () => {\n    if (isDefinedTask) {\n      onWorkflowUpdated?.();\n    } else {\n      const doneStatus = statuses.find((s) => s.system_code === \'done\' || s.name?.toLowerCase() === \'done\');\n      if (doneStatus) {\n        setForm((prev) => ({ ...prev, status_id: doneStatus.id }));\n      }\n      onWorkflowUpdated?.();\n      onSave?.('),
+  'TaskDetailPanel.handleCompletionSuccess does NOT invoke onSave() after successful RPC completion'
+);
+check(
+  taskDetailPanel.includes('handleCompletionSuccess = () =>') && taskDetailPanel.includes('onWorkflowUpdated?.()'),
+  'TaskDetailPanel.handleCompletionSuccess revalidates queries and updates local state without DB mutation'
+);
+
+// 19. TaskDetailPanel: Parent Task & Attached Process Guard (P5-02A)
+check(
+  taskDetailPanel.includes('isParentOrHostTask = Boolean(') &&
+    taskDetailPanel.includes('task?.attached_process_count > 0') &&
+    taskDetailPanel.includes('task?.child_task_count > 0'),
+  'TaskDetailPanel defines comprehensive isParentOrHostTask check covering child tasks and attached processes'
 );
 check(
   taskDetailPanel.includes('Parent tasks auto-complete when all child tasks'),
   'TaskDetailPanel guards parent tasks from direct completion/expense capture'
 );
 
-// 17. ProcessInstancePage Integration
+// 20. ProcessInstancePage Integration & Normalized Feedback (P5-02A)
 check(
   processInstancePage.includes('<TaskCompletionModal'),
   'ProcessInstancePage renders TaskCompletionModal'
@@ -233,8 +279,13 @@ check(
   !processInstancePage.includes('handleApprove = async (task) => {\n    setCompletionModalTask'),
   'ProcessInstancePage Accountable approval action does NOT trigger expense modal'
 );
+check(
+  processInstancePage.includes("stepStatus === 'in_review' || stepStatus === 'awaiting_approval'") &&
+    processInstancePage.includes('submitted for review'),
+  'ProcessInstancePage handleCompletePart interprets in_review status accurately'
+);
 
-// 18. TasksPage Kanban & Drag-and-Drop Integration
+// 21. TasksPage Kanban & Drag-and-Drop Parent / Host Task Guards (P5-02A)
 check(
   tasksPage.includes('<TaskCompletionModal'),
   'TasksPage renders TaskCompletionModal'
@@ -247,14 +298,18 @@ check(
   tasksPage.includes("getStatusSystemCode(targetStatus) === 'done'") && tasksPage.includes('setCompletionModalTask(movedTask)'),
   'TasksPage intercepts status menu selection of Done and opens TaskCompletionModal'
 );
+check(
+  tasksPage.includes('placement_type === \'task\'') && tasksPage.includes('p.parent_task_id === activeTaskId'),
+  'TasksPage onDragEnd guards host tasks with attached processes from direct completion'
+);
 
-// 19. Viewer / Read-Only Safety
+// 22. Viewer / Read-Only Safety
 check(
   taskDetailPanel.includes('readOnly={readOnly}') && tasksPage.includes('readOnly={!canMutateTasks}'),
   'Viewer readOnly permissions are strictly propagated to TaskCompletionModal'
 );
 
-// 20. Hooks & Central Utility Exports
+// 23. Hooks & Central Utility Exports
 check(
   useTasksHook.includes('completeTask'),
   'useTasks hook exports completeTask calling backend RPC'
@@ -267,7 +322,7 @@ check(
 // ── Suite 4: Security & Financial Ledger Immutability ────────────────────────
 console.log('\n--- Suite 4: Security & Financial Ledger Immutability ---');
 
-// 21. No direct DML from frontend
+// 24. No direct DML from frontend
 check(
   !taskCompletionModal.includes(".from('expense_transactions')") &&
     !taskDetailPanel.includes(".from('expense_transactions')") &&
@@ -283,12 +338,12 @@ check(
   'Zero direct INSERT/UPDATE/DELETE queries to expense_items from frontend (100% RPC-only)'
 );
 
-// 22. Responsive CSS Contracts
+// 25. Responsive CSS Contracts
 check(
   taskCompletionModalCss.includes('@media (max-width: 768px)') && taskCompletionModalCss.includes('@media (max-width: 390px)'),
   'TaskCompletionModal CSS module contains responsive breakpoints for tablet (768px) and mobile (390px)'
 );
 
 console.log('\n======================================================================');
-console.log(`P5-02 Expense Completion UI & Contracts: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
+console.log(`P5-02A Completion UI Acceptance Hardening: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
 console.log('======================================================================\n');

@@ -860,9 +860,14 @@ export default function TasksPage() {
 
           // Intercept move to Done status for ordinary tasks
           if (!isSameColumn && getStatusSystemCode(destStatus) === 'done') {
-            const hasChildTasks = tasks.some((t) => t.parent_task_id === activeTaskId) || (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
-            if (hasChildTasks) {
-              showToast('Parent tasks auto-complete when all child tasks are completed', 'info');
+            const hasDependencies =
+              tasks.some((t) => t.parent_task_id === activeTaskId) ||
+              (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === activeTaskId && p.status === 'running')) ||
+              (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled')) ||
+              Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
+
+            if (hasDependencies) {
+              showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
               if (boardSnapshotRef.current) return boardSnapshotRef.current;
               return currentBoard;
             }
@@ -956,7 +961,7 @@ export default function TasksPage() {
         return finalBoard;
       });
     },
-    [canMutateTasks, findContainer, reorderTask, showToast, statuses, stopAutoScroll, tasks]
+    [canMutateTasks, findContainer, processInstances, reorderTask, showToast, statuses, stopAutoScroll, tasks]
   );
 
   const handleDragCancel = useCallback(() => {
@@ -977,9 +982,14 @@ export default function TasksPage() {
       if (!movedTask || movedTask.status_id === targetStatusId) return;
 
       if (getStatusSystemCode(targetStatus) === 'done') {
-        const hasChildTasks = tasks.some((t) => t.parent_task_id === taskId) || (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
-        if (hasChildTasks) {
-          showToast('Parent tasks auto-complete when all child tasks are completed', 'info');
+        const hasDependencies =
+          tasks.some((t) => t.parent_task_id === taskId) ||
+          (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === taskId && p.status === 'running')) ||
+          (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled')) ||
+          Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
+
+        if (hasDependencies) {
+          showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
           return;
         }
         setCompletionModalTask(movedTask);
@@ -1008,7 +1018,7 @@ export default function TasksPage() {
         showToast('Failed to update task status', 'error');
       }
     },
-    [canMutateTasks, reorderTask, showToast, statuses, tasks]
+    [canMutateTasks, processInstances, reorderTask, showToast, statuses, tasks]
   );
 
   const activeTask = useMemo(

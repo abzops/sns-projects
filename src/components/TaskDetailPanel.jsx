@@ -244,14 +244,23 @@ export default function TaskDetailPanel({
     (task?.status_id && statuses.find((s) => s.id === task.status_id)?.system_code === 'done')
   );
 
+  const isParentOrHostTask = Boolean(
+    task?.child_task_count > 0 ||
+    task?.has_children ||
+    task?.is_parent ||
+    task?.attached_process_count > 0 ||
+    task?.attached_processes?.length > 0 ||
+    task?.process_instances?.length > 0 ||
+    (subtasks && subtasks.length > 0 && subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'))
+  );
+
   const handleStatusChange = (e) => {
     const newStatusId = e.target.value;
     const selectedStatus = statuses.find((s) => s.id === newStatusId);
     const isDone = selectedStatus && (selectedStatus.system_code === 'done' || selectedStatus.name?.toLowerCase() === 'done');
 
     if (isDone && !isDefinedTask) {
-      const hasUnfinishedChildren = (task?.child_task_count > 0) || (subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
-      if (hasUnfinishedChildren) {
+      if (isParentOrHostTask) {
         showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
         return;
       }
@@ -271,11 +280,6 @@ export default function TaskDetailPanel({
         setForm((prev) => ({ ...prev, status_id: doneStatus.id }));
       }
       onWorkflowUpdated?.();
-      onSave?.({
-        ...task,
-        ...form,
-        status_id: doneStatus?.id || form.status_id,
-      });
     }
     setShowCompletionModal(false);
   };
@@ -591,8 +595,7 @@ export default function TaskDetailPanel({
                   className={styles.execActionBtn}
                   style={{ marginTop: '8px', width: 'fit-content' }}
                   onClick={() => {
-                    const hasUnfinishedChildren = (task?.child_task_count > 0) || (subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
-                    if (hasUnfinishedChildren) {
+                    if (isParentOrHostTask) {
                       showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
                       return;
                     }
