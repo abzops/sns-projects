@@ -75,6 +75,9 @@ async function runP202TestSuite() {
   try {
     await client.query('BEGIN;');
 
+    const p501bMigration = await readFile(path.join(repoRoot, 'supabase/migrations/20260819154319_p5_01b_operational_scope_authorization_closure.sql'), 'utf8');
+    await client.query(p501bMigration);
+
     const testId = `p202_${Date.now()}`;
     const testUserId = (await client.query('SELECT gen_random_uuid() as id')).rows[0].id;
     const starterId = (await client.query('SELECT gen_random_uuid() as id')).rows[0].id;

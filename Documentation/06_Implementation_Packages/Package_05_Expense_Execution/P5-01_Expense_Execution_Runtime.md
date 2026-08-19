@@ -1,10 +1,11 @@
-# P5-01 & P5-01A: Expense Execution Runtime, Security & Runtime Parity
+# P5-01, P5-01A & P5-01B: Expense Execution Runtime, Security & Operational Scope Closure
 
 **Package**: Package 05 — Expense Execution Integration  
 **Status**: Implemented & Certified  
 **Deployment Migration Tips**:  
 - `20260819131603_p5_01_expense_execution_runtime.sql` (Baseline)  
-- `20260819151608_p5_01a_expense_runtime_security_parity_hotfix.sql` (Hotfix)  
+- `20260819151608_p5_01a_expense_runtime_security_parity_hotfix.sql` (Hotfix A)  
+- `20260819154319_p5_01b_operational_scope_authorization_closure.sql` (Hotfix B)  
 **Remote Project**: `gqerfixdmgbqahgslzsq`  
 **Certification Date**: 2026-08-19  
 
@@ -12,7 +13,7 @@
 
 ## 1. Overview
 
-P5-01 and P5-01A establish the production database execution engine and transactional APIs for recording, correcting, voiding, and auditing operational expenses in SNS Projects. All expense ledger writes occur atomically with work completion while strictly enforcing server-side mutation capabilities (blocking read-only Viewers from reaching mutation paths), preserving single canonical Defined Process execution runtime, ensuring notification constraint compatibility, and maintaining zero new Supabase Security Advisor warnings.
+P5-01, P5-01A, and P5-01B establish the production database execution engine and transactional APIs for recording, correcting, voiding, and auditing operational expenses in SNS Projects. All expense ledger writes occur atomically with work completion while strictly enforcing server-side mutation capabilities (blocking read-only Viewers from reaching mutation paths), requiring exact Operational V1 task-level authorization, preserving single canonical Defined Process execution runtime, ensuring notification constraint compatibility, and maintaining zero new Supabase Security Advisor warnings.
 
 ---
 
@@ -36,20 +37,28 @@ P5-01 and P5-01A establish the production database execution engine and transact
 
 ---
 
-## 3. Security Model & Mutation Authorization
+## 3. Security Model & Exact-Scope Authorization
 
-### 3.1 Server-Side Viewer Read-Only Enforcement
+### 3.1 Server-Side Tenancy & Capability Enforcement (P5-01B)
 
-Server-side helper `private.can_mutate_operational_workspace(workspace_id, user_id)` verifies that the authenticated caller holds mutation capability (Workspace Owner, Admin, Member, or System Role CEO, CTO, Project Admin, System Admin).
+Server-side helper `private.can_mutate_operational_workspace(workspace_id, user_id)` verifies that the authenticated caller holds active membership (`status = 'active'`) with an operational mutation capability:
+- Active `owner`, `admin`, or `member` role; OR
+- Active membership holding System Role `project_admin` or `system_admin`.
 
-An involved Workspace Viewer assigned as Assignee or RACI R/A/C is strictly denied from reaching mutation execution paths across:
-- `complete_task_with_expense`
-- `complete_responsible_step_with_expense`
-- `complete_responsible_part`
-- `approve_process_task`
-- `reject_process_task`
-- `submit_task_consultation`
-- `submit_task_evidence`
+The historical workspace creator bypass (`workspaces.created_by = p_user_id`) is strictly removed; suspended, pending, or removed creators cannot mutate data.
+
+### 3.2 Exact-Scope Task Completion Authorization
+
+`private.complete_task_with_expense_internal` explicitly enforces both:
+1. Workspace mutation capability (`private.can_mutate_operational_workspace`), and
+2. Exact Task authorization:
+   - System Role with broad visibility (`ceo`, `cto`, `project_admin`, `system_admin`),
+   - Project Owner for the target Project,
+   - Direct Task Assignee,
+   - Task Owner, or
+   - RACI Responsible (`R`), direct or active department-targeted.
+
+Workspace Owner/Admin membership alone without exact task involvement or system role cannot complete arbitrary tasks.
 
 ---
 
@@ -59,7 +68,7 @@ All external APIs are implemented as `SECURITY INVOKER` wrappers delegating to h
 
 | Public Wrapper | Private Implementation | Authorized Roles | Audit Action | Description |
 |---|---|---|---|---|
-| `complete_task_with_expense` | `private.complete_task_with_expense_internal` | Mutation capability + authorized Task access (Assignee/RACI R/Admin) | `created` (if expense) | Atomically validates leaf status (Decision 17), optional expense payload, updates task status to Done, triggers parent auto-completion. |
+| `complete_task_with_expense` | `private.complete_task_with_expense_internal` | Mutation capability + exact Task authorization | `created` (if expense) | Atomically validates leaf status (Decision 17), optional expense payload, updates task status to Done, triggers parent auto-completion. |
 | `complete_responsible_step_with_expense` | `private.complete_responsible_step_with_expense_internal` | Mutation capability + assigned Responsible (R) user | `created` (if expense) | Wraps canonical `complete_responsible_part_internal` for zero runtime duplication; atomically records optional cycle expense upon step completion. |
 | `correct_expense_transaction` | `private.correct_expense_transaction_internal` | Workspace Owner/Admin, CEO, CTO, Finance Operator (`FIN`) | `corrected` | Requires mandatory reason string. Replaces line items, calculates new total, logs previous and new item snapshots. |
 | `void_expense_transaction` | `private.void_expense_transaction_internal` | Workspace Owner/Admin, CEO, CTO, Finance Operator (`FIN`) | `voided` | Requires mandatory reason string. Marks transaction as voided ($0.00 effective contribution to rollups). |
@@ -69,7 +78,7 @@ All external APIs are implemented as `SECURITY INVOKER` wrappers delegating to h
 
 ## 5. Verification Matrix
 
-- **30/30 Automated Assertions** in `scripts/test-p5-01-expense-execution.mjs`.
+- **36/36 Automated Assertions** in `scripts/test-p5-01-expense-execution.mjs`.
 - **60/60 P4-01 Budget Assertions** in `scripts/test-p4-01-finance-foundation.mjs`.
 - **Full Process Runtime Regression**:
   - `scripts/test-p1-02a-process-lifecycle.mjs` (34/34 passing)

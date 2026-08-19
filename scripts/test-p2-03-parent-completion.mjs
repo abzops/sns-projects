@@ -88,6 +88,9 @@ async function run() {
   try {
     await client.query('BEGIN');
 
+    const p501bMigration = await readFile(path.join(repoRoot, 'supabase/migrations/20260819154319_p5_01b_operational_scope_authorization_closure.sql'), 'utf8');
+    await client.query(p501bMigration);
+
     const userId = (await client.query('SELECT gen_random_uuid() AS id')).rows[0].id;
     const suffix = Date.now();
     await client.query('INSERT INTO auth.users (id, email) VALUES ($1, $2)', [userId, `p203_${suffix}@example.com`]);

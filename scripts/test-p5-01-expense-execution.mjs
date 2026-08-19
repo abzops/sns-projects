@@ -64,7 +64,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function runTests() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — PACKAGE 5 / P5-01 & P5-01A EXPENSE EXECUTION TEST SUITE   ');
+  console.log('  SNS PROJECTS — PACKAGE 5 / P5-01, P5-01A & P5-01B EXPENSE TEST SUITE      ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   const env = parseEnv(await readFile('.env.admin', 'utf8'));
@@ -80,7 +80,7 @@ async function runTests() {
   await client.query('BEGIN');
 
   try {
-    // 1. Apply P5-01 and P5-01A migrations inside the isolated test transaction
+    // 1. Apply P5-01, P5-01A, and P5-01B migrations inside isolated test transaction
     const p5MigrationSql = await readFile(
       path.join('supabase', 'migrations', '20260819131603_p5_01_expense_execution_runtime.sql'),
       'utf8',
@@ -95,12 +95,21 @@ async function runTests() {
     await client.query(p5HotfixSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
     console.log('[SETUP] Applied P5-01A hotfix migration 20260819151608');
 
+    const p5HotfixBSql = await readFile(
+      path.join('supabase', 'migrations', '20260819154319_p5_01b_operational_scope_authorization_closure.sql'),
+      'utf8',
+    );
+    await client.query(p5HotfixBSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P5-01B hotfix migration 20260819154319');
+
     // 2. Set up test entities
     const ids = {
       ws: randomUUID(),
       ws2: randomUUID(),
       owner: randomUUID(),
       admin: randomUUID(),
+      pureOwner: randomUUID(),
+      pureAdmin: randomUUID(),
       ceo: randomUUID(),
       cto: randomUUID(),
       projAdmin: randomUUID(),
@@ -109,6 +118,11 @@ async function runTests() {
       member: randomUUID(),
       unrelatedMember: randomUUID(),
       viewer: randomUUID(),
+      viewerProjAdmin: randomUUID(),
+      viewerSysAdmin: randomUUID(),
+      viewerCEO: randomUUID(),
+      suspendedCreator: randomUUID(),
+      removedCreator: randomUUID(),
       finDept: randomUUID(),
       proj1: randomUUID(),
       phase1: randomUUID(),
@@ -121,6 +135,9 @@ async function runTests() {
       leafTask3: randomUUID(),
       leafTask4: randomUUID(),
       viewerTask: randomUUID(),
+      pureOwnerTask: randomUUID(),
+      pureAdminRaciTask: randomUUID(),
+      unrelatedTask: randomUUID(),
       parentTask: randomUUID(),
       childTask1: randomUUID(),
       childTask2: randomUUID(),
@@ -143,8 +160,10 @@ async function runTests() {
 
     // Profiles
     const profiles = [
-      [ids.owner, 'Workspace Owner'],
-      [ids.admin, 'Workspace Admin'],
+      [ids.owner, 'Workspace Owner (With CEO)'],
+      [ids.admin, 'Workspace Admin (With CTO)'],
+      [ids.pureOwner, 'Pure Workspace Owner (No System Role)'],
+      [ids.pureAdmin, 'Pure Workspace Admin (No System Role)'],
       [ids.ceo, 'Executive CEO'],
       [ids.cto, 'Executive CTO'],
       [ids.projAdmin, 'Project Admin User'],
@@ -153,6 +172,11 @@ async function runTests() {
       [ids.member, 'General Member User'],
       [ids.unrelatedMember, 'Unrelated Member User'],
       [ids.viewer, 'Viewer User'],
+      [ids.viewerProjAdmin, 'Viewer With Project Admin'],
+      [ids.viewerSysAdmin, 'Viewer With System Admin'],
+      [ids.viewerCEO, 'Viewer With CEO Only'],
+      [ids.suspendedCreator, 'Suspended Creator User'],
+      [ids.removedCreator, 'Removed Creator User'],
     ];
 
     for (const [pId, name] of profiles) {
@@ -167,35 +191,45 @@ async function runTests() {
     await client.query(`
       INSERT INTO public.workspaces (id, name, created_by)
       VALUES ($1, 'P5 Primary Workspace', $2),
-             ($3, 'P5 Other Workspace', $2)
-    `, [ids.ws, ids.owner, ids.ws2]);
+             ($3, 'P5 Other Workspace', $4)
+    `, [ids.ws, ids.suspendedCreator, ids.ws2, ids.removedCreator]);
 
     // Workspace Memberships
     await client.query(`
       INSERT INTO public.workspace_members (workspace_id, user_id, role, status)
       VALUES ($1, $2, 'owner', 'active'),
              ($1, $3, 'admin', 'active'),
-             ($1, $4, 'member', 'active'),
-             ($1, $5, 'member', 'active'),
+             ($1, $4, 'owner', 'active'),
+             ($1, $5, 'admin', 'active'),
              ($1, $6, 'member', 'active'),
              ($1, $7, 'member', 'active'),
              ($1, $8, 'member', 'active'),
              ($1, $9, 'member', 'active'),
-             ($1, $10, 'viewer', 'active'),
-             ($11, $12, 'member', 'active')
+             ($1, $10, 'member', 'active'),
+             ($1, $11, 'member', 'active'),
+             ($1, $12, 'viewer', 'active'),
+             ($1, $13, 'viewer', 'active'),
+             ($1, $14, 'viewer', 'active'),
+             ($1, $15, 'viewer', 'active'),
+             ($1, $16, 'owner', 'pending'),
+             ($17, $18, 'member', 'active')
     `, [
-      ids.ws, ids.owner, ids.admin, ids.ceo, ids.cto, ids.projAdmin,
-      ids.finMember, ids.projOwner, ids.member, ids.viewer,
-      ids.ws2, ids.unrelatedMember
+      ids.ws, ids.owner, ids.admin, ids.pureOwner, ids.pureAdmin, ids.ceo, ids.cto, ids.projAdmin,
+      ids.finMember, ids.projOwner, ids.member, ids.viewer, ids.viewerProjAdmin, ids.viewerSysAdmin, ids.viewerCEO,
+      ids.suspendedCreator, ids.ws2, ids.unrelatedMember
     ]);
+    // Note: ids.removedCreator created ws2 but has NO row in public.workspace_members for ws2.
 
     // User System Roles
     await client.query(`
       INSERT INTO public.user_system_roles (workspace_id, user_id, role)
       VALUES ($1, $2, 'ceo'),
              ($1, $3, 'cto'),
-             ($1, $4, 'project_admin')
-    `, [ids.ws, ids.ceo, ids.cto, ids.projAdmin]);
+             ($1, $4, 'project_admin'),
+             ($1, $5, 'project_admin'),
+             ($1, $6, 'system_admin'),
+             ($1, $7, 'ceo')
+    `, [ids.ws, ids.ceo, ids.cto, ids.projAdmin, ids.viewerProjAdmin, ids.viewerSysAdmin, ids.viewerCEO]);
 
     // Finance Department
     await client.query(`
@@ -246,13 +280,17 @@ async function runTests() {
              ($9, $2, $3, $4, 'Leaf Task 3 (Mode B Split)', $5, $6, $6, $7),
              ($10, $2, $3, $4, 'Leaf Task 4 (RACI Task)', $5, NULL, $6, $7),
              ($11, $2, $3, $4, 'Viewer Assigned Task', $5, $12, $12, $7),
-             ($13, $2, $3, $4, 'Parent Task with Children', $5, $6, $6, $7),
-             ($14, $2, $3, $4, 'Child Task 1', $5, $6, $6, $7),
-             ($15, $2, $3, $4, 'Child Task 2', $5, $6, $6, $7)
+             ($13, $2, $3, $4, 'Pure Owner Assigned Task', $5, $14, $14, $7),
+             ($15, $2, $3, $4, 'Pure Admin RACI Task', $5, NULL, $6, $7),
+             ($16, $2, $3, $4, 'Unrelated Task for Pure Owner/Admin', $5, $6, $6, $7),
+             ($17, $2, $3, $4, 'Parent Task with Children', $5, $6, $6, $7),
+             ($18, $2, $3, $4, 'Child Task 1', $5, $6, $6, $7),
+             ($19, $2, $3, $4, 'Child Task 2', $5, $6, $6, $7)
     `, [
       ids.leafTask1, ids.proj1, ids.phase1, ids.list1, ids.statusTodo, ids.member, ids.owner,
-      ids.leafTask2, ids.leafTask3, ids.leafTask4, ids.viewerTask, ids.viewer, ids.parentTask,
-      ids.childTask1, ids.childTask2
+      ids.leafTask2, ids.leafTask3, ids.leafTask4, ids.viewerTask, ids.viewer,
+      ids.pureOwnerTask, ids.pureOwner, ids.pureAdminRaciTask, ids.unrelatedTask,
+      ids.parentTask, ids.childTask1, ids.childTask2
     ]);
 
     // Parent-Child hierarchy linking
@@ -260,17 +298,17 @@ async function runTests() {
       UPDATE public.tasks SET parent_task_id = $1 WHERE id IN ($2, $3)
     `, [ids.parentTask, ids.childTask1, ids.childTask2]);
 
-    // RACI assignment for Task 4
+    // RACI assignments
     await client.query(`
       INSERT INTO public.task_raci_assignments (task_id, raci_role, user_id)
-      VALUES ($1, 'R', $2), ($1, 'A', $3)
-    `, [ids.leafTask4, ids.member, ids.admin]);
-
-    // RACI assignment for Viewer Task (Viewer is R and Assignee)
-    await client.query(`
-      INSERT INTO public.task_raci_assignments (task_id, raci_role, user_id)
-      VALUES ($1, 'R', $2), ($1, 'A', $3)
-    `, [ids.viewerTask, ids.viewer, ids.admin]);
+      VALUES ($1, 'R', $2), ($1, 'A', $3),
+             ($4, 'R', $5), ($4, 'A', $3),
+             ($6, 'R', $7), ($6, 'A', $3)
+    `, [
+      ids.leafTask4, ids.member, ids.admin,
+      ids.viewerTask, ids.viewer,
+      ids.pureAdminRaciTask, ids.pureAdmin
+    ]);
 
     // Projectless task for boundary testing
     await client.query(`
@@ -318,18 +356,99 @@ async function runTests() {
     pass('Initial P5 test fixtures and entities created successfully');
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SECTION 1: VIEWER READ-ONLY SERVER-SIDE ENFORCEMENT
+    // SECTION 0: P5-01B SERVER CAPABILITY HELPER MATRIX vs FRONTEND CONTRACT
     // ──────────────────────────────────────────────────────────────────────────
 
-    // 1. Viewer as direct assignee cannot complete ordinary Task
+    // Helper evaluation:
+    const checkCapability = async (uId, wsId = ids.ws) => {
+      const { rows } = await client.query(
+        `SELECT private.can_mutate_operational_workspace($1, $2) AS can_mutate`,
+        [wsId, uId]
+      );
+      return rows[0].can_mutate;
+    };
+
+    assert.equal(await checkCapability(ids.pureOwner), true, 'Active Workspace Owner -> true');
+    assert.equal(await checkCapability(ids.pureAdmin), true, 'Active Workspace Admin -> true');
+    assert.equal(await checkCapability(ids.member), true, 'Active Workspace Member -> true');
+    assert.equal(await checkCapability(ids.viewer), false, 'Active Workspace Viewer (no system role) -> false');
+    assert.equal(await checkCapability(ids.viewerProjAdmin), true, 'Active Viewer + project_admin -> true');
+    assert.equal(await checkCapability(ids.viewerSysAdmin), true, 'Active Viewer + system_admin -> true');
+    assert.equal(await checkCapability(ids.viewerCEO), false, 'Active Viewer + CEO only (no project/sys admin) -> false');
+    assert.equal(await checkCapability(ids.suspendedCreator), false, 'Suspended Workspace Creator -> false (No creator bypass)');
+    assert.equal(await checkCapability(ids.removedCreator, ids.ws2), false, 'Removed Workspace Creator -> false (No creator bypass)');
+    pass('0. Server capability helper matches frontend canMutateOperationalData matrix 100%');
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SECTION 1: P5-01B EXACT-SCOPE TASK AUTHORIZATION & INVOLVEMENT ENFORCEMENT
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // 1a. Pure Workspace Owner cannot complete unrelated Task (UUID guessing fails)
+    await expectError(client, async () => {
+      await asUser(client, ids.pureOwner, `
+        SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+      `, [ids.unrelatedTask, JSON.stringify({ amount: 100.00 })]);
+    }, 'Caller is not authorized to complete task');
+
+    // 1b. Pure Workspace Admin cannot complete unrelated Task
+    await expectError(client, async () => {
+      await asUser(client, ids.pureAdmin, `
+        SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+      `, [ids.unrelatedTask, JSON.stringify({ amount: 100.00 })]);
+    }, 'Caller is not authorized to complete task');
+
+    // Verify task row and expense count untouched on failed attempts
+    const { rows: [uTaskRow] } = await client.query(`SELECT status_id FROM public.tasks WHERE id = $1`, [ids.unrelatedTask]);
+    assert.equal(uTaskRow.status_id, ids.statusTodo);
+    const { rows: uExpCount } = await client.query(`SELECT count(*) FROM public.expense_transactions WHERE task_id = $1`, [ids.unrelatedTask]);
+    assert.equal(Number(uExpCount[0].count), 0, 'No expense persisted on failed authorization');
+    pass('1. No-system-role Workspace Owner and Admin CANNOT complete unrelated tasks (fails closed)');
+
+    // 1c. Pure Workspace Owner CAN complete task when legitimately assigned
+    const resPureOwner = await asUser(client, ids.pureOwner, `
+      SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+    `, [ids.pureOwnerTask, JSON.stringify({ amount: 250.00, category: 'Hardware' })]);
+    assert.equal(resPureOwner.rows[0].res.success, true);
+    assert.equal(resPureOwner.rows[0].res.status, 'done');
+    pass('1c. Workspace Owner CAN complete when legitimately assigned as Assignee');
+
+    // 1d. Pure Workspace Admin CAN complete task when assigned as RACI R
+    const resPureAdmin = await asUser(client, ids.pureAdmin, `
+      SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+    `, [ids.pureAdminRaciTask, JSON.stringify({ amount: 350.00, category: 'Hardware' })]);
+    assert.equal(resPureAdmin.rows[0].res.success, true);
+    assert.equal(resPureAdmin.rows[0].res.status, 'done');
+    pass('1d. Workspace Admin CAN complete when legitimately assigned as RACI R');
+
+    // 1e. Project Owner CAN complete task in owned project
+    const resProjOwner = await asUser(client, ids.projOwner, `
+      SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+    `, [ids.unrelatedTask, JSON.stringify({ amount: 450.00, category: 'Hardware' })]);
+    assert.equal(resProjOwner.rows[0].res.success, true);
+    assert.equal(resProjOwner.rows[0].res.status, 'done');
+    pass('1e. Project Owner CAN complete tasks within owned project');
+
+    // 1f. Suspended creator CANNOT complete task
+    await expectError(client, async () => {
+      await asUser(client, ids.suspendedCreator, `
+        SELECT public.complete_task_with_expense($1) AS res
+      `, [ids.leafTask1]);
+    }, 'Caller does not have mutation capability');
+    pass('1f. Suspended workspace creator CANNOT complete tasks');
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SECTION 2: VIEWER READ-ONLY SERVER-SIDE ENFORCEMENT
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // 2a. Viewer as direct assignee cannot complete ordinary Task
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.complete_task_with_expense($1) AS res
       `, [ids.viewerTask]);
     }, 'Caller does not have mutation capability');
-    pass('1. Viewer as direct assignee CANNOT complete ordinary Task (fails closed)');
+    pass('2a. Viewer as direct assignee CANNOT complete ordinary Task (fails closed)');
 
-    // 2. Viewer with RACI R cannot complete ordinary Task with expense
+    // 2b. Viewer with RACI R cannot complete ordinary Task with expense
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
@@ -341,9 +460,9 @@ async function runTests() {
     assert.equal(vTaskRow.status_id, ids.statusTodo, 'Task status must remain Todo');
     const { rows: vExpCount } = await client.query(`SELECT count(*) FROM public.expense_transactions WHERE task_id = $1`, [ids.viewerTask]);
     assert.equal(Number(vExpCount[0].count), 0, 'Zero expense transactions created');
-    pass('2. Viewer with RACI R CANNOT attach expense or mutate task');
+    pass('2b. Viewer with RACI R CANNOT attach expense or mutate task');
 
-    // 3. Set up Viewer on Process Step Task and verify all process mutation RPCs fail closed
+    // 2c. Set up Viewer on Process Step Task and verify all process mutation RPCs fail closed
     await client.query('SET LOCAL session_replication_role = replica');
     await client.query(`
       INSERT INTO public.process_instances (id, workspace_id, defined_process_id, defined_process_version_id, instance_name, placement_type, project_id, phase_id, task_list_id, started_by, owner_id, status)
@@ -361,43 +480,43 @@ async function runTests() {
     `, [ids.viewerStepTask, ids.viewer]);
     await client.query('SET LOCAL session_replication_role = DEFAULT');
 
-    // 3a. Viewer cannot complete responsible step with expense
+    // 2c-1. Viewer cannot complete responsible step with expense
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.complete_responsible_step_with_expense($1, 1, 'Viewer work', $2::jsonb) AS res
       `, [ids.viewerStepTask, JSON.stringify({ amount: 100.00 })]);
     }, 'Caller does not have mutation capability');
-    pass('3a. Viewer CANNOT execute complete_responsible_step_with_expense');
+    pass('2c-1. Viewer CANNOT execute complete_responsible_step_with_expense');
 
-    // 3b. Viewer cannot call complete_responsible_part
+    // 2c-2. Viewer cannot call complete_responsible_part
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.complete_responsible_part($1, 1, 'Viewer work') AS res
       `, [ids.viewerStepTask]);
     }, 'Caller does not have mutation capability');
-    pass('3b. Viewer CANNOT execute canonical complete_responsible_part');
+    pass('2c-2. Viewer CANNOT execute canonical complete_responsible_part');
 
-    // 3c. Viewer cannot call submit_task_evidence
+    // 2c-3. Viewer cannot call submit_task_evidence
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.submit_task_evidence($1, NULL, 'text', '{"doc": "v"}'::jsonb) AS res
       `, [ids.viewerStepTask]);
     }, 'Caller does not have mutation capability');
-    pass('3c. Viewer CANNOT execute submit_task_evidence');
+    pass('2c-3. Viewer CANNOT execute submit_task_evidence');
 
-    // 3d. Viewer cannot call submit_task_consultation
+    // 2c-4. Viewer cannot call submit_task_consultation
     await expectError(client, async () => {
       await asUser(client, ids.viewer, `
         SELECT public.submit_task_consultation($1, 'Viewer opinion') AS res
       `, [ids.viewerStepTask]);
     }, 'Caller does not have mutation capability');
-    pass('3d. Viewer CANNOT execute submit_task_consultation');
+    pass('2c-4. Viewer CANNOT execute submit_task_consultation');
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SECTION 2: ORDINARY TASK COMPLETION + EXPENSE RUNTIME
+    // SECTION 3: ORDINARY TASK COMPLETION + EXPENSE RUNTIME
     // ──────────────────────────────────────────────────────────────────────────
 
-    // 4. Ordinary leaf Task completes without expense
+    // 3. Ordinary leaf Task completes without expense for authorized Member
     const res1 = await asUser(client, ids.member, `
       SELECT public.complete_task_with_expense($1) AS res
     `, [ids.leafTask1]);
@@ -407,9 +526,9 @@ async function runTests() {
 
     const { rows: [t1] } = await client.query(`SELECT status_id FROM public.tasks WHERE id = $1`, [ids.leafTask1]);
     assert.equal(t1.status_id, ids.statusDone);
-    pass('4. Ordinary leaf Task completes without expense for authorized Member');
+    pass('3. Ordinary leaf Task completes without expense for authorized Member');
 
-    // 5. Ordinary leaf Task completes atomically with single total expense (Mode A)
+    // 4. Ordinary leaf Task completes atomically with single total expense (Mode A)
     const res2 = await asUser(client, ids.member, `
       SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
     `, [ids.leafTask2, JSON.stringify({
@@ -437,9 +556,9 @@ async function runTests() {
     assert.equal(t2Audit.action, 'created');
     assert.equal(t2Audit.original_transaction_id, tx2Id);
     assert.equal(t2Audit.actor_id, ids.member);
-    pass('5. Ordinary leaf Task completes atomically with single total expense (Mode A)');
+    pass('4. Ordinary leaf Task completes atomically with single total expense (Mode A)');
 
-    // 6. Ordinary leaf Task completes atomically with itemized split expenses (Mode B)
+    // 5. Ordinary leaf Task completes atomically with itemized split expenses (Mode B)
     const res3 = await asUser(client, ids.member, `
       SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
     `, [ids.leafTask3, JSON.stringify({
@@ -455,17 +574,17 @@ async function runTests() {
     assert.equal(t3Items.length, 2);
     assert.equal(Number(t3Items[0].amount), 2000.00);
     assert.equal(Number(t3Items[1].amount), 3000.00);
-    pass('6. Ordinary leaf Task completes atomically with itemized split expenses (Mode B)');
+    pass('5. Ordinary leaf Task completes atomically with itemized split expenses (Mode B)');
 
-    // 7. Parent Task direct expense capture is strictly REJECTED (Decision 17)
+    // 6. Parent Task direct expense capture is strictly REJECTED (Decision 17)
     await expectError(client, async () => {
       await asUser(client, ids.member, `
         SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
       `, [ids.parentTask, JSON.stringify({ amount: 5000.00, category: 'Hardware' })]);
     }, 'Parent tasks with child dependencies cannot capture direct expenses');
-    pass('7. Parent Task direct expense capture is strictly REJECTED (Decision 17)');
+    pass('6. Parent Task direct expense capture is strictly REJECTED (Decision 17)');
 
-    // 8. Parent Task auto-completion preserves zero direct expense rows
+    // 7. Parent Task auto-completion preserves zero direct expense rows
     await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask1]);
     await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask2]);
 
@@ -474,13 +593,13 @@ async function runTests() {
 
     const { rows: pExpRows } = await client.query(`SELECT * FROM public.expense_transactions WHERE task_id = $1`, [ids.parentTask]);
     assert.equal(pExpRows.length, 0, 'Parent auto-completion must NOT create expense transactions');
-    pass('8. Parent automatic completion creates zero direct expense transactions');
+    pass('7. Parent automatic completion creates zero direct expense transactions');
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SECTION 3: DEFINED PROCESS RUNTIME & NOTIFICATION INTEGRATION
+    // SECTION 4: DEFINED PROCESS RUNTIME & NOTIFICATION INTEGRATION
     // ──────────────────────────────────────────────────────────────────────────
 
-    // 9. Defined Process Step Cycle 1 records expense with cycle provenance
+    // 8. Defined Process Step Cycle 1 records expense with cycle provenance
     const resStep1 = await asUser(client, ids.member, `
       SELECT public.complete_responsible_step_with_expense($1, 1, 'Completed Step 1 HW', $2::jsonb) AS res
     `, [ids.stepTask1, JSON.stringify({
@@ -499,9 +618,9 @@ async function runTests() {
 
     const { rows: [stepTaskAfter] } = await client.query(`SELECT workflow_state FROM public.tasks WHERE id = $1`, [ids.stepTask1]);
     assert.equal(stepTaskAfter.workflow_state, 'awaiting_approval');
-    pass('9. Defined Process Step Cycle 1 records expense with cycle provenance');
+    pass('8. Defined Process Step Cycle 1 records expense with cycle provenance');
 
-    // 10. Accountable approval advances step without duplicate expense
+    // 9. Accountable approval advances step without duplicate expense
     await asUser(client, ids.admin, `
       SELECT public.approve_process_task($1) AS res
     `, [ids.stepTask1]);
@@ -511,9 +630,9 @@ async function runTests() {
 
     const { rows: step1Approvals } = await client.query(`SELECT * FROM public.expense_transactions WHERE task_id = $1`, [ids.stepTask1]);
     assert.equal(step1Approvals.length, 1, 'Accountable approval must NOT create a duplicate expense transaction');
-    pass('10. Accountable approval advances step without creating duplicate expense');
+    pass('9. Accountable approval advances step without creating duplicate expense');
 
-    // 11. Notification Compatibility: submit_task_consultation inserts process_consultation_response notification
+    // 10. Notification Compatibility: submit_task_consultation inserts process_consultation_response notification
     const consultStepId = randomUUID();
     await client.query('SET LOCAL session_replication_role = replica');
     await client.query(`
@@ -553,9 +672,9 @@ async function runTests() {
     assert.ok(notifRows.length > 0, 'process_consultation_response notification must be recorded');
     assert.equal(notifRows[0].type, 'process_consultation_response');
     assert.equal(notifRows[0].recipient_id, ids.member);
-    pass('11. submit_task_consultation emits process_consultation_response notification cleanly');
+    pass('10. submit_task_consultation emits process_consultation_response notification cleanly');
 
-    // 12. Rejection / Rework cycle setup:
+    // 11. Rejection / Rework cycle setup:
     const reworkProcInstId = randomUUID();
     const reworkStepTaskId = randomUUID();
     await client.query(`
@@ -592,9 +711,9 @@ async function runTests() {
     const { rows: [c1Tx] } = await client.query(`SELECT status, cycle_number FROM public.expense_transactions WHERE id = $1`, [reworkC1TxId]);
     assert.equal(c1Tx.status, 'active');
     assert.equal(c1Tx.cycle_number, 1);
-    pass('12. Rejection into rework preserves Cycle 1 expense transaction');
+    pass('11. Rejection into rework preserves Cycle 1 expense transaction');
 
-    // 13. Cycle 2 completion with 500.00 additional rework expense
+    // 12. Cycle 2 completion with 500.00 additional rework expense
     const resReworkC2 = await asUser(client, ids.member, `
       SELECT public.complete_responsible_step_with_expense($1, 2, 'Cycle 2 Rework Work', $2::jsonb) AS res
     `, [reworkStepTaskId, JSON.stringify({ amount: 500.00, category: 'Hardware' })]);
@@ -612,31 +731,31 @@ async function runTests() {
       WHERE et.task_id = $1 AND et.status IN ('active', 'corrected')
     `, [reworkStepTaskId]);
     assert.equal(Number(taskSpend.total_spend), 1500.00);
-    pass('13. Cycle 2 rework expenses accumulate cumulatively into Task Actual Spend (1,500.00)');
+    pass('12. Cycle 2 rework expenses accumulate cumulatively into Task Actual Spend (1,500.00)');
 
-    // 14. Process-Cycle Database Unique Index prevents concurrent double expense insertion
+    // 13. Process-Cycle Database Unique Index prevents concurrent double expense insertion
     await expectError(client, async () => {
       await client.query(`
         INSERT INTO public.expense_transactions (workspace_id, task_id, cycle_number, status, created_by)
         VALUES ($1, $2, 1, 'active', $3)
       `, [ids.ws, reworkStepTaskId, ids.member]);
     }, 'uq_expense_transactions_task_cycle_active');
-    pass('14. Partial unique index uq_expense_transactions_task_cycle_active blocks duplicate active cycle expense');
+    pass('13. Partial unique index uq_expense_transactions_task_cycle_active blocks duplicate active cycle expense');
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SECTION 4: AUDIT, CORRECTION, VOID & HARD-DELETE
+    // SECTION 5: AUDIT, CORRECTION, VOID & HARD-DELETE
     // ──────────────────────────────────────────────────────────────────────────
 
-    // 15. Direct authenticated INSERT on expense_transactions is BLOCKED
+    // 14. Direct authenticated INSERT on expense_transactions is BLOCKED
     await expectError(client, async () => {
       await asUser(client, ids.member, `
         INSERT INTO public.expense_transactions (workspace_id, task_id, status, created_by)
         VALUES ($1, $2, 'active', $3)
       `, [ids.ws, ids.leafTask4, ids.member]);
     }, 'permission denied for table expense_transactions');
-    pass('15. Direct authenticated INSERT on expense_transactions is BLOCKED');
+    pass('14. Direct authenticated INSERT on expense_transactions is BLOCKED');
 
-    // 16. Expense Correction authorized for Finance Operator
+    // 15. Expense Correction authorized for Finance Operator
     const resCorr = await asUser(client, ids.finMember, `
       SELECT public.correct_expense_transaction($1, $2::jsonb, 'Vendor discount applied') AS res
     `, [tx2Id, JSON.stringify({
@@ -647,25 +766,25 @@ async function runTests() {
     assert.equal(resCorr.rows[0].res.success, true);
     assert.equal(resCorr.rows[0].res.status, 'corrected');
     assert.equal(Number(resCorr.rows[0].res.new_total_amount), 1800.00);
-    pass('16. Expense Correction authorized for Finance Operator');
+    pass('15. Expense Correction authorized for Finance Operator');
 
-    // 17. Expense Correction DENIED for unapproved roles (Project Admin)
+    // 16. Expense Correction DENIED for unapproved roles (Project Admin)
     await expectError(client, async () => {
       await asUser(client, ids.projAdmin, `
         SELECT public.correct_expense_transaction($1, $2::jsonb, 'Unauthorized correction') AS res
       `, [tx2Id, JSON.stringify({ amount: 100.00 })]);
     }, 'not authorized to correct expenses');
-    pass('17. Expense Correction DENIED for unapproved roles (Project Admin)');
+    pass('16. Expense Correction DENIED for unapproved roles (Project Admin)');
 
-    // 18. Expense Correction requires mandatory non-empty reason
+    // 17. Expense Correction requires mandatory non-empty reason
     await expectError(client, async () => {
       await asUser(client, ids.finMember, `
         SELECT public.correct_expense_transaction($1, $2::jsonb, '   ') AS res
       `, [tx2Id, JSON.stringify({ amount: 100.00 })]);
     }, 'Correction reason is required');
-    pass('18. Expense Correction requires mandatory non-empty reason');
+    pass('17. Expense Correction requires mandatory non-empty reason');
 
-    // 19. Expense Void authorized for Finance Operator
+    // 18. Expense Void authorized for Finance Operator
     const resVoid = await asUser(client, ids.finMember, `
       SELECT public.void_expense_transaction($1, 'Duplicate procurement cancelled') AS res
     `, [tx3Id]);
@@ -674,25 +793,25 @@ async function runTests() {
 
     const { rows: [t3Void] } = await client.query(`SELECT status FROM public.expense_transactions WHERE id = $1`, [tx3Id]);
     assert.equal(t3Void.status, 'voided');
-    pass('19. Expense Void authorized for Finance Operator');
+    pass('18. Expense Void authorized for Finance Operator');
 
-    // 20. Correction of voided transaction is strictly REJECTED
+    // 19. Correction of voided transaction is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, ids.finMember, `
         SELECT public.correct_expense_transaction($1, $2::jsonb, 'Attempt edit voided') AS res
       `, [tx3Id, JSON.stringify({ amount: 100.00 })]);
     }, 'Cannot correct a voided');
-    pass('20. Correction of voided transaction is strictly REJECTED');
+    pass('19. Correction of voided transaction is strictly REJECTED');
 
-    // 21. Repeat Void is strictly REJECTED
+    // 20. Repeat Void is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, ids.finMember, `
         SELECT public.void_expense_transaction($1, 'Repeat void') AS res
       `, [tx3Id]);
     }, 'already voided');
-    pass('21. Repeat Void is strictly REJECTED');
+    pass('20. Repeat Void is strictly REJECTED');
 
-    // 22. Admin Hard-Delete physically removes transaction and items
+    // 21. Admin Hard-Delete physically removes transaction and items
     const tempTxRes = await asUser(client, ids.member, `
       SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
     `, [ids.leafTask4, JSON.stringify({ amount: 999.00, category: 'Hardware' })]);
@@ -708,17 +827,17 @@ async function runTests() {
 
     const { rows: delItemCheck } = await client.query(`SELECT * FROM public.expense_items WHERE transaction_id = $1`, [tempTxId]);
     assert.equal(delItemCheck.length, 0, 'Items must be physically deleted');
-    pass('22. Admin Hard-Delete physically removes transaction and items');
+    pass('21. Admin Hard-Delete physically removes transaction and items');
 
-    // 23. Finance Operator alone CANNOT hard-delete (Admin/Executive only)
+    // 22. Finance Operator alone CANNOT hard-delete (Admin/Executive only)
     await expectError(client, async () => {
       await asUser(client, ids.finMember, `
         SELECT public.hard_delete_expense_transaction($1, 'Finance delete attempt') AS res
       `, [tx2Id]);
     }, 'may hard-delete expenses');
-    pass('23. Finance Operator alone is DENIED hard-delete authority');
+    pass('22. Finance Operator alone is DENIED hard-delete authority');
 
-    // 24. Tombstone preserves original transaction UUID and complete immutable snapshot
+    // 23. Tombstone preserves original transaction UUID and complete immutable snapshot
     const { rows: tombstoneRows } = await client.query(`
       SELECT * FROM public.expense_audit_logs
       WHERE original_transaction_id = $1 AND action = 'hard_deleted'
@@ -729,9 +848,9 @@ async function runTests() {
     assert.equal(tombstoneRows[0].reason, 'Fraudulent test entry removed');
     assert.ok(tombstoneRows[0].metadata?.snapshot?.items, 'Tombstone metadata must contain complete snapshot of items');
     assert.equal(Number(tombstoneRows[0].previous_total_amount), 999.00);
-    pass('24. Hard-delete tombstone permanently preserves original transaction UUID and snapshot');
+    pass('23. Hard-delete tombstone permanently preserves original transaction UUID and snapshot');
 
-    // 25. Notification constraint drift guard: all emitted types must be accepted
+    // 24. Notification constraint drift guard: all 20 emitted types verified accepted
     const emittedTypes = [
       'task_assigned', 'task_accountable', 'task_consulted', 'task_informed',
       'raci_changed', 'task_status_changed', 'subtask_assigned', 'project_status_changed',
@@ -753,9 +872,9 @@ async function runTests() {
         `notifications_type_check must accept emitted type: "${t}"`
       );
     }
-    pass('25. Notification constraint drift guard: all 20 emitted types verified accepted');
+    pass('24. Notification constraint drift guard: all 20 emitted types verified accepted');
 
-    // 26. Zero new Security Advisor warnings (verified via query)
+    // 25. Zero new Security Advisor warnings (verified via query)
     const { rows: pubSecDef } = await client.query(`
       SELECT p.proname
       FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
@@ -763,7 +882,7 @@ async function runTests() {
         AND p.proname IN ('complete_task_with_expense', 'complete_responsible_step_with_expense', 'correct_expense_transaction', 'void_expense_transaction', 'hard_delete_expense_transaction')
     `);
     assert.equal(pubSecDef.length, 0, 'Zero new SECURITY DEFINER functions in public schema');
-    pass('26. Zero new SECURITY DEFINER functions introduced in public schema');
+    pass('25. Zero new SECURITY DEFINER functions introduced in public schema');
 
     console.log('\n═══════════════════════════════════════════════════════════════════════════');
     console.log(`  ALL ${passed} DATABASE & SECURITY ASSERTIONS PASSED WITH ZERO ERRORS!  `);
