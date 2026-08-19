@@ -102,6 +102,13 @@ async function runTests() {
     await client.query(p5HotfixBSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
     console.log('[SETUP] Applied P5-01B hotfix migration 20260819154319');
 
+    const p5HotfixCSql = await readFile(
+      path.join('supabase', 'migrations', '20260819190058_p5_01c_parent_completion_ownership_closure.sql'),
+      'utf8',
+    );
+    await client.query(p5HotfixCSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P5-01C closure migration 20260819190058');
+
     // 2. Set up test entities
     const ids = {
       ws: randomUUID(),
@@ -584,16 +591,71 @@ async function runTests() {
     }, 'Parent tasks with child dependencies cannot capture direct expenses');
     pass('6. Parent Task direct expense capture is strictly REJECTED (Decision 17)');
 
-    // 7. Parent Task auto-completion preserves zero direct expense rows
-    await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask1]);
-    await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask2]);
+    // 7. Parent Task auto-completion: P5-01C Exactly-Once & Expense-Free Trigger Verification
+    // Step 1: Complete Child 1 via complete_task_with_expense
+    const resChild1 = await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask1]);
+    assert.equal(resChild1.rows[0].res.success, true);
+    assert.equal(resChild1.rows[0].res.status, 'done');
 
+    // Step 2: Parent remains incomplete and has 0 audit events
+    const { rows: [pTaskMid] } = await client.query(`SELECT status_id FROM public.tasks WHERE id = $1`, [ids.parentTask]);
+    assert.equal(pTaskMid.status_id, ids.statusTodo, 'Parent must remain incomplete after completing only Child 1');
+    const { rows: pAuditMid } = await client.query(
+      `SELECT count(*)::int AS count FROM public.process_audit_events WHERE task_id = $1 AND event_type = 'PARENT_TASK_AUTO_COMPLETED'`,
+      [ids.parentTask]
+    );
+    assert.equal(pAuditMid[0].count, 0, 'No parent auto-completion audit event before all children complete');
+
+    // Step 3: Complete Child 2 using complete_task_with_expense (with child expense)
+    const resChild2 = await asUser(client, ids.member, `
+      SELECT public.complete_task_with_expense($1, $2::jsonb) AS res
+    `, [ids.childTask2, JSON.stringify({ amount: 1500.00, category: 'Hardware', description: 'Child 2 materials' })]);
+    assert.equal(resChild2.rows[0].res.success, true);
+    assert.equal(resChild2.rows[0].res.status, 'done');
+
+    // Step 4: Parent becomes Done through existing P2-03 trigger architecture
     const { rows: [pTaskAfter] } = await client.query(`SELECT status_id FROM public.tasks WHERE id = $1`, [ids.parentTask]);
-    assert.equal(pTaskAfter.status_id, ids.statusDone, 'Parent must be auto-completed by trigger');
+    assert.equal(pTaskAfter.status_id, ids.statusDone, 'Parent must be auto-completed to Done by canonical P2-03 trigger');
 
+    // Step 5: Parent has ZERO direct expense transactions
     const { rows: pExpRows } = await client.query(`SELECT * FROM public.expense_transactions WHERE task_id = $1`, [ids.parentTask]);
     assert.equal(pExpRows.length, 0, 'Parent auto-completion must NOT create expense transactions');
-    pass('7. Parent automatic completion creates zero direct expense transactions');
+
+    // Step 6: Parent-completion audit/event is created exactly once
+    const { rows: pAuditAfter } = await client.query(
+      `SELECT count(*)::int AS count FROM public.process_audit_events WHERE task_id = $1 AND event_type = 'PARENT_TASK_AUTO_COMPLETED'`,
+      [ids.parentTask]
+    );
+    assert.equal(pAuditAfter[0].count, 1, 'Parent completion audit event must be created exactly once');
+
+    // Step 7: Parent-completion notification/side effect is not duplicated
+    const { rows: pNotifs } = await client.query(
+      `SELECT count(*)::int AS count FROM public.notifications WHERE message LIKE '%Parent Task with Children%'`
+    );
+    const notifCountBeforeRetry = pNotifs[0].count;
+
+    // Step 8: Retry already-completed Child 2
+    const resChild2Retry = await asUser(client, ids.member, `SELECT public.complete_task_with_expense($1) AS res`, [ids.childTask2]);
+    assert.equal(resChild2Retry.rows[0].res.success, true);
+    assert.equal(resChild2Retry.rows[0].res.is_retry, true);
+
+    // Step 9: Parent remains Done
+    const { rows: [pTaskAfterRetry] } = await client.query(`SELECT status_id FROM public.tasks WHERE id = $1`, [ids.parentTask]);
+    assert.equal(pTaskAfterRetry.status_id, ids.statusDone, 'Parent must remain Done on child retry');
+
+    // Step 10: No second parent completion event appears (idempotency preserved)
+    const { rows: pAuditAfterRetry } = await client.query(
+      `SELECT count(*)::int AS count FROM public.process_audit_events WHERE task_id = $1 AND event_type = 'PARENT_TASK_AUTO_COMPLETED'`,
+      [ids.parentTask]
+    );
+    assert.equal(pAuditAfterRetry[0].count, 1, 'No second parent completion audit event on retry');
+
+    const { rows: pNotifsAfterRetry } = await client.query(
+      `SELECT count(*)::int AS count FROM public.notifications WHERE message LIKE '%Parent Task with Children%'`
+    );
+    assert.equal(pNotifsAfterRetry[0].count, notifCountBeforeRetry, 'No duplicate notification on retry');
+
+    pass('7. Parent auto-completion exactly-once trigger closure proven (10/10 scenario assertions)');
 
     // ──────────────────────────────────────────────────────────────────────────
     // SECTION 4: DEFINED PROCESS RUNTIME & NOTIFICATION INTEGRATION

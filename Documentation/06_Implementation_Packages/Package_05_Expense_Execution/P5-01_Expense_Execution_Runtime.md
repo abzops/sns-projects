@@ -1,4 +1,4 @@
-# P5-01, P5-01A & P5-01B: Expense Execution Runtime, Security & Operational Scope Closure
+# P5-01, P5-01A, P5-01B & P5-01C: Expense Execution Runtime, Security & Parent Completion Ownership
 
 **Package**: Package 05 — Expense Execution Integration  
 **Status**: Implemented & Certified  
@@ -6,6 +6,7 @@
 - `20260819131603_p5_01_expense_execution_runtime.sql` (Baseline)  
 - `20260819151608_p5_01a_expense_runtime_security_parity_hotfix.sql` (Hotfix A)  
 - `20260819154319_p5_01b_operational_scope_authorization_closure.sql` (Hotfix B)  
+- `20260819190058_p5_01c_parent_completion_ownership_closure.sql` (Hotfix C)  
 **Remote Project**: `gqerfixdmgbqahgslzsq`  
 **Certification Date**: 2026-08-19  
 
@@ -13,7 +14,7 @@
 
 ## 1. Overview
 
-P5-01, P5-01A, and P5-01B establish the production database execution engine and transactional APIs for recording, correcting, voiding, and auditing operational expenses in SNS Projects. All expense ledger writes occur atomically with work completion while strictly enforcing server-side mutation capabilities (blocking read-only Viewers from reaching mutation paths), requiring exact Operational V1 task-level authorization, preserving single canonical Defined Process execution runtime, ensuring notification constraint compatibility, and maintaining zero new Supabase Security Advisor warnings.
+P5-01, P5-01A, P5-01B, and P5-01C establish the production database execution engine and transactional APIs for recording, correcting, voiding, and auditing operational expenses in SNS Projects. All expense ledger writes occur atomically with work completion while strictly enforcing server-side mutation capabilities (blocking read-only Viewers from reaching mutation paths), requiring exact Operational V1 task-level authorization, preserving single canonical Defined Process execution runtime, ensuring notification constraint compatibility, preserving single-trigger parent task auto-completion ownership (P2-03 trigger `trg_tasks_parent_completion_reevaluate`), and maintaining zero new Supabase Security Advisor warnings.
 
 ---
 
@@ -60,6 +61,18 @@ The historical workspace creator bypass (`workspaces.created_by = p_user_id`) is
 
 Workspace Owner/Admin membership alone without exact task involvement or system role cannot complete arbitrary tasks.
 
+### 3.3 Parent Completion Ownership Closure (P5-01C)
+
+Parent task auto-completion is solely owned by the canonical P2-03 trigger `trg_tasks_parent_completion_reevaluate` on `public.tasks` (`AFTER INSERT OR DELETE OR UPDATE OF parent_task_id, process_instance_id, process_step_id, status_id FOR EACH ROW EXECUTE FUNCTION private.trg_fn_reevaluate_parent_task_closure()`). 
+
+`private.complete_task_with_expense_internal` removes redundant manual calls to `private.try_auto_complete_parent_task`, ensuring:
+- Parent Task remains incomplete when child tasks remain unfinished;
+- Parent Task transitions to Done atomically via the P2-03 trigger upon final child completion;
+- Zero direct `expense_transactions` on parent tasks;
+- Exactly one `PARENT_TASK_AUTO_COMPLETED` audit event logged;
+- No duplicate notifications;
+- Complete idempotency upon child task retries.
+
 ---
 
 ## 4. Transactional & Audited Execution APIs
@@ -68,7 +81,7 @@ All external APIs are implemented as `SECURITY INVOKER` wrappers delegating to h
 
 | Public Wrapper | Private Implementation | Authorized Roles | Audit Action | Description |
 |---|---|---|---|---|
-| `complete_task_with_expense` | `private.complete_task_with_expense_internal` | Mutation capability + exact Task authorization | `created` (if expense) | Atomically validates leaf status (Decision 17), optional expense payload, updates task status to Done, triggers parent auto-completion. |
+| `complete_task_with_expense` | `private.complete_task_with_expense_internal` | Mutation capability + exact Task authorization | `created` (if expense) | Atomically validates leaf status (Decision 17), optional expense payload, updates task status to Done. Parent auto-completion is evaluated solely by the canonical P2-03 trigger. |
 | `complete_responsible_step_with_expense` | `private.complete_responsible_step_with_expense_internal` | Mutation capability + assigned Responsible (R) user | `created` (if expense) | Wraps canonical `complete_responsible_part_internal` for zero runtime duplication; atomically records optional cycle expense upon step completion. |
 | `correct_expense_transaction` | `private.correct_expense_transaction_internal` | Workspace Owner/Admin, CEO, CTO, Finance Operator (`FIN`) | `corrected` | Requires mandatory reason string. Replaces line items, calculates new total, logs previous and new item snapshots. |
 | `void_expense_transaction` | `private.void_expense_transaction_internal` | Workspace Owner/Admin, CEO, CTO, Finance Operator (`FIN`) | `voided` | Requires mandatory reason string. Marks transaction as voided ($0.00 effective contribution to rollups). |

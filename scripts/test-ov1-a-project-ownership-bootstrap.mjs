@@ -46,14 +46,53 @@ function hasExactly(actual, expected, message) {
   pass(message);
 }
 
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+function parseEnv(content) {
+  return content.split(/\r?\n/).reduce((values, rawLine) => {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) return values;
+    const equalsIndex = line.indexOf('=');
+    if (equalsIndex <= 0) return values;
+    const key = line.slice(0, equalsIndex).trim();
+    const value = line.slice(equalsIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+    values[key] = value;
+    return values;
+  }, {});
+}
+
+async function getConnectionConfig() {
+  let envAdmin = {};
+  try {
+    const envAdminPath = path.join(process.cwd(), '.env.admin');
+    const content = await readFile(envAdminPath, 'utf8');
+    envAdmin = parseEnv(content);
+  } catch (e) {}
+
+  const connectionString = process.env.DATABASE_URL || envAdmin.SUPABASE_DB_URL;
+  if (connectionString) {
+    const hostname = new URL(connectionString).hostname;
+    const isLocal = hostname === '127.0.0.1' || hostname === 'localhost';
+    return {
+      connectionString,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+    };
+  }
+
+  return {
+    host: process.env.PGHOST || envAdmin.SUPABASE_DB_HOST || '127.0.0.1',
+    port: Number(process.env.PGPORT || envAdmin.SUPABASE_DB_PORT || '54322'),
+    database: process.env.PGDATABASE || envAdmin.SUPABASE_DB_NAME || 'postgres',
+    user: process.env.PGUSER || envAdmin.SUPABASE_DB_USER || 'postgres',
+    password: process.env.PGPASSWORD || envAdmin.SUPABASE_DB_PASSWORD || 'postgres',
+    ssl: false,
+  };
+}
+
 async function main() {
-  const client = new Client({
-    host: '127.0.0.1',
-    port: 54322,
-    database: 'postgres',
-    user: 'postgres',
-    password: 'postgres',
-  });
+  const config = await getConnectionConfig();
+  const client = new Client(config);
 
   await client.connect();
   await client.query('BEGIN');
