@@ -24,9 +24,9 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Operational V1** | `OV1-A` | Server-Enforced Operational Visibility Access Closure | **`VERIFIED`** | [OV1-A Security Closure](../03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) · Hotfix tip `20260818120101` |
 | **Operational V1** | `OV1-B` | Frontend Visibility Alignment | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend commit `c176835` |
 | **Operational V1** | `OV1-C` | Role-Aware Dashboard Engine | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend tip `e518350` |
-| **Operational V1** | `OV1-D` | Operational V1 Final Production Acceptance & Stability Closure | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend commit `0bd418d` · deployment run `32150807393` |
-| **Package 4** | `P4-01..` | Finance Database Foundation (Budgets, Buffers, Expense Ledger) | **`PLANNED`** | Financial schemas, RLS, audit logs (Next execution package) |
-| **Package 5** | `P5-01..` | Expense Execution Integration (Atomic Intercept, Reallocations) | **`PLANNED`** | Task/Process Expense attachments & audit |
+| **Package 4** | `P4-01` | Finance Database Foundation (Budgets, Buffers, Risk Engine) | **`VERIFIED`** | [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) · Migration tip `20260819115602` |
+| **Package 5** | `P5-01` | Expense Execution Runtime & Audit APIs | **`VERIFIED`** | [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · Migration tip `20260819131603` |
+| **Package 5** | `P5-02` | Expense Execution Frontend & Action Modals | **`NEXT`** | Work completion modals, expense capture UI, audit viewers |
 | **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
 | **Package 7** | `P7-01..` | Financial Hierarchy UX (Compact Bars, Hover Cards, Rollups) | **`PLANNED`** | Hierarchical financial visualization |
 | **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import | **`PLANNED`** | Bulk template ingestion & E2E certification |
