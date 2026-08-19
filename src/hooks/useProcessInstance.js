@@ -418,12 +418,22 @@ export function useProcessInstance(taskListId, authorizationScopeKey = 'default'
   const scopedInstance = scopeIsCurrent ? instance : (taskListId ? instanceCache.get(cacheKey) || null : null);
 
   // Workflow RPC actions
-  const completeResponsiblePart = async (taskId, note = null) => {
+  const completeResponsiblePart = async (
+    taskId,
+    note = null,
+    cycleNumber = 1,
+    expensePayload = null
+  ) => {
     try {
-      const { data, error: rpcErr } = await supabase.rpc('complete_responsible_part', {
-        p_task_id: taskId,
-        p_note: note,
-      });
+      const { data, error: rpcErr } = await supabase.rpc(
+        'complete_responsible_step_with_expense',
+        {
+          p_task_id: taskId,
+          p_cycle_number: Number(cycleNumber) || 1,
+          p_notes: note?.trim() || null,
+          p_expense_payload: expensePayload || null,
+        }
+      );
       if (rpcErr) throw rpcErr;
       await fetchInstance({ silent: true });
       return { success: true, data };

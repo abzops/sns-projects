@@ -29,6 +29,7 @@ import { useSubtasks } from '../hooks/useSubtasks';
 import { getMemberDisplayName } from '../lib/identity';
 import { supabase } from '../lib/supabase';
 import { useToast } from './Toast';
+import TaskCompletionModal from './TaskCompletionModal';
 import styles from './TaskDetailPanel.module.css';
 
 function RaciAssignmentIdentity({ assignment }) {
@@ -128,8 +129,7 @@ export default function TaskDetailPanel({
 
   // Defined Task Action States
   const [actionLoading, setActionLoading] = useState(false);
-  const [completionNote, setCompletionNote] = useState('');
-  const [showCompleteForm, setShowCompleteForm] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const [showEvidenceForm, setShowEvidenceForm] = useState(false);
   const [evidenceType, setEvidenceType] = useState('text');
@@ -237,31 +237,47 @@ export default function TaskDetailPanel({
     onDelete?.(task.id);
   };
 
-  // Defined Task RPC Handlers
-  const handleCompleteMyPart = async () => {
-    if (readOnly) return;
-    setActionLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('complete_responsible_part', {
-        p_task_id: task.id,
-        p_note: completionNote.trim() || null,
-      });
-      if (error) throw error;
+  const isTaskDone = Boolean(
+    task?.task_statuses?.system_code === 'done' ||
+    task?.task_statuses?.name?.toLowerCase() === 'done' ||
+    statuses.find((s) => s.id === form.status_id)?.system_code === 'done' ||
+    (task?.status_id && statuses.find((s) => s.id === task.status_id)?.system_code === 'done')
+  );
 
-      showToast(
-        data?.completed
-          ? 'Step completed!'
-          : `Contribution saved (${data?.remaining_responsible} Assignees remaining).`,
-        'success'
-      );
-      setShowCompleteForm(false);
-      setCompletionNote('');
-      onWorkflowUpdated?.();
-    } catch (err) {
-      showToast(err.message || 'Failed to complete part.', 'error');
-    } finally {
-      setActionLoading(false);
+  const handleStatusChange = (e) => {
+    const newStatusId = e.target.value;
+    const selectedStatus = statuses.find((s) => s.id === newStatusId);
+    const isDone = selectedStatus && (selectedStatus.system_code === 'done' || selectedStatus.name?.toLowerCase() === 'done');
+
+    if (isDone && !isDefinedTask) {
+      const hasUnfinishedChildren = (task?.child_task_count > 0) || (subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
+      if (hasUnfinishedChildren) {
+        showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
+        return;
+      }
+      setShowCompletionModal(true);
+      return;
     }
+
+    setForm((prev) => ({ ...prev, status_id: newStatusId }));
+  };
+
+  const handleCompletionSuccess = () => {
+    if (isDefinedTask) {
+      onWorkflowUpdated?.();
+    } else {
+      const doneStatus = statuses.find((s) => s.system_code === 'done' || s.name?.toLowerCase() === 'done');
+      if (doneStatus) {
+        setForm((prev) => ({ ...prev, status_id: doneStatus.id }));
+      }
+      onWorkflowUpdated?.();
+      onSave?.({
+        ...task,
+        ...form,
+        status_id: doneStatus?.id || form.status_id,
+      });
+    }
+    setShowCompletionModal(false);
   };
 
   const handleSubmitEvidence = async (e) => {
@@ -556,7 +572,7 @@ export default function TaskDetailPanel({
                 id="task-status"
                 className={`${styles.select} ${isDefinedTask || readOnly ? styles.lockedInput : ''}`}
                 value={form.status_id}
-                onChange={handleChange('status_id')}
+                onChange={handleStatusChange}
                 disabled={isDefinedTask || readOnly}
               >
                 {statuses.length > 0 ? (
@@ -569,6 +585,23 @@ export default function TaskDetailPanel({
                   <option value="">{task.task_statuses?.name || 'In Progress'}</option>
                 )}
               </select>
+              {!isTaskDone && !readOnly && !isDefinedTask && (
+                <button
+                  type="button"
+                  className={styles.execActionBtn}
+                  style={{ marginTop: '8px', width: 'fit-content' }}
+                  onClick={() => {
+                    const hasUnfinishedChildren = (task?.child_task_count > 0) || (subtasks.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
+                    if (hasUnfinishedChildren) {
+                      showToast('Parent tasks auto-complete when all child tasks and subtasks are completed.', 'info');
+                      return;
+                    }
+                    setShowCompletionModal(true);
+                  }}
+                >
+                  <CheckCircle2 size={13} /> Complete Task
+                </button>
+              )}
             </div>
 
             {/* Priority */}
@@ -625,30 +658,11 @@ export default function TaskDetailPanel({
                     <button
                       type="button"
                       className={styles.execActionBtn}
-                      onClick={() => setShowCompleteForm(!showCompleteForm)}
+                      onClick={() => setShowCompletionModal(true)}
                     >
                       <CheckCircle2 size={14} /> Complete My Part
                     </button>
                   </div>
-                  {showCompleteForm && (
-                    <div className={styles.inlineForm}>
-                      <textarea
-                        className={styles.execTextarea}
-                        rows={2}
-                        placeholder="Optional completion note..."
-                        value={completionNote}
-                        onChange={(e) => setCompletionNote(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className={styles.execSubmitBtn}
-                        onClick={handleCompleteMyPart}
-                        disabled={actionLoading}
-                      >
-                        {actionLoading ? 'Recording...' : 'Confirm My Part Complete'}
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1229,6 +1243,17 @@ export default function TaskDetailPanel({
           </div>
         </div>
       </div>
+
+      {showCompletionModal && (
+        <TaskCompletionModal
+          isOpen={showCompletionModal}
+          onClose={() => setShowCompletionModal(false)}
+          task={task}
+          isDefinedTask={isDefinedTask}
+          onSuccess={handleCompletionSuccess}
+          readOnly={readOnly}
+        />
+      )}
     </div>,
     document.body
   );

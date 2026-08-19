@@ -1,0 +1,724 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Task Header Summary Banner */
+.taskBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.taskBannerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.taskTitleBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.taskCheckIcon {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.taskTitleText {
+  word-break: break-word;
+}
+
+.cycleBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ff9800;
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.taskListMeta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Choice Cards */
+.choiceGroup {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.choiceCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.choiceCard:hover:not(:disabled) {
+  border-color: rgba(253, 226, 21, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.choiceCardActive {
+  border-color: var(--brand);
+  background: rgba(253, 226, 21, 0.07);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
+.choiceIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.choiceCardActive .choiceIconWrap {
+  background: var(--brand);
+  color: #000;
+}
+
+.choiceText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.choiceTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.choiceSub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* Expense Section */
+.expenseSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-sm);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expenseSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modeToggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+}
+
+.modeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-xs) - 2px);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.modeBtn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.modeBtnActive {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.datePickerWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dateLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.dateInput {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.dateInput:focus {
+  border-color: var(--brand);
+}
+
+/* Single Form Grid */
+.singleFormGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.fieldItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fullWidthField {
+  grid-column: 1 / -1;
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.requiredStar {
+  color: var(--danger, #f44336);
+}
+
+.optionalTag {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+.amountInputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currencyPrefix {
+  position: absolute;
+  left: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brand);
+  pointer-events: none;
+}
+
+.amountInput {
+  width: 100%;
+  padding: 8px 12px 8px 28px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.amountInput:focus {
+  border-color: var(--brand);
+}
+
+.textInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.textInput:focus {
+  border-color: var(--brand);
+}
+
+/* Itemized Section */
+.itemizedSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.itemizedHeader {
+  display: grid;
+  grid-template-columns: 32px 140px 140px 1fr 36px;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.colLine {
+  text-align: center;
+}
+
+.colAmount {
+  text-align: left;
+}
+
+.colCat {
+  text-align: left;
+}
+
+.colDesc {
+  text-align: left;
+}
+
+.colAction {
+  text-align: center;
+}
+
+.itemizedList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.itemizedRow {
+  display: grid;
+  grid-template-columns: 32px 140px 140px 1fr 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.lineBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-xs);
+  margin: 0 auto;
+}
+
+.itemAmountWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.itemAmountInput {
+  width: 100%;
+  padding: 7px 8px 7px 22px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.itemAmountInput:focus {
+  border-color: var(--brand);
+}
+
+.itemCatWrap,
+.itemDescWrap {
+  width: 100%;
+}
+
+.itemCatInput,
+.itemDescInput {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.itemCatInput:focus,
+.itemDescInput:focus {
+  border-color: var(--brand);
+}
+
+.itemActionWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.removeLineBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.removeLineBtn:hover:not(:disabled) {
+  color: var(--danger, #f44336);
+  background: rgba(244, 67, 54, 0.1);
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.removeLineBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.itemizedFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  flex-wrap: wrap;
+}
+
+.addLineBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.addLineBtn:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: rgba(253, 226, 21, 0.05);
+}
+
+.calculatedTotalCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-xs);
+}
+
+.calculatedLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.calculatedValue {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--brand);
+}
+
+/* Notes Section */
+.notesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  outline: none;
+  resize: vertical;
+  min-height: 56px;
+  transition: border-color var(--transition);
+}
+
+.textarea:focus {
+  border-color: var(--brand);
+}
+
+/* Error Notice */
+.errorNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.35);
+  border-radius: var(--radius-xs);
+  color: #ff8a80;
+  font-size: 0.85rem;
+  animation: shake 0.2s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.errorText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.errorText strong {
+  font-weight: 700;
+}
+
+.errorText p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+/* Footer Actions */
+.footerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.cancelBtn {
+  padding: 8px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.cancelBtn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.submitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #000;
+  background: var(--brand);
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: var(--brand-hover, #ffea00);
+  transform: translateY(-1px);
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .choiceGroup {
+    grid-template-columns: 1fr;
+  }
+
+  .singleFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .expenseSectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .datePickerWrap {
+    justify-content: space-between;
+  }
+
+  .itemizedHeader {
+    display: none;
+  }
+
+  .itemizedRow {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xs);
+  }
+
+  .lineBadge {
+    display: none;
+  }
+
+  .itemAmountWrap {
+    grid-column: 1 / 2;
+  }
+
+  .itemCatWrap {
+    grid-column: 2 / 3;
+  }
+
+  .itemDescWrap {
+    grid-column: 1 / 2;
+  }
+
+  .itemActionWrap {
+    grid-column: 2 / 3;
+    justify-content: flex-end;
+  }
+
+  .itemizedFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calculatedTotalCard {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 390px) {
+  .choiceCard {
+    padding: 12px;
+  }
+
+  .modeToggle {
+    width: 100%;
+  }
+
+  .modeBtn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .footerActions {
+    flex-direction: column-reverse;
+  }
+
+  .cancelBtn,
+  .submitBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}

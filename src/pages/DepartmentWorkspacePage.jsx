@@ -546,6 +546,7 @@ export default function DepartmentWorkspacePage() {
             await fetchDeptTasks();
             setSelectedTask(null);
           }}
+          onWorkflowUpdated={() => fetchDeptTasks()}
           statuses={[]}
           members={deptMembers}
           departments={departments}

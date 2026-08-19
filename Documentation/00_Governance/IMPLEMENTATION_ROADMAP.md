@@ -26,7 +26,7 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Operational V1** | `OV1-C` | Role-Aware Dashboard Engine | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend tip `e518350` |
 | **Package 4** | `P4-01` | Finance Database Foundation (Budgets, Buffers, Risk Engine) | **`VERIFIED`** | [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) · Migration tip `20260819115602` |
 | **Package 5** | `P5-01` | Expense Execution Runtime & Audit APIs | **`VERIFIED`** | [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · Migration tip `20260819190058` |
-| **Package 5** | `P5-02` | Expense Execution Frontend & Action Modals | **`NEXT`** | Work completion modals, expense capture UI, audit viewers |
+| **Package 5** | `P5-02` | Expense Execution Frontend & Action Modals | **`IMPLEMENTED / ACCEPTANCE PENDING`** | [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · Work completion modals, single & itemized expense capture |
 | **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
 | **Package 7** | `P7-01..` | Financial Hierarchy UX (Compact Bars, Hover Cards, Rollups) | **`PLANNED`** | Hierarchical financial visualization |
 | **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import | **`PLANNED`** | Bulk template ingestion & E2E certification |
@@ -93,10 +93,9 @@ graph TD
 - **Package 4 Status**: **`P4-01 / P4-01A VERIFIED / FOUNDATION DEPLOYED`**.
 
 ### Package 5: Expense Execution Integration
-- Atomic task completion expense intercept dialog (*Complete without Expense* vs *Add Expense & Complete*).
-- Support for single totals and split amounts.
-- Cumulative rework expense tracking.
-- Expense correction, void, and admin hard-delete with immutable audit tombstones.
+- **P5-01 / P5-01A / P5-01B / P5-01C (`VERIFIED`)**: Expense Execution Runtime, Exact-Scope Authorization, and Single Parent Completion Ownership. Migrations `20260819131603` through `20260819190058`. [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md).
+- **P5-02 (`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`)**: Unified task work completion modal (`TaskCompletionModal`), Complete without Expense, Single Total and Itemized / Split expense capture, integration with Task Detail, Kanban drag-and-drop, My Work, and Defined Process execution. [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md).
+- **Package 5 Status**: **`P5-01..C VERIFIED · P5-02 IMPLEMENTED`**.
 
 ### Package 6: Finance Frontend
 - **Overview Dashboard**: High-level financial summary, burn rates, and project budgets.

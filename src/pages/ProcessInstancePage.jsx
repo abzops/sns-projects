@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import TaskCompletionModal from '../components/TaskCompletionModal';
 import Avatar from '../components/Avatar';
 import { CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
@@ -107,6 +108,7 @@ export default function ProcessInstancePage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectDueDate, setRejectDueDate] = useState('');
 
+  const [completionModalTask, setCompletionModalTask] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || null;
@@ -485,7 +487,7 @@ export default function ProcessInstancePage() {
                           <button
                             type="button"
                             className={styles.completePartBtn}
-                            onClick={() => handleCompletePart(task)}
+                            onClick={() => setCompletionModalTask(task)}
                             disabled={actionLoading}
                           >
                             <CheckCircle2 size={14} /> Complete My Part
@@ -742,6 +744,21 @@ export default function ProcessInstancePage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Task Completion Modal */}
+      {completionModalTask && (
+        <TaskCompletionModal
+          isOpen={!!completionModalTask}
+          task={completionModalTask}
+          isDefinedTask={true}
+          onClose={() => setCompletionModalTask(null)}
+          onSuccess={() => {
+            fetchInstance({ silent: true });
+            setCompletionModalTask(null);
+          }}
+          readOnly={isReadOnly}
+        />
       )}
     </div>
   );

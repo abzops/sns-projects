@@ -764,6 +764,7 @@ export default function MyWorkPage() {
           onClose={() => setSelectedTask(null)}
           onSave={handleTaskSave}
           onDelete={handleTaskDelete}
+          onWorkflowUpdated={() => fetchMyWork({ silent: true })}
           statuses={[]}
           members={[]}
           departments={departments}

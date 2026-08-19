@@ -53,6 +53,7 @@ import {
 import TaskRow from '../components/TaskRow';
 import TaskCard from '../components/TaskCard';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import TaskCompletionModal from '../components/TaskCompletionModal';
 import HierarchyTaskTree, { HierarchyProcessGroups } from '../components/HierarchyTaskTree';
 import Modal from '../components/Modal';
 import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
@@ -323,6 +324,7 @@ export default function TasksPage() {
   const [showAddTaskListModal, setShowAddTaskListModal] = useState(false);
   const [taskCreationContext, setTaskCreationContext] = useState(null);
   const [taskListCreationContext, setTaskListCreationContext] = useState(null);
+  const [completionModalTask, setCompletionModalTask] = useState(null);
 
   // Kanban local board state & dragging refs
   const [activeId, setActiveId] = useState(null);
@@ -856,6 +858,19 @@ export default function TasksPage() {
             return currentBoard;
           }
 
+          // Intercept move to Done status for ordinary tasks
+          if (!isSameColumn && getStatusSystemCode(destStatus) === 'done') {
+            const hasChildTasks = tasks.some((t) => t.parent_task_id === activeTaskId) || (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
+            if (hasChildTasks) {
+              showToast('Parent tasks auto-complete when all child tasks are completed', 'info');
+              if (boardSnapshotRef.current) return boardSnapshotRef.current;
+              return currentBoard;
+            }
+            setCompletionModalTask(movedTask);
+            if (boardSnapshotRef.current) return boardSnapshotRef.current;
+            return currentBoard;
+          }
+
           let fullSourceTaskIds = [];
           let fullDestinationTaskIds = [];
 
@@ -960,6 +975,16 @@ export default function TasksPage() {
 
       const movedTask = tasks.find((t) => t.id === taskId);
       if (!movedTask || movedTask.status_id === targetStatusId) return;
+
+      if (getStatusSystemCode(targetStatus) === 'done') {
+        const hasChildTasks = tasks.some((t) => t.parent_task_id === taskId) || (movedTask?.subtasks?.some((st) => st.status !== 'done' && st.status !== 'cancelled'));
+        if (hasChildTasks) {
+          showToast('Parent tasks auto-complete when all child tasks are completed', 'info');
+          return;
+        }
+        setCompletionModalTask(movedTask);
+        return;
+      }
 
       const sourceTasks = tasks
         .filter((t) => t.status_id === movedTask.status_id && t.id !== taskId)
@@ -2060,6 +2085,21 @@ export default function TasksPage() {
           </div>
         </form>
       </Modal>
+
+      {/* ───── Task Completion Modal ───── */}
+      {completionModalTask && (
+        <TaskCompletionModal
+          isOpen={!!completionModalTask}
+          task={completionModalTask}
+          isDefinedTask={Boolean(completionModalTask.process_step_id || completionModalTask.process_instance_id)}
+          onClose={() => setCompletionModalTask(null)}
+          onSuccess={() => {
+            refetchTasks({ silent: true });
+            setCompletionModalTask(null);
+          }}
+          readOnly={!canMutateTasks}
+        />
+      )}
     </div>
   );
 }

@@ -523,6 +523,23 @@ export function useTasks(projectId, workspaceId) {
     return { data, error: null };
   };
 
+  const completeTask = async (taskId, expensePayload = null, notes = null) => {
+    const supabase = getSupabase();
+    try {
+      const { data, error: rpcError } = await supabase.rpc('complete_task_with_expense', {
+        p_task_id: taskId,
+        p_expense_payload: expensePayload || null,
+        p_notes: notes?.trim() || null,
+      });
+      if (rpcError) throw rpcError;
+      await fetchTasks({ silent: true });
+      return { data, error: null };
+    } catch (err) {
+      console.error('Failed to complete task with expense:', err);
+      return { data: null, error: err };
+    }
+  };
+
   return {
     tasks: scopedTasks,
     loading: !scopeIsCurrent || initialLoading,
@@ -533,6 +550,7 @@ export function useTasks(projectId, workspaceId) {
     updateTask,
     deleteTask,
     reorderTask,
+    completeTask,
     refetch: fetchTasks,
   };
 }
