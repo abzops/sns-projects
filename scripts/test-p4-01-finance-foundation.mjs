@@ -771,14 +771,14 @@ async function runTests() {
 
     // 50. Expense audit reason constraints: created action permits NULL; correction requires reason
     await client.query(`
-      INSERT INTO public.expense_audit_logs (workspace_id, transaction_id, action, actor_id, reason)
-      VALUES ($1, $2, 'created', $3, NULL)
+      INSERT INTO public.expense_audit_logs (workspace_id, transaction_id, original_transaction_id, action, actor_id, reason)
+      VALUES ($1, $2, $2, 'created', $3, NULL)
     `, [ids.ws, et1.id, ids.owner]);
 
     await expectError(client, async () => {
       await client.query(`
-        INSERT INTO public.expense_audit_logs (workspace_id, transaction_id, action, actor_id, reason)
-        VALUES ($1, $2, 'voided', $3, '')
+        INSERT INTO public.expense_audit_logs (workspace_id, transaction_id, original_transaction_id, action, actor_id, reason)
+        VALUES ($1, $2, $2, 'voided', $3, '')
       `, [ids.ws, et1.id, ids.owner]);
     });
     pass('50. Expense audit logs enforce mandatory reason on correction/void/deletion');

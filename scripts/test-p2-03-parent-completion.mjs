@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
 
@@ -14,6 +16,51 @@ function assert(condition, message, details = '') {
     console.error(`  [FAIL] ${message}${details ? ` - ${details}` : ''}`);
     failed++;
   }
+}
+
+const repoRoot = process.cwd();
+
+function parseEnv(content) {
+  return content
+    .split(/\r?\n/)
+    .reduce((values, rawLine) => {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) return values;
+      const equalsIndex = line.indexOf('=');
+      if (equalsIndex <= 0) return values;
+      const key = line.slice(0, equalsIndex).trim();
+      const value = line.slice(equalsIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+      values[key] = value;
+      return values;
+    }, {});
+}
+
+async function getConnectionConfig() {
+  let envAdmin = {};
+  try {
+    const envAdminPath = path.join(repoRoot, '.env.admin');
+    const content = await readFile(envAdminPath, 'utf8');
+    envAdmin = parseEnv(content);
+  } catch (e) {}
+
+  const connectionString = process.env.DATABASE_URL || envAdmin.SUPABASE_DB_URL;
+  if (connectionString) {
+    const hostname = new URL(connectionString).hostname;
+    const isLocal = hostname === '127.0.0.1' || hostname === 'localhost';
+    return {
+      connectionString,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+    };
+  }
+
+  return {
+    host: process.env.PGHOST || envAdmin.SUPABASE_DB_HOST || '127.0.0.1',
+    port: Number(process.env.PGPORT || envAdmin.SUPABASE_DB_PORT || '54322'),
+    database: process.env.PGDATABASE || envAdmin.SUPABASE_DB_NAME || 'postgres',
+    user: process.env.PGUSER || envAdmin.SUPABASE_DB_USER || 'postgres',
+    password: process.env.PGPASSWORD || envAdmin.SUPABASE_DB_PASSWORD || 'postgres',
+    ssl: false,
+  };
 }
 
 async function expectError(client, sql, params = []) {
@@ -35,15 +82,8 @@ async function run() {
   console.log('SNS Projects — Package 2 / P2-03: Parent Completion Runtime Suite');
   console.log('======================================================================\n');
 
-  const client = new Client({
-    host: '127.0.0.1',
-    port: 54322,
-    database: 'postgres',
-    user: 'postgres',
-    password: 'postgres',
-    ssl: false,
-  });
-
+  const config = await getConnectionConfig();
+  const client = new Client(config);
   await client.connect();
   try {
     await client.query('BEGIN');
@@ -51,7 +91,7 @@ async function run() {
     const userId = (await client.query('SELECT gen_random_uuid() AS id')).rows[0].id;
     const suffix = Date.now();
     await client.query('INSERT INTO auth.users (id, email) VALUES ($1, $2)', [userId, `p203_${suffix}@example.com`]);
-    await client.query('INSERT INTO public.profiles (id, full_name) VALUES ($1, $2)', [userId, 'P2-03 Runtime Owner']);
+    await client.query('INSERT INTO public.profiles (id, full_name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name', [userId, 'P2-03 Runtime Owner']);
 
     const { rows: [workspace] } = await client.query(
       'INSERT INTO public.workspaces (name, created_by) VALUES ($1, $2) RETURNING *',
