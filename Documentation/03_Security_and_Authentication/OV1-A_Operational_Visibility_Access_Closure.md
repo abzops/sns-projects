@@ -81,4 +81,4 @@ Supabase Security Advisor remains exactly the accepted six-warning baseline: fiv
 
 ## 6. Scope Boundary
 
-OV1-A adds no dashboard, Finance, Package 4, fake production data, or parallel hierarchy model. Operational V1 remains **`READY FOR MANUAL FINAL ACCEPTANCE`** and requires the corrected Project/Task List creation flow to be manually reaccepted; this closure does not declare FULL V1.
+OV1-A adds no dashboard, Finance, Package 4, fake production data, or parallel hierarchy model. Operational V1 is **`STABLE / VERIFIED`** following successful manual production acceptance; this closure does not declare FULL V1.

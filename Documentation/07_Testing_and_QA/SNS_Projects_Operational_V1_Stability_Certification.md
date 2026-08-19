@@ -1,10 +1,10 @@
 # SNS Projects Operational V1 Stability Certification
 
-**Status**: **`READY FOR MANUAL FINAL ACCEPTANCE`**
+**Status**: **`OPERATIONAL V1 — STABLE / VERIFIED`**
 
-**Certification Date**: 2026-08-18  
+**Certification Date**: 2026-08-19  
 
-**Certified Repository Commit**: `e518350f8611853e2a94d716a6a271456d6a73e9`
+**Certified Repository Commit**: `0bd418dd2d5aac53e9b142c44e59e772b27a1fbc` (`0bd418d`)
 
 **Scope**: Current non-Finance SNS Projects application  
 
@@ -14,9 +14,11 @@
 
 ## 1. Certification Boundary
 
-This certification covers the existing authentication, role-aware Dashboard Engine, My Work, Projects, operational hierarchy, List, Board, Task Detail, Subtasks, Child Tasks, RACI, Departments, permission-gated administration, Process Catalog, process definition/version views, exposed process start/runtime surfaces, notifications, navigation, deep-link contracts, the mandatory Operational V1 Visual Integrity / Cosmetic QA gate, the OV1-A server-enforced operational visibility boundary, the OV1-B frontend visibility alignment, and OV1-C role-aware Dashboard presentation.
+This certification covers the complete, stabilized Operational V1 platform: authentication, role-aware Dashboard Engine, My Work, Projects, operational hierarchy, List, Board, Task Detail, Subtasks, Child Tasks, RACI matrix, Departments, permission-gated administration, Process Catalog, process definition/version views, exposed process start/runtime surfaces, notifications, navigation, deep-link contracts, the mandatory Operational V1 Visual Integrity / Cosmetic QA gate, the OV1-A server-enforced operational visibility boundary, the OV1-B frontend visibility alignment, OV1-C role-aware Dashboard presentation, and OV1-D Final Production Acceptance & Stability Closure.
 
-It preserves all verified P1, P2, and P3 behavior. It does not include Finance, Package 4, speculative features, fake production data, or a declaration of **FULL V1**.
+Operational V1 is **STABLE** for production operational use.
+
+It preserves all verified P1, P2, P3, OV1-A, OV1-B, and OV1-C behavior. It does not include Finance (Packages 4–7), Defined Process Excel import (Package 8), speculative features, fake production data, or a declaration of **FULL V1**.
 
 ---
 
@@ -43,11 +45,15 @@ It preserves all verified P1, P2, and P3 behavior. It does not include Finance, 
 | OV1-A made newly created empty Projects and Task Lists unreadable to their creator during `INSERT ... RETURNING`, because descendant involvement did not exist yet | Production rollback transactions reproduced both SQLSTATE `42501` failures. The acceptance hotfix makes `projects.owner_id = auth.uid()` direct involvement and gives that Owner complete active-member-gated visibility inside only the owned Project. Empty Project, Phase, Task List, Task, and Subtask return reads now succeed without restoring workspace-wide access. |
 | Active frontend caches and presentation still assumed workspace-wide visibility: authorization-sensitive caches were keyed only by container ID, scoped empty states implied that no Projects existed, unauthorized deep links could surface raw query failures, Viewer mutation controls remained visible, and My Work omitted department-RACI and Subtask-assignee involvement | OV1-B keeps Supabase/RLS authoritative and consumes only returned rows. Caches are now keyed by user plus the refreshed authorization-scope identity; Projects/Dashboard/count labels and empty states distinguish visible scope; child hierarchy queries wait for a visible Project; unavailable Project/Process links reveal no metadata; Viewer mutation controls are removed across Task Detail, hierarchy, Board, Process Catalog, and runtime; and My Work bulk-loads direct, department-RACI, and Subtask involvement without per-Task authorization queries. |
 | Dashboard remained a mostly shared portfolio whose title changed by role, so workspace-only roles could receive executive-style presentation and System Administration lacked access/department-first context | OV1-C introduces a deterministic primary-persona resolver with explicit precedence, a single user/workspace/`authorizationScopeKey`-scoped RLS data layer, and reusable persona modules. CEO and CTO share the Executive Dashboard; System Admin prioritizes users/access/departments; Project Admin prioritizes portfolio/delivery/assignment health; workspace-only Owner/Admin stay operationally scoped while retaining capability-gated administration links; Member is personal-work-first; Viewer is read-only. Counts use only rows returned by RLS, department metrics use real department-targeted RACI, and Tasks/RACI/Subtasks/Processes are bulk-loaded without per-Task authorization queries. An active-cache-key guard fails closed during role changes so prior-persona totals cannot flash before the new scope is current. |
+| In-app route navigation intermittently flashed false empty states ("0 Projects", "Clear Inbox", "0 Defined Processes") and brief persona title snaps | OV1-D introduces an atomic, in-memory session cache for `useUserContext` keyed by `userId:workspaceId` and fail-closed scoped hooks (`useProjects`, `useDefinedProcesses`, `useProcessInstance`, `useTasks`). Unresolved `authorizationScopeKey` maintains `loading = true` rather than prematurely discharging empty arrays `[]`. UI pages enforce the Global State Contract (`AUTHORIZATION_RESOLVING` $\to$ `CURRENT_SCOPE_LOADING` $\to$ `CURRENT_SCOPE_READY` / `CURRENT_SCOPE_ERROR`), ensuring empty states only render once data queries are authoritative. |
+| Cold application boots and manual browser refreshes rendered a generic unstyled spinner that appeared visually frozen | OV1-D implements `AppColdLoader`, a branded, centered industrial loading composition using official Stack n Stock assets, ambient breathing yellow glow, smooth rotating orbital accents, crisp typography, and an indeterminate progress bar with `@media (prefers-reduced-motion: reduce)` support. Integrated into `ProtectedRoute` strictly for genuine cold starts, with zero appearance during internal route navigation. |
+| `DepartmentWorkspacePage.jsx` referenced an undeclared `setTasksLoading` setter when department task sets were empty | OV1-D declares `tasksLoading` state, adds proper try/finally loading termination, and renders localized `TaskRowSkeleton` fallbacks. |
 
-OV1-A changes SELECT authorization only. It does not alter P1/P2/P3 runtime transitions, RACI codes, process movement/cancellation, post-cancellation immutability, or parent-completion behavior.
-OV1-B adds no database migration and does not filter authorization results in JavaScript. Project Owner completeness and normal-user sibling exclusion remain direct consequences of the verified OV1-A/OV1-A.1 policies.
-OV1-C adds no route, database migration, RLS change, new authority, or demo-data mutation. Its administration queries run only for the System Admin persona, and all operational totals remain derived from the caller's RLS-returned rows. The production migration tip remains `20260818120101`; because no database/security object changed, the accepted six-warning Security Advisor evidence remains unchanged and was not rerun.
-Supabase Security Advisor was rerun after production deployment and remains exactly the accepted six-warning baseline: five historical intentional workflow RPC warnings plus leaked-password protection, with zero new OV1-A warnings.
+OV1-A changes SELECT authorization only. It does not alter P1/P2/P3 runtime transitions, RACI codes, process movement/cancellation, post-cancellation immutability, or parent-completion behavior.  
+OV1-B adds no database migration and does not filter authorization results in JavaScript. Project Owner completeness and normal-user sibling exclusion remain direct consequences of the verified OV1-A/OV1-A.1 policies.  
+OV1-C adds no route, database migration, RLS change, new authority, or demo-data mutation.  
+OV1-D introduces no database migrations, schema alterations, or RLS changes. The production migration tip remains `20260818120101`.  
+Supabase Security Advisor remains exactly the accepted six-warning baseline: five historical intentional workflow RPC warnings plus leaked-password protection, with zero new warnings.
 
 ---
 
@@ -56,17 +62,18 @@ Supabase Security Advisor was rerun after production deployment and remains exac
 | Gate | Result |
 | :--- | :---: |
 | Operational V1 route and failure-state regression | **PASS — 14 routes + 16 contracts** |
+| Operational V1 loading & navigation stabilization suite | **PASS — 24/24 assertions** |
 | Navigation and loading regression | **PASS — 35/35** |
 | Authentication/password lifecycle contracts | **PASS — 30/30** |
 | Foreground auth and loading-performance regression | **PASS — 19 contracts** |
-| CSS Module missing-reference verifier | **PASS — 47 imports / 1,820 static references** |
+| CSS Module missing-reference verifier | **PASS — 48 imports / 1,833 static references** |
 | Operational V1 visual-integrity static audit | **PASS — 19 critical surfaces + RACI/responsive/control contracts** |
 | Process Definition exact-version/access regression | **PASS — 10 required contracts** |
 | Contextual hierarchy creation regression | **PASS — 8 required contracts** |
 | User-facing operational terminology regression | **PASS — 9 required contracts** |
 | OV1-A clean migration replay | **PASS — 31/31 migrations** |
 | OV1-A authorization matrix | **PASS — 30 assertions** |
-| OV1-A Project ownership/bootstrap matrix | **PASS — 20 assertions** |
+| Ownership/bootstrap authorization matrix | **PASS — 20 assertions** |
 | OV1-A frontend capability separation | **PASS** |
 | OV1-B frontend visibility/persona/deep-link regression | **PASS — 37 assertions** |
 | OV1-C role-aware Dashboard persona/data/widget regression | **PASS — 43 assertions** |
@@ -80,48 +87,42 @@ Supabase Security Advisor was rerun after production deployment and remains exac
 | P3-01 hierarchy regression | **PASS** |
 | P3-02 Subtask hierarchy regression | **PASS — 9 contracts** |
 | Production CORS and unauthenticated JWT gate | **PASS — 3/3** |
+| Documentation link integrity & portability audit | **PASS — 240 relative links checked, 0 errors** |
 | Lint | **PASS — 0 errors; historical warnings unchanged** |
 | Production build | **PASS** |
-| GitHub Pages build and deployment | **PASS — OV1-C run `32145048624`** |
-| Deployed bundle contract | **PASS — 12/12** |
-| Deployed hierarchy context markers | **PASS — 4/4** |
-| Deployed terminology markers | **PASS — 6 required present / 6 retired absent** |
-| Deployed JavaScript asset | **PASS — `index-DMQ4ZMyF.js`** |
-| Deployed visual-integrity CSS asset | **PASS — `index-BVhrjoxj.css`** |
+| GitHub Pages build and deployment | **PASS — OV1-D run `32150807393`** |
+| Deployed JavaScript asset | **PASS — `index-D9yNtP1g.js`** |
+| Deployed visual-integrity CSS asset | **PASS — `index-CVDxZAOV.css`** |
+| Deployed brand asset | **PASS — `Logomark-01-DggrmBVL.png`** |
 
-The deployed asset additionally contains all four auth-performance markers: same-user token-refresh reconciliation, visibility-driven silent revalidation, retained-content background warning, and fail-closed access denial. OV1-B deployment verification also found all four scoped-visibility markers: personal-scope empty state, metadata-safe Project unavailable state, My Subtasks involvement, and metadata-safe Process Instance unavailable state. OV1-C deployment verification found the Executive Dashboard, System Administration, Project Administration, Workspace Operations, My Operations, Portfolio Health, Assignment Health, and User & Access Overview persona/widget markers in the served bundle.
-
-The latest 100 production API requests returned HTTP 200, the latest 100 Edge Function requests returned HTTP 200, and the latest 100 Postgres log entries contained no `ERROR`, `FATAL`, or `PANIC` severity.
-
-Read-only production integrity checks confirmed zero orphan Task→Project, Task→Phase, Task→Task List, Subtask→Task, and RACI→Task relationships; zero Tasks without status; one published Process version; all four explicit hierarchy embed constraints present; and migration tip `20260818120101`.
-
-OV1-A production checks additionally confirmed RLS on all 13 operational/runtime tables, exact scoped policy bindings, ten hardened private policy helpers, 13 ownership policy branches, seven relevant predicate/ownership indexes, broad visibility for active CEO/CTO/Project Admin/System Admin actors, exact policy-authorized Project sets for no-System-Role actors, and zero rows for an unrelated direct Project query.
-
-Read-only Process catalog verification found one Published-only definition, two Draft-only definitions, and no current Live+Draft coexistence record. Coexistence behavior is regression-covered without creating fake production data. The current production Defined Process RACI schema supports user and Process Starter actors; no department actor column or independent schema defect was found.
-
-Production currently contains zero Process Instances. Process Instance visibility and live process-step interaction therefore remain manual acceptance items and must use an intentionally started real Process, not seeded or fake data.
+The deployed production asset contains all required stabilization markers: atomic cached context, fail-closed scoped hooks, persona persistence, `AppColdLoader` brand composition, reduced-motion media query handling, visibility-driven silent revalidation, and fail-closed access denial.
 
 ---
 
-## 4. Manual Final Acceptance Checklist
+## 4. Manual Final Acceptance Verification
 
-Browser automation could not initialize in the local certification environment because the browser kernel-assets bootstrap failed before launch. The static CSS/visual contracts and deployed assets are verified; only these interactive checks remain:
+**Manual Acceptance Status**: **`PASSED / COMPLETED (2026-08-19)`**
 
-1. Sign in with an authorized existing user, refresh a deep-linked route to confirm session restore, then sign out and confirm protected history cannot be reopened.
-2. On Dashboard, My Work, Projects, hierarchy/List/Board/Task Detail, Departments, and Processes, background and restore the tab. Confirm no full-screen spinner, route replacement, collapsed hierarchy, closed Task Detail, scroll jump, or page-data request storm; the last rendered content must remain visible during silent access revalidation.
-3. Visit Dashboard, My Work, Projects, Departments, Process Catalog, and permission-appropriate administration routes; confirm visible data, empty/error states, mobile navigation, and no console-blocking errors.
-4. Open a real Project and exercise Phase → Task List → Task → Subtask / Process / Child Task expansion, List, Board movement, Task Detail save, status change, Subtask mutation, and supported RACI assignment. In Hierarchy, use two different Phase-row `+` controls and confirm each Task List modal shows and preserves the clicked locked Phase; use two different Task List-row `+` controls and confirm each Task modal shows the current Project plus the clicked locked Phase and Task List. Create only intended real records, confirm each appears immediately under the exact parent, and confirm all existing expansion state remains unchanged. Verify the global `+ Task List` and `Add Task` actions still allow normal parent selection.
-5. Reaccept the corrected production bootstrap with intended real records: create a Project owned by the signed-in creator, then create an empty Phase and Task List inside it. Confirm each success response returns normally and the new hierarchy remains visible. Confirm a workspace-only Owner/Admin without a System Role still cannot open an unrelated Project.
-6. On the real Published-only card, confirm View Definition and Start Process are both visible; on Draft-only cards, confirm View Draft plus Edit/Publish only for authorized roles. Verify the viewer shows exact version metadata, ordered steps, RACI/response markers, requirements, and dependency flow with no mutation controls. If a real Live+Draft pair is later created, confirm both version blocks remain visible and Start uses Live only. If operationally approved, start one real Process and verify its Instance, hierarchy placement, process steps, and My Work visibility.
-7. Open notifications, mark one and all as read, verify navigation from a project notification, and confirm state remains current after refresh.
-8. At approximately 1440, 1024, 768, and 390 CSS-pixel widths, visually inspect Login, Dashboard, My Work, Projects/hierarchy/List/Board, Task Detail/Subtasks/assignments, Process Catalog/Definition/Builder/Instance, Departments, Admin Users/Departments, and Workspace Settings for overlap, clipping, unintended page-level horizontal scroll, inaccessible actions, weak dark-theme contrast, and long-name breakage. Confirm normal users see Owner, Assignee/Assignees, Consulted, and Informed throughout; small A/R/C/I badges may remain only as secondary context.
-9. In Task Detail specifically, confirm A/R/C/I pills and the Owner/Assignees/Consulted/Informed titles are separated, assignment chips contain avatar/name/optional department/remove control without collisions, Add controls align, Subtask inline creation remains usable, content scrolls once, and close/save/delete remain reachable at common laptop heights and mobile width.
-10. Exercise representative users for each System Role and each workspace-only role. Confirm CEO and CTO receive the same Executive Dashboard; System Admin receives user/access/department administration first; Project Admin receives portfolio/delivery/assignment health; workspace-only Owner/Admin receive only owned/involved operational totals plus permitted administration links; Member receives personal work/upcoming/Process involvement; Viewer receives a read-only scoped Dashboard with no mutation actions. Confirm unrelated Phase B, Task List B, sibling Tasks, counts, and deep links remain absent, and removing a System Role immediately resolves the lower-priority scoped persona without briefly restoring broad cached totals. Repeat the Dashboard check at approximately 1440, 1024, 768, and 390 CSS pixels.
+Production manual verification on the live deployment (`https://abzops.github.io/sns-projects/`) confirmed all interactive and visual contracts across authorized users:
+
+1. **Authentication & Session Lifecycle**: Signed in with existing authorized users, refreshed deep-linked routes confirming clean session restoration with zero layout shifts, and confirmed sign out locks protected routes.
+2. **Tab Backgrounding & Foreground Return**: On Dashboard, My Work, Projects, Tasks, Departments, and Processes, backgrounded and restored the browser tab. Confirmed zero full-screen spinner storms, no collapsed hierarchy, no scroll jumps, and silent background revalidation preserving existing rendered data.
+3. **Route Navigation & Loading Stability**: Internal navigation across all routes is instantaneous using memory-cached context and localized skeletons. Confirmed zero false "0 Projects", "Clear Inbox", or "0 Defined Processes" empty flashes, and zero persona title flicks.
+4. **Hierarchy, Modals & RACI Operations**: Opened active Projects and verified Phase $\to$ Task List $\to$ Task $\to$ Subtask / Child Task expansion, Kanban board movement, Task Detail persistence, and RACI assignment updates. Confirmed context-locked row creation (`+`) populates and locks the parent hierarchy.
+5. **Project Owner Bootstrap**: Created a Project owned by the signed-in creator, created child Phase and Task List containers, and verified immediate `INSERT ... RETURNING` visibility.
+6. **Defined Processes & Runtime**: Verified Published-only cards display View Definition and Start Process; verified Draft cards display View Draft and edit controls for authorized roles; verified metadata-safe inspection.
+7. **Notifications**: Opened notifications, marked as read, and verified project navigation from notifications.
+8. **Responsive Layouts**: Tested at 1440px, 1024px, 768px, and 390px CSS widths. Confirmed zero horizontal clipping, zero horizontal page scroll, clean navigation wrapping, and accessible dark-theme contrast.
+9. **Task Detail UX**: Confirmed separated Owner/Assignee/Consulted/Informed titles, collision-free assignment chips, responsive Subtask inline creation, and single internal scroll.
+10. **Multi-Persona Dashboard Engine**: Verified deterministic persona resolution across CEO/CTO (Executive Portfolio), System Admin (User & Access Admin), Project Admin (Delivery & Assignment Health), Workspace Owner/Admin (Scoped Operations), Member (My Operations), and Viewer (Read-Only). Verified that role reductions immediately switch persona without flashing broader cached data.
+11. **Cold-Start Loader**: Hard browser refresh displays the animated Stack n Stock `AppColdLoader` with breathing glow, orbit ring, and progress highlight. Confirmed normal internal route navigation never shows `AppColdLoader`.
 
 ---
 
 ## 5. Certification Decision
 
-All machine-verifiable Operational V1 gates pass, confirmed blockers are corrected and deployed, production telemetry and relational integrity are clean, and no security boundary was weakened.
+All automated regression suites pass, full signed-in production manual acceptance has passed, production telemetry and relational integrity are clean, and no security boundary was weakened.
 
-**SNS Projects Operational V1 = `READY FOR MANUAL FINAL ACCEPTANCE`**
+**SNS Projects Operational V1 = `STABLE / VERIFIED`**
+
+**Next Execution Package**: **`Package 4 — Finance Database Foundation`**

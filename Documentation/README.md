@@ -24,10 +24,11 @@
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
 - **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
 - **Package 3 Status**: **`COMPLETE / VERIFIED`** (`P3-01` and `P3-02` verified; manual signed-in production acceptance passed)
-- **Operational V1 Certification**: **`READY FOR MANUAL FINAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Certification**: **`OPERATIONAL V1 — STABLE / VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 - **Operational V1 Access Closure**: **`OV1-A VERIFIED`** ([Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md))
-- **Operational V1 Frontend Visibility**: **`OV1-B READY FOR MANUAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
-- **Operational V1 Role-Aware Dashboards**: **`OV1-C READY FOR MANUAL ACCEPTANCE`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Frontend Visibility**: **`OV1-B VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Role-Aware Dashboards**: **`OV1-C VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
+- **Operational V1 Stability & Acceptance**: **`OV1-D VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -62,7 +63,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | **`07_Testing_and_QA`** | Verification suites, static contract validation, safety harnesses | [Operational V1 Stability Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · [Testing Directory](07_Testing_and_QA/) |
 | **`08_Deployment_and_Operations`** | Data seed operations, migrations deployment, backup runs | [Structured Reseed Report](08_Deployment_and_Operations/Structured_Data_Reseed_Report.md) |
 | **`09_Decision_Records`** | Authoritative Architecture Decision Records (ADRs) | [Master Decision Register](09_Decision_Records/DECISION_REGISTER.md) · [Process Decisions](09_Decision_Records/PROCESS_ARCHITECTURE_DECISIONS.md) · [Finance Decisions](09_Decision_Records/FINANCE_ARCHITECTURE_DECISIONS.md) |
-| **`10_Release_Notes`** | Production release notes, changelogs, and hotfix reports | [Day-0 Release Notes](10_Release_Notes/Day0_Release1_Production_MVP.md) · [Hotfix Reports](10_Release_Notes/) |
+| **`10_Release_Notes`** | Production release notes, changelogs, and hotfix reports | [Operational V1 Release](10_Release_Notes/Operational_V1_Production_Release.md) · [Day-0 Release Notes](10_Release_Notes/Day0_Release1_Production_MVP.md) · [Hotfix Reports](10_Release_Notes/) |
 | **`99_Archive`** | Historical or superseded project documentation | [Archive Directory](99_Archive/) |
 
 ---
@@ -88,9 +89,10 @@ When consulting documentation, the following hierarchy of authority applies:
 | **Package 3: Hierarchy UI** | `P3-01` Operational Hierarchy UI Cutover | **`VERIFIED`** | [P3-01 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-01_Operational_Hierarchy_UI_Cutover.md) — manual signed-in production acceptance passed |
 | | `P3-02` Subtask Hierarchy and Operational Closure | **`VERIFIED`** | [P3-02 Spec](06_Implementation_Packages/Package_03_Hierarchy_UI/P3-02_Subtask_Hierarchy_and_Operational_Closure.md) — Package 3 complete and verified |
 | **Operational V1** | `OV1-A` Server-Enforced Operational Visibility | **`VERIFIED`** | Ownership/bootstrap hotfix `20260818120101` · [OV1-A Security Closure](03_Security_and_Authentication/OV1-A_Operational_Visibility_Access_Closure.md) |
-| | `OV1-B` Frontend Visibility Alignment | **`READY FOR MANUAL ACCEPTANCE`** | Frontend commit `c176835` · deployment run `32138145503` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
-| | `OV1-C` Role-Aware Dashboard Engine | **`READY FOR MANUAL ACCEPTANCE`** | Frontend tip `e518350` · deployment run `32145048624` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
-| **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 |
+| | `OV1-B` Frontend Visibility Alignment | **`VERIFIED`** | Frontend commit `c176835` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
+| | `OV1-C` Role-Aware Dashboard Engine | **`VERIFIED`** | Frontend tip `e518350` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
+| | `OV1-D` Operational V1 Final Production Acceptance & Stability Closure | **`VERIFIED`** | Frontend commit `0bd418d` · deployment run `32150807393` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
+| **Package 4: Finance DB** | Base Budgets, Safety Buffers, Expense Ledger, RLS | **`PLANNED`** | Upcoming Package 4 (Next execution package) |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
 | **Package 7: Financial Hierarchy**| Compact financial utilization bars, hover summaries | **`PLANNED`** | Upcoming Package 7 |
