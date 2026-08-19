@@ -86,15 +86,14 @@ async function runTests() {
   await client.query('BEGIN');
 
   try {
-    // 1. Apply the P4-01 migration
-    const migrationSql = await readFile(
-      path.join('supabase', 'migrations', '20260819101557_p4_01_finance_database_foundation.sql'),
+    // 1. Apply the P4-01A hotfix migration on top of the current remote DB baseline
+    const hotfixSql = await readFile(
+      path.join('supabase', 'migrations', '20260819115602_p4_01a_finance_integrity_hotfix.sql'),
       'utf8',
     );
-    // Strip BEGIN and COMMIT from migration text to run inside this outer test transaction
-    const strippedSql = migrationSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, '');
-    await client.query(strippedSql);
-    pass('P4-01 migration applied cleanly inside test transaction');
+    await client.query(hotfixSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+
+    console.log('[SETUP] Applied P4-01A hotfix migration 20260819115602 inside test transaction');
 
     // 2. Set up test entities
     const ids = {
@@ -369,14 +368,52 @@ async function runTests() {
     assert.equal(Number(pSummaryPre.sum.allocated_to_children), 60000.00);
     pass('11. Unallocated parent Base Budget remains available at parent (40,000 unallocated)');
 
-    // 12. Budget may be reduced below Actual Spend
-    // Reduce Task List 1 budget to 1,000 (we will add 5,000 spend later and it won't be blocked)
+    // 12. Budget may be reduced below Actual Spend when child allocation constraint is satisfied
+    // Reduce Task List 1 budget to 10,000 (we will add 5,000 spend later and it won't be blocked)
     await client.query(`
       UPDATE public.budgets
       SET base_budget = 10000.00
       WHERE id = $1
     `, [bTaskList.id]);
     pass('12. Budget reduction succeeds without blocking');
+
+    // 12a. Phase Base Budget reduction below existing child Task List allocations is REJECTED
+    // Setup: Add second Task List under Phase 1 with 30k base (Total Task Lists under Phase 1 = 10k + 30k = 40k)
+    const dummyList2Id = randomUUID();
+    await client.query(`
+      INSERT INTO public.task_lists (id, project_id, phase_id, name, position)
+      VALUES ($1, $2, $3, 'List 2 in Phase 1', 2)
+    `, [dummyList2Id, ids.proj1, ids.phase1]);
+    const { rows: [bTaskList2] } = await client.query(`
+      INSERT INTO public.budgets (workspace_id, entity_type, project_id, phase_id, task_list_id, base_budget, created_by)
+      VALUES ($1, 'task_list', $2, $3, $4, 30000.00, $5)
+      RETURNING *
+    `, [ids.ws, ids.proj1, ids.phase1, dummyList2Id, ids.owner]);
+
+    // Current Phase 1 Base = 60k. Child Task Lists = 40k. Attempt Phase 1 Base -> 5k (5k < 40k -> must fail)
+    await expectError(client, async () => {
+      await client.query(`
+        UPDATE public.budgets SET base_budget = 5000.00 WHERE id = $1
+      `, [bPhase.id]);
+    });
+    pass('12a. Phase Base Budget reduction below existing Task List allocations is REJECTED');
+
+    // 12b. Phase Base Budget reduction to 0 while positive child Task List allocations exist is REJECTED
+    await expectError(client, async () => {
+      await client.query(`
+        UPDATE public.budgets SET base_budget = 0.00 WHERE id = $1
+      `, [bPhase.id]);
+    });
+    pass('12b. Phase Base Budget reduction to zero while positive Task List allocations exist is REJECTED');
+
+    // 12c. Phase Base Budget CAN be reduced to exactly equal or exceed child allocations (40k)
+    await client.query(`
+      UPDATE public.budgets SET base_budget = 40000.00 WHERE id = $1
+    `, [bPhase.id]);
+    // Restore Phase 1 Base to 60k and delete extra task list budget for downstream tests
+    await client.query(`DELETE FROM public.budgets WHERE id = $1`, [bTaskList2.id]);
+    await client.query(`UPDATE public.budgets SET base_budget = 60000.00 WHERE id = $1`, [bPhase.id]);
+    pass('12c. Phase Base Budget CAN be reduced as long as child allocation constraint is satisfied');
 
     // 13. Absent budget row is distinguished from configured zero budget
     const { rows: [unbudgetedPhaseSum] } = await client.query(`
@@ -697,6 +734,40 @@ async function runTests() {
     assert.ok(auditRows.length >= 2, 'Budget audit logs must record creation and updates');
     assert.equal(auditRows[0].action, 'created');
     pass('49. Immutable budget audit logs automatically capture creation and modifications');
+
+    // 49a. Authenticated created_by spoof attempt is overwritten with auth.uid()
+    const dummyProjSpoofId = randomUUID();
+    await client.query(`
+      INSERT INTO public.projects (id, workspace_id, name, created_by)
+      VALUES ($1, $2, 'Spoof Test Project', $3)
+    `, [dummyProjSpoofId, ids.ws, ids.owner]);
+
+    const { rows: [spoofedBudget] } = await asUser(client, ids.owner, `
+      INSERT INTO public.budgets (workspace_id, entity_type, project_id, base_budget, created_by)
+      VALUES ($1, 'project', $2, 50000.00, $3)
+      RETURNING created_by, updated_by
+    `, [ids.ws, dummyProjSpoofId, ids.member]); // Passing ids.member to spoof created_by
+    assert.equal(spoofedBudget.created_by, ids.owner, 'created_by must be forced to auth.uid()');
+    pass('49a. Authenticated created_by spoof attempt is overwritten with auth.uid()');
+
+    // 49b. Authenticated updated_by spoof attempt is overwritten with auth.uid()
+    const { rows: [updatedSpoofedBudget] } = await asUser(client, ids.admin, `
+      UPDATE public.budgets
+      SET base_budget = 55000.00, updated_by = $1
+      WHERE project_id = $2 AND entity_type = 'project'
+      RETURNING updated_by
+    `, [ids.viewer, dummyProjSpoofId]); // Passing ids.viewer to spoof updated_by
+    assert.equal(updatedSpoofedBudget.updated_by, ids.admin, 'updated_by must be forced to auth.uid()');
+    pass('49b. Authenticated updated_by spoof attempt is overwritten with auth.uid()');
+
+    // 49c. Budget audit log actor_id matches auth.uid() exactly
+    const { rows: spoofAuditRows } = await client.query(`
+      SELECT actor_id, action FROM public.budget_audit_logs
+      WHERE entity_id = $1 ORDER BY created_at ASC
+    `, [dummyProjSpoofId]);
+    assert.equal(spoofAuditRows[0].actor_id, ids.owner, 'Audit log created actor must equal owner auth.uid()');
+    assert.equal(spoofAuditRows[1].actor_id, ids.admin, 'Audit log updated actor must equal admin auth.uid()');
+    pass('49c. Budget audit log actor_id strictly matches auth.uid()');
 
     // 50. Expense audit reason constraints: created action permits NULL; correction requires reason
     await client.query(`

@@ -92,7 +92,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `OV1-B` Frontend Visibility Alignment | **`VERIFIED`** | Frontend commit `c176835` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | | `OV1-C` Role-Aware Dashboard Engine | **`VERIFIED`** | Frontend tip `e518350` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | | `OV1-D` Operational V1 Final Production Acceptance & Stability Closure | **`VERIFIED`** | Frontend commit `0bd418d` · deployment run `32150807393` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
-| **Package 4: Finance DB** | `P4-01` Finance Database Foundation | **`VERIFIED`** | Migration `20260819101557` · [P4-01 Spec](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) |
+| **Package 4: Finance DB** | `P4-01 / P4-01A` Finance Database Foundation | **`VERIFIED`** | Migrations `20260819101557` + `20260819115602` · [P4-01 / P4-01A Spec](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) |
 | **Package 5: Expense Execution** | Atomic completion intercept, split expenses, audit | **`PLANNED`** | Upcoming Package 5 |
 | **Package 6: Finance Frontend** | Overview, Financial Explorer, Alert Center UI | **`PLANNED`** | Upcoming Package 6 |
 | **Package 7: Financial Hierarchy**| Compact financial utilization bars, hover summaries | **`PLANNED`** | Upcoming Package 7 |

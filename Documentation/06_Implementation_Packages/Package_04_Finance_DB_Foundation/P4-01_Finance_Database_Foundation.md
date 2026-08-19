@@ -1,8 +1,9 @@
-# P4-01: Finance Database Foundation
+# P4-01 / P4-01A: Finance Database Foundation
 
 **Package**: Package 04 — Finance Foundation  
 **Status**: Implemented & Certified  
-**Deployment Migration Tip**: `20260819101557_p4_01_finance_database_foundation.sql`  
+**Deployment Migration Tip**: `20260819115602_p4_01a_finance_integrity_hotfix.sql`  
+**Base Foundation Migration**: `20260819101557_p4_01_finance_database_foundation.sql`  
 **Remote Project**: `gqerfixdmgbqahgslzsq`  
 **Certification Date**: 2026-08-19  
 
@@ -10,7 +11,7 @@
 
 ## 1. Overview
 
-P4-01 delivers the canonical Finance database foundation for SNS Projects without altering or destabilizing Operational V1. It introduces the immutable budget ledger, expense ledger, deterministic financial risk engine, and authorization helpers.
+P4-01 delivers the canonical Finance database foundation for SNS Projects without altering or destabilizing Operational V1. P4-01A adds critical integrity closures for Phase $\to$ Task List budget reduction invariants and hardened audit actor resolution.
 
 ---
 
@@ -27,17 +28,20 @@ P4-01 delivers the canonical Finance database foundation for SNS Projects withou
      - Phase base budget cannot exceed parent Project base budget.
      - Task List base budget cannot exceed immediate Phase base budget.
      - Task List positive base budget requires positive immediate Phase base budget.
+     - **P4-01A Invariant**: Phase base budget cannot be reduced below the sum of existing child Task List base budgets (including reductions to 0).
      - Safety buffer is non-allocatable to child containers.
    - Deletion protection: `ON DELETE RESTRICT` from projects, phases, and task lists.
 
 2. **`public.budget_audit_logs`**:
    - Immutable audit trail capturing every budget creation, update, and deletion.
    - Automatically populated by trigger `private.trg_fn_audit_budget_mutation()`.
-   - Records `actor_id = COALESCE(auth.uid(), NEW.created_by / NEW.updated_by / NEW.actor_id)`.
+   - **P4-01A Actor Hardening**: Authenticated caller identity is unconditionally forced to `auth.uid()`; caller-supplied `created_by` / `updated_by` spoof attempts are overridden.
+   - Unauthenticated execution is restricted to trusted internal server sessions (`current_user IN ('postgres', 'service_role', 'supabase_admin')`, `replica` mode, or `app.trusted_internal_execution = 'on'`).
 
 3. **`public.budget_reallocations`**:
    - Records peer-to-peer budget reallocations strictly between sibling entities of the exact same entity type within the same workspace/project/phase.
    - Validated by `private.trg_fn_validate_budget_reallocation()`.
+   - Reallocation actor is derived from `auth.uid()`.
 
 4. **`public.expense_transactions`**:
    - High-level expense transaction envelope attached strictly to leaf operational `tasks` (`task_id`).
@@ -89,13 +93,9 @@ Deterministic risk band evaluation implemented in `public.calculate_financial_ri
 
 ## 5. Verification & Test Suite
 
-The comprehensive regression test suite `scripts/test-p4-01-finance-foundation.mjs` executes 55 real SQL assertions inside an isolated transaction:
-- Budget hierarchy and allocation rules (Projects, Phases, Task Lists).
-- Fixed Safety Buffer calculations and non-allocatability.
-- Boundary risk calculations (GREEN, YELLOW, ORANGE, RED).
-- Expense itemization and upward aggregations (Project Spend + Standalone Spend = Total Company Spend).
-- Dynamic task movement and spend reattribution.
-- Role-based mutation and scoped read visibility.
-- Fail-closed direct expense DML protections.
-- Foreign key deletion restriction (`ON DELETE RESTRICT`).
-- Immutability of budget entity identity and audit trigger generation.
+The test suite `scripts/test-p4-01-finance-foundation.mjs` executes 60 numbered behavioral assertions inside an isolated transaction:
+- **Hierarchy & Allocation Rules**: Tests 1–13 (Project, Phase, Task List configurations, allocation ceilings, non-allocatable buffers, Phase reduction constraints 12a/12b/12c, unbudgeted rollups).
+- **Risk Engine Boundaries**: Tests 14–20 (Exact GREEN, YELLOW, ORANGE, RED thresholds).
+- **Expense Aggregations**: Tests 21–30 (Single totals, split items, leaf rollups, task movement reattribution, standalone vs project spend).
+- **Role-Based Authority & Visibility**: Tests 31–41 (Owner/Admin/CEO/CTO mutation rights, Project Admin/System Admin/Finance Operator mutation blocks, scoped summaries, anti-leak checks, Decision 58 Viewer reads).
+- **Fail-Closed DML & Integrity Protection**: Tests 42–54 (Blocked direct expense DML, `ON DELETE RESTRICT` operational protection, entity immutability, anti-spoofing overrides 49a/49b/49c, mandatory audit reasons, sibling reallocation restrictions, Security Advisor zero-definer check, RLS table enablement).
