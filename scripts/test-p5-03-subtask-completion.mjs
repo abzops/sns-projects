@@ -87,6 +87,7 @@ async function runTests() {
       ['P5-02A', '20260819214046_p5_02a_parent_direct_completion_guard.sql'],
       ['P5-03',  '20260820072145_p5_03_subtask_completion_expense_parent_closure.sql'],
       ['P5-03A', '20260820073423_p5_03a_drop_ambiguous_expense_overload.sql'],
+      ['P5-03B', '20260820082034_p5_03b_subtask_rpc_execution_hotfix.sql'],
     ]) {
       const sql = await readFile(path.join('supabase', 'migrations', file), 'utf8');
       await client.query(sql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
@@ -423,9 +424,65 @@ async function runTests() {
     assert.equal(grantCheck.rows[0].ok, true, 'authenticated has EXECUTE grant');
     pass('30. authenticated role has EXECUTE grant on public.complete_subtask_with_expense');
 
+    // ── 31. Anon execution is strictly blocked ──────────────────────────────────
+    const anonCheck = await client.query(`
+      SELECT has_function_privilege('anon', 
+        'public.complete_subtask_with_expense(uuid, jsonb, text)', 'EXECUTE') as ok`);
+    assert.equal(anonCheck.rows[0].ok, false, 'anon does not have EXECUTE grant');
+    pass('31. anon role CANNOT execute public.complete_subtask_with_expense (revoked)');
+
+    // ── 32. Unrelated user / guessed UUID is strictly rejected ──────────────────
+    const unrelatedUid = randomUUID();
+    const fakeSubtaskId = randomUUID();
+    await expectError(client,
+      () => asUser(client, unrelatedUid,
+        `SELECT public.complete_subtask_with_expense($1, NULL, NULL)`, [fakeSubtaskId]),
+      'Subtask not found'
+    );
+    await expectError(client,
+      () => asUser(client, unrelatedUid,
+        `SELECT public.complete_subtask_with_expense($1, NULL, NULL)`, [st3]),
+      'does not have mutation capability'
+    );
+    pass('32. Unrelated user and guessed UUID strictly rejected (fails closed)');
+
+    // ── 33. Invalid expense payload: atomic rollback, subtask stays todo, 0 tx ──
+    const invalidExpense = JSON.stringify({
+      mode: 'single',
+      amount: -500, // Invalid negative amount
+      description: 'Invalid expense',
+      category: 'Labour',
+    });
+    const preTxCount = (await client.query(`SELECT count(*)::int as cnt FROM public.expense_transactions WHERE task_id=$1`, [ids.task])).rows[0].cnt;
+    await expectError(client,
+      () => asUser(client, ids.member,
+        `SELECT public.complete_subtask_with_expense($1, $2::jsonb, NULL)`, [st3, invalidExpense]),
+      'Expense amount must be a positive number'
+    );
+    const postTxCount = (await client.query(`SELECT count(*)::int as cnt FROM public.expense_transactions WHERE task_id=$1`, [ids.task])).rows[0].cnt;
+    assert.equal(preTxCount, postTxCount, 'zero expense transactions created on validation error');
+    const st3Check = (await client.query(`SELECT status FROM public.subtasks WHERE id=$1`, [st3])).rows[0].status;
+    assert.equal(st3Check, 'todo', 'subtask remains in todo status after failed completion attempt');
+    pass('33. Invalid expense payload fails atomically: subtask remains todo, 0 new expense transactions');
+
+    // ── 34. Live ACL check on private internal engine ───────────────────────────
+    const privAclCheck = await client.query(`
+      SELECT 
+        p.prosecdef as is_sec_def,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_ok,
+        has_function_privilege('anon', p.oid, 'EXECUTE') as anon_ok
+      FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'private' AND p.proname = 'complete_subtask_with_expense_internal'
+    `);
+    assert.equal(privAclCheck.rows[0].is_sec_def, true, 'internal engine is SECURITY DEFINER');
+    assert.equal(privAclCheck.rows[0].auth_ok, true, 'authenticated can execute internal engine');
+    assert.equal(privAclCheck.rows[0].anon_ok, false, 'anon CANNOT execute internal engine');
+    pass('34. private.complete_subtask_with_expense_internal ACL: authenticated=true, anon=false, sec_def=true');
+
     console.log('');
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log(`  ALL ${passed} P5-03 SUBTASK COMPLETION ASSERTIONS PASSED WITH ZERO ERRORS!  `);
+    console.log(`  ALL ${passed} P5-03 / P5-03B SUBTASK COMPLETION ASSERTIONS PASSED!  `);
     console.log('═══════════════════════════════════════════════════════════════════════════');
 
   } finally {

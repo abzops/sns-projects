@@ -233,7 +233,7 @@
 - **Status**: APPROVED
 - **Rule**: Hovering over financial indicators in the project hierarchy displays a rich popover: `Base Budget`, `Safety Buffer`, `Actual Spend`, `Remaining Base`, `Buffer Used / Remaining`, `Overrun Amount`, `Utilization %`, and `Risk Status`.
 
-### Decision 62 — Subtask Expense Capture & Traceability
+### Decision 72 — Subtask Expense Capture & Traceability
 - **Status**: APPROVED (P5-03)
 - **Rule**: `public.subtasks` are optional expense capture sources during subtask completion. Subtask expenses record `task_id = parent Task ID` and `subtask_id = Subtask ID` with `cycle_number = NULL`. Finance actual spend queries naturally aggregate subtask expenses under the parent Task without query modifications or double counting. Subtasks with expenses cannot be hard-deleted (`ON DELETE RESTRICT`).
 
