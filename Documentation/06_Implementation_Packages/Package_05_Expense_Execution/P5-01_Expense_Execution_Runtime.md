@@ -1,12 +1,13 @@
 # P5-01, P5-01A, P5-01B & P5-01C: Expense Execution Runtime, Security & Parent Completion Ownership
 
 **Package**: Package 05 — Expense Execution Integration  
-**Status**: Implemented & Certified  
+**Status**: `COMPLETE / VERIFIED / FROZEN`  
 **Deployment Migration Tips**:  
 - `20260819131603_p5_01_expense_execution_runtime.sql` (Baseline)  
 - `20260819151608_p5_01a_expense_runtime_security_parity_hotfix.sql` (Hotfix A)  
 - `20260819154319_p5_01b_operational_scope_authorization_closure.sql` (Hotfix B)  
 - `20260819190058_p5_01c_parent_completion_ownership_closure.sql` (Hotfix C)  
+- `20260819214046_p5_02a_parent_direct_completion_guard.sql` (Parent Guard Hotfix)  
 **Remote Project**: `gqerfixdmgbqahgslzsq`  
 **Certification Date**: 2026-08-19  
 
@@ -91,7 +92,7 @@ All external APIs are implemented as `SECURITY INVOKER` wrappers delegating to h
 
 ## 5. Verification Matrix
 
-- **36/36 Automated Assertions** in `scripts/test-p5-01-expense-execution.mjs`.
+- **39/39 Automated Assertions** in `scripts/test-p5-01-expense-execution.mjs`.
 - **60/60 P4-01 Budget Assertions** in `scripts/test-p4-01-finance-foundation.mjs`.
 - **Full Process Runtime Regression**:
   - `scripts/test-p1-02a-process-lifecycle.mjs` (34/34 passing)

@@ -25,9 +25,9 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Operational V1** | `OV1-B` | Frontend Visibility Alignment | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend commit `c176835` |
 | **Operational V1** | `OV1-C` | Role-Aware Dashboard Engine | **`VERIFIED`** | [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) · Frontend tip `e518350` |
 | **Package 4** | `P4-01` | Finance Database Foundation (Budgets, Buffers, Risk Engine) | **`VERIFIED`** | [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) · Migration tip `20260819115602` |
-| **Package 5** | `P5-01` | Expense Execution Runtime & Audit APIs | **`VERIFIED`** | [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · Migration tip `20260819190058` |
-| **Package 5** | `P5-02` | Expense Execution Frontend & Action Modals | **`IMPLEMENTED / ACCEPTANCE PENDING`** | [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · Migration tip `20260819214046` (P5-02A) |
-| **Package 6** | `P6-01..` | Finance Frontend (Overview, Financial Explorer, Alert Center) | **`PLANNED`** | Financial management UI, Reports, Analytics |
+| **Package 5** | `P5-01..C` | Expense Execution Runtime & Audit APIs | **`VERIFIED`** | [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · Migration tip `20260819190058` |
+| **Package 5** | `P5-02..C` | Expense Execution Frontend & Action Modals | **`VERIFIED`** | [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · Migration tip `20260819214046` (P5-02A) · Manual acceptance PASSED |
+| **Package 6** | `P6-01` | Finance Overview / Dashboard | **`NEXT`** | Starting with P6-01 Finance Overview / Dashboard |
 | **Package 7** | `P7-01..` | Financial Hierarchy UX (Compact Bars, Hover Cards, Rollups) | **`PLANNED`** | Hierarchical financial visualization |
 | **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import | **`PLANNED`** | Bulk template ingestion & E2E certification |
 
@@ -94,11 +94,11 @@ graph TD
 
 ### Package 5: Expense Execution Integration
 - **P5-01 / P5-01A / P5-01B / P5-01C (`VERIFIED`)**: Expense Execution Runtime, Exact-Scope Authorization, and Single Parent Completion Ownership. Migrations `20260819131603` through `20260819190058`. [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md).
-- **P5-02 / P5-02A (`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`)**: Unified task work completion modal (`TaskCompletionModal`), Complete without Expense, Single Total and Itemized / Split expense capture, local date parsing, single completion write, server-side fail-closed parent completion guard (`20260819214046`), integration with Task Detail, Kanban drag-and-drop, My Work, and Defined Process execution. [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md).
-- **Package 5 Status**: **`P5-01..C VERIFIED · P5-02/P5-02A IMPLEMENTED / ACCEPTANCE PENDING`**.
+- **P5-02 / P5-02A / P5-02B / P5-02C (`VERIFIED`)**: Unified task work completion experience (`TaskCompletionModal`), Complete without Expense, Single Total and Itemized / Split expense capture, local date parsing, single completion write, server-side fail-closed parent completion guard (`20260819214046`), canonical parent closure parity excluding subtasks, command-center visual polishing and theme tokens, integration with Task Detail, Kanban drag-and-drop, My Work, and Defined Process execution. Signed-in manual production acceptance passed. [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md).
+- **Package 5 Status**: **`COMPLETE / VERIFIED / FROZEN`**.
 
 ### Package 6: Finance Frontend
-- **Overview Dashboard**: High-level financial summary, burn rates, and project budgets.
+- **P6-01 (`NEXT`)**: Finance Overview / Dashboard — high-level financial summary, budget utilization, risk metrics, and project portfolio burn rates.
 - **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
 - **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 

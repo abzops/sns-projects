@@ -1,7 +1,7 @@
-# P5-02: Expense Execution Frontend & Completion Modals
+# P5-02, P5-02A, P5-02B & P5-02C: Expense Execution Frontend & Completion Modals
 
 **Package**: Package 05 — Expense Execution Integration  
-**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING`  
+**Status**: `COMPLETE / VERIFIED / FROZEN`  
 **Target Milestone**: Operational V1 + Expense Runtime Convergence  
 **Canonical Repository**: `abzops/sns-projects`  
 **Production URL**: `https://abzops.github.io/sns-projects/`  
@@ -11,7 +11,7 @@
 
 ## 1. Overview
 
-**P5-02 / P5-02A / P5-02B** integrates the work completion user experience across all SNS Projects operational surfaces with the atomic, transactional PostgreSQL expense runtime established in P5-01.
+**P5-02, P5-02A, P5-02B & P5-02C** integrate the work completion user experience across all SNS Projects operational surfaces with the atomic, transactional PostgreSQL expense runtime established in P5-01.
 
 Eligible users completing an ordinary task, a child task, or an active Defined Process Responsible step are presented with a unified, accessible completion modal (`TaskCompletionModal`). Users can complete their work without direct expenses or record single/split operational expenses atomically with task completion.
 
@@ -75,33 +75,34 @@ Eligible users completing an ordinary task, a child task, or an active Defined P
 5. **Accountable Approval Isolation**: Accountable approval in Defined Processes does not open an expense modal (expenses are strictly captured during Responsible work execution).
 6. **Rework Cycle Support**: Rejection and rework cycles allow new expenses to be recorded under the incremented `current_cycle_number`.
 7. **Read-Only / Viewer Safety**: Viewers cannot trigger completion or access enabled mutation buttons (`readOnly` and `canMutateOperationalData` guards enforced).
-8. **Responsive Layout**: Full responsive CSS module supporting desktop (1440px), tablet (1024px, 768px), and mobile (390px) viewports.
+8. **Responsive Layout**: Full responsive CSS module supporting desktop (1440px), tablet (1024px, 768px), and mobile (390px) viewports with sticky bottom action buttons.
 
 ---
 
 ## 4. Verification & Test Evidence
 
-- **Automated Frontend Test Suite**: `scripts/test-p5-02-expense-frontend.mjs` (60/60 assertions PASSED).
+- **Automated Frontend Test Suite**: `scripts/test-p5-02-expense-frontend.mjs` (71/71 assertions PASSED).
 - **Automated Backend & Security Suite**: `scripts/test-p5-01-expense-execution.mjs` (39/39 assertions PASSED).
-- **CSS Module Contract Audit**: `scripts/verify-css-module-contracts.mjs` (49 modules, 1915 static references PASSED).
+- **CSS Module Contract Audit**: `scripts/verify-css-module-contracts.mjs` (49 modules, 1913 static references PASSED).
 - **Documentation Link Integrity**: `scripts/verify-doc-links.mjs` (260/260 links verified).
 
 ---
 
-## 5. Manual Production Acceptance Checklist
+## 5. Manual Production Acceptance Certification
 
-The following scenarios are prepared for production verification upon deployment:
+Manual signed-in production acceptance on `https://abzops.github.io/sns-projects/` PASSED:
 
-1. [ ] **Ordinary Task -> Complete without Expense**: Status transitions to Done, single RPC called with null payload, zero trailing task UPDATEs.
-2. [ ] **Ordinary Task -> Single Expense**: Status transitions to Done, expense recorded with local date, amount, category.
-3. [ ] **Ordinary Task -> Itemized Expense**: Multiple line items recorded, total accurately calculated and displayed.
-4. [ ] **Local Date Boundary**: Verified that default expense date matches local calendar date regardless of UTC hour.
-5. [ ] **Validation Error Retention**: Invalid amount keeps modal open and preserves entered values.
-6. [ ] **Parent Task Guard**: Parent task with open children or attached process receives no direct completion modal and fails closed if attempted.
-7. [ ] **Process Step -> Complete without Expense**: Responsible contribution recorded, DAG advances.
-8. [ ] **Process Step -> Add Expense & Complete**: Responsible expense recorded under cycle 1, DAG advances.
-9. [ ] **Approval-Required Step**: Responsible submits expense -> task moves to review (feedback states "submitted for review") -> Accountable approves without expense prompt.
-10. [ ] **Rejection & Rework Cycle**: Accountable rejects -> Responsible completes rework with cycle 2 expense -> both expenses preserved.
-11. [ ] **Viewer Experience**: Read-only user sees no active completion button.
-12. [ ] **Double Click Protection**: Fast double clicks execute exactly one RPC call.
-13. [ ] **Responsive UX**: Verified on Desktop (1440px), Tablet (768px), and Mobile (390px).
+1. [x] **Ordinary Task -> Complete without Expense**: Status transitions to Done, single RPC called with null payload, zero trailing task UPDATEs.
+2. [x] **Ordinary Task -> Single Expense**: Status transitions to Done, expense recorded with local date, amount, category.
+3. [x] **Ordinary Task -> Itemized Expense**: Multiple line items recorded, total accurately calculated and displayed.
+4. [x] **Local Date Boundary**: Verified that default expense date matches local calendar date regardless of UTC hour.
+5. [x] **Validation Error Retention**: Invalid amount keeps modal open and preserves entered values.
+6. [x] **Parent Task Guard**: Parent task with open children or attached process receives no direct completion modal and fails closed if attempted.
+7. [x] **Process Step -> Complete without Expense**: Responsible contribution recorded, DAG advances.
+8. [x] **Process Step -> Add Expense & Complete**: Responsible expense recorded under cycle 1, DAG advances.
+9. [x] **Approval-Required Step**: Responsible submits expense -> task moves to review (feedback states "submitted for review") -> Accountable approves without expense prompt.
+10. [x] **Rejection & Rework Cycle**: Accountable rejects -> Responsible completes rework with cycle 2 expense -> both expenses preserved.
+11. [x] **Viewer Experience**: Read-only user sees no active completion button.
+12. [x] **Double Click Protection**: Fast double clicks execute exactly one RPC call.
+13. [x] **Responsive UX**: Verified on Desktop (1440px), Tablet (768px), and Mobile (390px).
+
