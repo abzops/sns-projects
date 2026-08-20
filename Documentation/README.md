@@ -21,6 +21,7 @@
 - **Production URL**: `https://abzops.github.io/sns-projects/`
 - **Supabase Project Reference**: `gqerfixdmgbqahgslzsq`
 - **Current Canonical Migration**: `20260820082034_p5_03b_subtask_rpc_execution_hotfix.sql`
+- **Current Frontend Baseline**: `47d17ced49487bdc428d72b6dd6dd7aa95e407e8`
 - **Package 1 Status**: `VERIFIED` (Production Parity + Real Local PostgreSQL E2E 34-Test Lifecycle Suite + Trigger Security Closure)
 - **Package 2 Status**: `P2-01, P2-01A, P2-02, P2-02A, P2-03 VERIFIED` (Parent Completion and Runtime Closure deployed and verified)
 - **Package 3 Status**: **`COMPLETE / VERIFIED`** (`P3-01` and `P3-02` verified; manual signed-in production acceptance passed)
@@ -30,7 +31,7 @@
 - **Operational V1 Role-Aware Dashboards**: **`OV1-C VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 - **Operational V1 Stability & Acceptance**: **`OV1-D VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 - **Package 4 Status**: **`P4-01 / P4-01A VERIFIED`** ([Finance Foundation](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md))
-- **Package 5 Status**: **`EXTENDED / MANUAL ACCEPTANCE PENDING`** (`P5-01`..`C` VERIFIED · `P5-02`..`C` VERIFIED · `P5-03` [Subtask Completion & Closure](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) IMPLEMENTED / MANUAL ACCEPTANCE PENDING)
+- **Package 5 Status**: **`COMPLETE / VERIFIED / FROZEN`** (`P5-01`..`C` VERIFIED · `P5-02`..`C` VERIFIED · `P5-03`..`C` [Subtask Completion & Closure](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) VERIFIED · Manual production acceptance PASSED · Frontend baseline `47d17ce`)
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -95,7 +96,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `OV1-C` Role-Aware Dashboard Engine | **`VERIFIED`** | Frontend tip `e518350` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | | `OV1-D` Operational V1 Final Production Acceptance & Stability Closure | **`VERIFIED`** | Frontend commit `0bd418d` · deployment run `32150807393` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | **Package 4: Finance DB Foundation** | `P4-01 / P4-01A` Budgets, Buffers, Risk Engine & Ledgers | **`VERIFIED`** | Migrations `20260819070817`..`20260819115602` · [P4-01 Spec](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) |
-| **Package 5: Expense Execution** | `P5-01..C` Runtime & `P5-02..C` Frontend Completion & `P5-03 / B` Subtask Closure | **`EXTENDED / MANUAL ACCEPTANCE PENDING`** | Migrations `20260819131603`..`20260820082034` · [P5-01 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · [P5-02 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · [P5-03 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) · All suites passed |
+| **Package 5: Expense Execution** | `P5-01..C` Runtime & `P5-02..C` Frontend Completion & `P5-03..C` Subtask Closure | **`COMPLETE / VERIFIED / FROZEN`** | Migrations `20260819131603`..`20260820082034` · Frontend `47d17ce` · [P5-01 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · [P5-02 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · [P5-03 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) · All suites passed · Manual production acceptance PASSED |
 | **Package 6: Finance Frontend** | `P6-01` Overview Dashboard, Financial Explorer, Alert Center UI | **`NEXT`** | Starting with P6-01 Finance Overview / Dashboard |
 | **Package 7: Financial Hierarchy**| Compact financial utilization bars, hover summaries | **`PLANNED`** | Upcoming Package 7 |
 | **Package 8: Regression & Excel** | Defined Process Excel import, Day-N certification | **`PLANNED`** | Upcoming Package 8 |

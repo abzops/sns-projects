@@ -53,11 +53,50 @@ P5-03 defines the canonical completion lifecycle, expense capture, and parent cl
 
 ---
 
-## 4. Verification & Certification
+## 4. P5-03C: Live State Synchronization & Expense Contract Hardening
 
-- **P5-03 Automated PostgreSQL Test Suite** (`scripts/test-p5-03-subtask-completion.mjs`): 31/31 PASSED.
-- **P5-02 Frontend Test Suite** (`scripts/test-p5-02-expense-frontend.mjs`): 71/71 PASSED.
+P5-03C resolves two post-implementation production defects without database schema changes:
+
+1. **Local Subtask State Refresh**: `useSubtasks` exposes `refetch: refetchSubtasks`. On subtask completion, toggle/reopen, creation, and deletion, `refetchSubtasks()` is awaited so the subtask row, checkbox, and progress counter (e.g. `0/1 → 1/1`) update immediately without page reload.
+2. **Parent Task Live Synchronization**: `TasksPage`, `MyWorkPage`, and `DepartmentWorkspacePage` maintain `selectedTask` in component state. A `useEffect` now synchronizes `selectedTask` to the refreshed canonical task object whenever the tasks collection revalidates, reflecting auto-completed `Done` parent status while the panel remains open.
+3. **Defensive Response Contract Guard**: `TaskCompletionModal` validates that when `hasExpense = true`, the RPC response includes a non-null `transaction_id`. If missing, a contract error halts and the success confirmation is not displayed.
+4. **`onSubtasksChange` Propagation**: `MyWorkPage` and `DepartmentWorkspacePage` pass `onSubtasksChange` to `TaskDetailPanel`, triggering silent background task revalidation on subtask lifecycle events.
+
+Frontend baseline: `47d17ced49487bdc428d72b6dd6dd7aa95e407e8` — commit `fix(p5-03c): sync subtask completion state and verify expense payload`.
+
+---
+
+## 5. Accepted Final Behavioral Model
+
+The following behaviors are certified as correct and verified in production:
+
+- `public.subtasks` are Task execution dependencies — nested inside Tasks, NOT structural hierarchy rows, and cannot be subdivided further.
+- Tasks with active Subtasks cannot be manually completed (blocked by server-side guard).
+- Subtask completion supports: Complete without Expense, Single Total Expense, and Itemized / Split Expense.
+- Subtask expense records: parent `task_id` + exact `subtask_id`.
+- Subtask expenses roll upward through existing Task financial rollups with zero double counting.
+- Final dependency auto-completes parent Task to Done.
+- Reopening or adding an active Subtask under a Done Task automatically reopens parent to In Progress.
+- Prior expenses remain after reopen; parent auto-completion creates no direct parent expense.
+- Direct browser Subtask status bypass to `done` is blocked server-side by `trg_subtasks_guard_status`.
+- Viewer role remains strictly read-only.
+- Live UI refresh immediately reflects Subtask and parent Task status changes without page reload.
+
+---
+
+## 6. Verification & Certification
+
+- **P5-03 Automated PostgreSQL Test Suite** (`scripts/test-p5-03-subtask-completion.mjs`): **37/37 PASSED** (P5-03C adds assertions 35 and 36: Single Total ₹123.45 and Itemized ₹350.00 exact database verification).
+- **P5-02 Frontend Test Suite** (`scripts/test-p5-02-expense-frontend.mjs`): **77/77 PASSED** (P5-03C adds Suite 6: live state sync, contract hardening, and runtime payload construction assertions).
 - **P5-01 Expense Runtime Suite** (`scripts/test-p5-01-expense-execution.mjs`): 39/39 PASSED.
 - **P4-01 Finance Foundation Suite** (`scripts/test-p4-01-finance-foundation.mjs`): 60/60 PASSED.
 - **P2-03 Parent Completion Suite** (`scripts/test-p2-03-parent-completion.mjs`): 17/17 PASSED.
-- **Security Advisor**: Exactly 6 baseline warnings maintained. Zero new `SECURITY DEFINER` in `public` schema.
+- **Doc Links**: 265 relative links verified — 0 errors.
+- **Lint**: 20 warnings, 0 errors (oxlint).
+- **Build**: Vite production build successful.
+- **GitHub Pages Deployment**: Run `32354208339` — SUCCESS.
+- **Manual Production Acceptance**: **PASSED**.
+
+> [!IMPORTANT]
+> **P5-03 STATUS: VERIFIED** — P5-03, P5-03A, P5-03B, P5-03C all VERIFIED. Package 5 = **COMPLETE / VERIFIED / FROZEN**.
+
