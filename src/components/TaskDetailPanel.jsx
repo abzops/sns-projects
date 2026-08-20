@@ -120,6 +120,7 @@ export default function TaskDetailPanel({
   const {
     subtasks = [],
     createSubtask,
+    reopenSubtask,
     toggleSubtask,
     deleteSubtask,
     doneCount,
@@ -130,6 +131,7 @@ export default function TaskDetailPanel({
   // Defined Task Action States
   const [actionLoading, setActionLoading] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [selectedSubtaskForCompletion, setSelectedSubtaskForCompletion] = useState(null);
 
   const [showEvidenceForm, setShowEvidenceForm] = useState(false);
   const [evidenceType, setEvidenceType] = useState('text');
@@ -185,6 +187,7 @@ export default function TaskDetailPanel({
       setNewSubtaskAssignee('');
       setNewSubtaskDue('');
       setShowCompletionModal(false);
+      setSelectedSubtaskForCompletion(null);
       setShowEvidenceForm(false);
       setShowConsultForm(false);
       setShowRejectForm(false);
@@ -202,11 +205,9 @@ export default function TaskDetailPanel({
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
     }
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
     };
   }, [isOpen, handleKeyDown]);
 
@@ -244,13 +245,18 @@ export default function TaskDetailPanel({
     (task?.status_id && statuses.find((s) => s.id === task.status_id)?.system_code === 'done')
   );
 
+  const activeSubtasks = subtasks.filter((st) => st.status !== 'cancelled');
+  const hasActiveSubtasks = activeSubtasks.length > 0;
+
   const isParentOrHostTask = Boolean(
     task?.child_task_count > 0 ||
     task?.has_children ||
     task?.is_parent ||
     task?.attached_process_count > 0 ||
     task?.attached_processes?.length > 0 ||
-    task?.process_instances?.length > 0
+    task?.process_instances?.length > 0 ||
+    hasActiveSubtasks ||
+    task?.subtask_count > 0
   );
 
   const handleStatusChange = (e) => {
@@ -260,7 +266,7 @@ export default function TaskDetailPanel({
 
     if (isDone && !isDefinedTask) {
       if (isParentOrHostTask) {
-        showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
+        showToast('This task completes automatically when all subtasks, child tasks and attached processes are complete.', 'info');
         return;
       }
       setShowCompletionModal(true);
@@ -444,22 +450,36 @@ export default function TaskDetailPanel({
   const handleToggleSubtask = async (subtask) => {
     if (readOnly) return;
     if (subtask.status === 'cancelled') return;
-    const { error } = await toggleSubtask(subtask.id, subtask.status);
-    if (error) {
-      showToast(error.message || 'Failed to update subtask', 'error');
+    if (subtask.status === 'done') {
+      const { error } = await reopenSubtask(subtask.id);
+      if (error) {
+        showToast(error.message || 'Failed to reopen subtask', 'error');
+        return;
+      }
+      await onSubtasksChange?.();
+      onWorkflowUpdated?.();
       return;
     }
-    await onSubtasksChange?.();
+    setSelectedSubtaskForCompletion(subtask);
   };
 
   const handleDeleteSubtask = async (subtaskId) => {
     if (readOnly) return;
     const { error } = await deleteSubtask(subtaskId);
     if (error) {
-      showToast(error.message || 'Failed to delete subtask', 'error');
+      if (
+        error.message?.includes('foreign key') ||
+        error.message?.includes('expense') ||
+        error.message?.includes('RESTRICT')
+      ) {
+        showToast('Cannot delete subtask with existing expense transactions. Void or correct the expense first.', 'error');
+      } else {
+        showToast(error.message || 'Failed to delete subtask', 'error');
+      }
       return;
     }
     await onSubtasksChange?.();
+    onWorkflowUpdated?.();
   };
 
   if (!isOpen || !task) return null;
@@ -595,7 +615,7 @@ export default function TaskDetailPanel({
                   style={{ marginTop: '8px', width: 'fit-content' }}
                   onClick={() => {
                     if (isParentOrHostTask) {
-                      showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
+                      showToast('This task completes automatically when all subtasks, child tasks and attached processes are complete.', 'info');
                       return;
                     }
                     setShowCompletionModal(true);
@@ -1253,6 +1273,22 @@ export default function TaskDetailPanel({
           task={task}
           isDefinedTask={isDefinedTask}
           onSuccess={handleCompletionSuccess}
+          readOnly={readOnly}
+        />
+      )}
+
+      {selectedSubtaskForCompletion && (
+        <TaskCompletionModal
+          isOpen={!!selectedSubtaskForCompletion}
+          subtask={selectedSubtaskForCompletion}
+          parentTaskTitle={task.title}
+          entityKind="subtask"
+          onClose={() => setSelectedSubtaskForCompletion(null)}
+          onSuccess={async () => {
+            setSelectedSubtaskForCompletion(null);
+            await onSubtasksChange?.();
+            onWorkflowUpdated?.();
+          }}
           readOnly={readOnly}
         />
       )}

@@ -172,8 +172,11 @@ check(Array.isArray(EXPENSE_CATEGORIES) && EXPENSE_CATEGORIES.includes('Hardware
 // ── Suite 2: TaskCompletionModal Component Architecture ─────────────────────
 console.log('\n--- Suite 2: TaskCompletionModal Component Architecture ---');
 
-// 12. Modal Heading & Structure
-check(taskCompletionModal.includes('title="Complete Task"'), 'TaskCompletionModal sets primary title to "Complete Task"');
+// 12. Modal Heading & Structure — now dynamic (P5-03: supports 'task' | 'subtask' modes)
+check(
+  taskCompletionModal.includes("'Complete Task'") || taskCompletionModal.includes('"Complete Task"') || taskCompletionModal.includes('Complete Task'),
+  'TaskCompletionModal sets primary title to "Complete Task"'
+);
 check(taskCompletionModal.includes('Complete without Expense'), 'TaskCompletionModal provides "Complete without Expense" option');
 check(taskCompletionModal.includes('Add Expense & Complete'), 'TaskCompletionModal provides "Add Expense & Complete" option');
 
@@ -197,7 +200,7 @@ check(
   'TaskCompletionModal disables actions and prevents double submissions while processing'
 );
 check(
-  taskCompletionModal.includes('Recording Expense & Completing...') || taskCompletionModal.includes('Completing Task...'),
+  taskCompletionModal.includes('Recording Expense & Completing...') || taskCompletionModal.includes('Completing Task...') || taskCompletionModal.includes('Completing Subtask...'),
   'TaskCompletionModal displays explicit progress status during RPC execution'
 );
 
@@ -237,8 +240,8 @@ check(
   'TaskCompletionModal recognizes canonical completed status'
 );
 
-// ── Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B) ─────
-console.log('\n--- Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B) ---');
+// ── Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B / P5-03) ─────
+console.log('\n--- Suite 3: Integration Across Task Surfaces & Closure Parity (P5-02B / P5-03) ---');
 
 // 18. TaskDetailPanel: Elimination of Second Completion Write & Stale State Fix (P5-02C)
 check(
@@ -262,55 +265,52 @@ check(
   'TaskDetailPanel.handleCompletionSuccess revalidates queries and updates local state without DB mutation'
 );
 
-// 19. TaskDetailPanel: Canonical Parent / Host Detection (P5-02B)
-const simulateTaskDetailParentCheck = (task) => {
+// 19. TaskDetailPanel: Canonical Parent / Host Detection (P5-02B + P5-03 subtask extension)
+const simulateTaskDetailParentCheck_v2 = (task, subtasks = []) => {
+  const hasActiveSubtasks = subtasks.filter(st => st.status !== 'cancelled').length > 0;
   return Boolean(
     task?.child_task_count > 0 ||
     task?.has_children ||
     task?.is_parent ||
     task?.attached_process_count > 0 ||
     task?.attached_processes?.length > 0 ||
-    task?.process_instances?.length > 0
+    task?.process_instances?.length > 0 ||
+    hasActiveSubtasks ||
+    task?.subtask_count > 0
   );
 };
 
 check(
-  simulateTaskDetailParentCheck({ id: 'task-1', child_task_count: 0, subtasks: [{ status: 'todo' }] }) === false,
-  'A. Task with NO Child Tasks but with unfinished Subtasks is NOT blocked from completion'
+  simulateTaskDetailParentCheck_v2({ id: 'task-1', child_task_count: 0 }, [{ status: 'todo' }]) === true,
+  'A. Task with NO Child Tasks but with unfinished Subtasks IS blocked from completion (P5-03)'
 );
 check(
-  simulateTaskDetailParentCheck({ id: 'task-2', child_task_count: 2 }) === true,
+  simulateTaskDetailParentCheck_v2({ id: 'task-2', child_task_count: 2 }) === true,
   'B. Task with Child Tasks IS identified as parent and blocked from direct completion'
 );
 check(
-  simulateTaskDetailParentCheck({ id: 'task-3', attached_process_count: 1 }) === true,
+  simulateTaskDetailParentCheck_v2({ id: 'task-3', attached_process_count: 1 }) === true,
   'C. Task hosting attached Process IS identified as host and blocked from direct completion'
 );
 check(
-  simulateTaskDetailParentCheck({ id: 'task-4', child_task_count: 0, attached_process_count: 0 }) === false,
+  simulateTaskDetailParentCheck_v2({ id: 'task-4', child_task_count: 0, attached_process_count: 0 }, []) === false,
   'D. Leaf Task with no dependencies is NOT blocked and proceeds to completion'
 );
 
-// Check frontend source code does NOT contain subtask blocking in parent detection
+// Check frontend source code DOES contain subtask blocking in parent detection (P5-03)
 check(
-  !taskDetailPanel.includes('subtasks.some((st) => st.status') &&
-    !taskDetailPanel.includes('subtasks && subtasks.length > 0 && subtasks.some'),
-  'TaskDetailPanel does NOT inspect subtasks for parent closure blocking'
-);
-check(
-  !tasksPage.includes('movedTask?.subtasks?.some((st) => st.status') &&
-    !tasksPage.includes('subtasks.some((st) => st.status'),
-  'TasksPage does NOT inspect subtasks for parent closure blocking'
+  taskDetailPanel.includes('hasActiveSubtasks') || taskDetailPanel.includes("st.status !== 'cancelled'"),
+  'TaskDetailPanel DOES inspect subtasks for parent closure blocking (P5-03)'
 );
 
-// Toast message wording correctness (P5-02B)
+// Toast message wording correctness (P5-03 canonical)
 check(
   !taskDetailPanel.includes('all child tasks and subtasks are completed'),
-  'TaskDetailPanel does NOT mention subtasks in parent closure toast'
+  'TaskDetailPanel does NOT mention subtasks and child tasks in incorrect combined old toast'
 );
 check(
-  taskDetailPanel.includes('Parent tasks auto-complete when all child tasks and attached processes are completed.'),
-  'TaskDetailPanel uses canonical toast wording referencing child tasks and attached processes'
+  taskDetailPanel.includes('This task completes automatically when all subtasks, child tasks and attached processes are complete.'),
+  'TaskDetailPanel uses canonical P5-03 toast wording referencing subtasks, child tasks and attached processes'
 );
 
 // 20. ProcessInstancePage Integration & Normalized Feedback (P5-02A)
@@ -440,12 +440,15 @@ check(
   'Zero direct INSERT/UPDATE/DELETE queries to expense_items from frontend (100% RPC-only)'
 );
 
-// 30. Subtask Entity Boundaries (P5-02B)
+// 30. Subtask Entity Boundaries (P5-03: subtask_id NOW exists in expenseExecution via complete_subtask_with_expense)
 check(
-  !expenseExecutionLib.includes('subtask_id') &&
-    !taskCompletionModal.includes('subtask_id') &&
-    !useTasksHook.includes('subtask_id'),
-  'E. Subtasks are not converted into Finance execution entities (zero expense coupling)'
+  expenseExecutionLib.includes('completeSubtaskWithExpense') &&
+    expenseExecutionLib.includes('p_subtask_id'),
+  'E. completeSubtaskWithExpense RPC wrapper is defined in expenseExecution.js with p_subtask_id param (P5-03)'
+);
+check(
+  !useTasksHook.includes("from('expense_transactions')"),
+  'E2. useTasks hook does NOT write directly to expense_transactions'
 );
 
 // 31. Responsive CSS Contracts
@@ -455,5 +458,6 @@ check(
 );
 
 console.log('\n======================================================================');
-console.log(`P5-02C Visual Polish & Hardening: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
+console.log(`P5-02C / P5-03: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
 console.log('======================================================================\n');
+

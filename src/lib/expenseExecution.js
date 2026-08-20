@@ -190,3 +190,30 @@ export async function completeResponsibleStepWithExpense(
     };
   }
 }
+
+/**
+ * Calls backend RPC public.complete_subtask_with_expense
+ * @param {string} subtaskId
+ * @param {Object|null} expensePayload
+ * @param {string|null} notes
+ * @returns {Promise<{ success: boolean, data?: Object, error?: string }>}
+ */
+export async function completeSubtaskWithExpense(subtaskId, expensePayload = null, notes = null) {
+  try {
+    const { data, error } = await supabase.rpc('complete_subtask_with_expense', {
+      p_subtask_id: subtaskId,
+      p_expense_payload: expensePayload || null,
+      p_notes: notes?.trim() || null,
+    });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (err) {
+    console.error('[expenseExecution] completeSubtaskWithExpense error:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to complete subtask.',
+    };
+  }
+}
+

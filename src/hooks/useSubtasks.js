@@ -111,9 +111,16 @@ export function useSubtasks(taskId) {
     }
   };
 
+  const reopenSubtask = async (id) => {
+    return updateSubtask(id, { status: 'todo' });
+  };
+
   const toggleSubtask = async (id, currentStatus) => {
-    const nextStatus = currentStatus === 'done' ? 'todo' : 'done';
-    return updateSubtask(id, { status: nextStatus });
+    if (currentStatus === 'done') {
+      return reopenSubtask(id);
+    }
+    // Note: Transitions to 'done' must route through completeSubtaskWithExpense RPC
+    return { data: null, error: new Error('Subtask completion requires the completion runtime.') };
   };
 
   const deleteSubtask = async (id) => {
@@ -147,8 +154,10 @@ export function useSubtasks(taskId) {
     progress,
     createSubtask,
     updateSubtask,
+    reopenSubtask,
     toggleSubtask,
     deleteSubtask,
     refetch: fetchSubtasks,
   };
 }
+

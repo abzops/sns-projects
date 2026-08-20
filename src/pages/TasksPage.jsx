@@ -860,13 +860,18 @@ export default function TasksPage() {
 
           // Intercept move to Done status for ordinary tasks
           if (!isSameColumn && getStatusSystemCode(destStatus) === 'done') {
+            const hasSubtasks = Boolean(
+              movedTask?.subtask_count > 0 ||
+              movedTask?.subtasks?.some((st) => st.status !== 'cancelled')
+            );
             const hasDependencies =
               tasks.some((t) => t.parent_task_id === activeTaskId) ||
               (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === activeTaskId && p.status === 'running')) ||
-              Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
+              Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children) ||
+              hasSubtasks;
 
             if (hasDependencies) {
-              showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
+              showToast('This task completes automatically when all subtasks, child tasks and attached processes are complete.', 'info');
               if (boardSnapshotRef.current) return boardSnapshotRef.current;
               return currentBoard;
             }
@@ -981,13 +986,18 @@ export default function TasksPage() {
       if (!movedTask || movedTask.status_id === targetStatusId) return;
 
       if (getStatusSystemCode(targetStatus) === 'done') {
+        const hasSubtasks = Boolean(
+          movedTask?.subtask_count > 0 ||
+          movedTask?.subtasks?.some((st) => st.status !== 'cancelled')
+        );
         const hasDependencies =
           tasks.some((t) => t.parent_task_id === taskId) ||
           (processInstances && processInstances.some((p) => p.placement_type === 'task' && p.parent_task_id === taskId && p.status === 'running')) ||
-          Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children);
+          Boolean(movedTask?.child_task_count > 0 || movedTask?.has_children) ||
+          hasSubtasks;
 
         if (hasDependencies) {
-          showToast('Parent tasks auto-complete when all child tasks and attached processes are completed.', 'info');
+          showToast('This task completes automatically when all subtasks, child tasks and attached processes are complete.', 'info');
           return;
         }
         setCompletionModalTask(movedTask);

@@ -116,7 +116,22 @@ async function runTests() {
     await client.query(p5_02aSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
     console.log('[SETUP] Applied P5-02A migration 20260819214046');
 
+    const p5_03Sql = await readFile(
+      path.join('supabase', 'migrations', '20260820072145_p5_03_subtask_completion_expense_parent_closure.sql'),
+      'utf8',
+    );
+    await client.query(p5_03Sql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P5-03 migration 20260820072145');
+
+    const p5_03aSql = await readFile(
+      path.join('supabase', 'migrations', '20260820073423_p5_03a_drop_ambiguous_expense_overload.sql'),
+      'utf8',
+    );
+    await client.query(p5_03aSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P5-03A hotfix migration 20260820073423');
+
     // 2. Set up test entities
+
     const ids = {
       ws: randomUUID(),
       ws2: randomUUID(),

@@ -94,3 +94,5 @@ Decisions are organized into domain-specific registers while preserving their or
 | **Decision 69** | Finance | Safety Buffer is NOT allocatable to child budgets (consumed from Base Budget only) | APPROVED | [FINANCE ADR-69](FINANCE_ARCHITECTURE_DECISIONS.md#decision-69--safety-buffer-not-allocatable) |
 | **Decision 70** | Finance | NO FINANCIAL DOUBLE COUNTING: Parent Actual Spend values are calculated rollups | APPROVED | [FINANCE ADR-70](FINANCE_ARCHITECTURE_DECISIONS.md#decision-70--no-financial-double-counting) |
 | **Decision 71** | Process | Broad operational visibility is System-Role based; other users see involved work plus minimum ancestors only | APPROVED / IMPLEMENTED | [PROCESS ADR-71](PROCESS_ARCHITECTURE_DECISIONS.md#decision-71--operational-visibility-is-system-role-or-involvement-based) |
+| **Decision 72** | Finance | Subtasks are optional expense capture sources recording `task_id = parent.id` and `subtask_id = subtask.id`; rollups naturally sum into parent Task with zero double counting | APPROVED / IMPLEMENTED | [FINANCE ADR-62](FINANCE_ARCHITECTURE_DECISIONS.md#decision-62--subtask-expense-capture--traceability) |
+

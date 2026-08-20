@@ -19,6 +19,7 @@ import {
   validateExpenseForm,
   getLocalDateString,
   completeTaskWithExpense,
+  completeSubtaskWithExpense,
   completeResponsibleStepWithExpense,
   EXPENSE_CATEGORIES,
 } from '../lib/expenseExecution';
@@ -26,19 +27,23 @@ import styles from './TaskCompletionModal.module.css';
 
 /**
  * TaskCompletionModal
- * Canonical completion and expense capture modal for ordinary tasks and defined process steps.
+ * Canonical completion and expense capture modal for ordinary tasks, defined process steps, and subtasks.
  */
 export default function TaskCompletionModal({
   isOpen,
   onClose,
   task,
+  subtask,
+  parentTaskTitle,
+  entityKind = 'task', // 'task' | 'process_step' | 'subtask'
   isDefinedTask = false,
   onSuccess,
   readOnly = false,
 }) {
   const { showToast } = useToast();
 
-  const isDefined = isDefinedTask || Boolean(task?.process_step_id || task?.process_instance_id);
+  const isSubtask = entityKind === 'subtask' || Boolean(subtask);
+  const isDefined = !isSubtask && (isDefinedTask || Boolean(task?.process_step_id || task?.process_instance_id));
   const cycleNumber = task?.current_cycle_number || 1;
 
   // Form State
@@ -58,7 +63,9 @@ export default function TaskCompletionModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  // Reset form when modal opens with a new task
+  const entityId = isSubtask ? subtask?.id : task?.id;
+
+  // Reset form when modal opens with a new task or subtask
   useEffect(() => {
     if (isOpen) {
       setHasExpense(false);
@@ -73,7 +80,7 @@ export default function TaskCompletionModal({
       setSubmitting(false);
       setErrorMessage(null);
     }
-  }, [isOpen, task?.id]);
+  }, [isOpen, entityId]);
 
   // Derived calculated total for itemized mode
   const calculatedTotal = useMemo(() => {
@@ -109,7 +116,7 @@ export default function TaskCompletionModal({
   // Form Submission
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (submitting || readOnly || !task?.id) return;
+    if (submitting || readOnly || !entityId) return;
 
     setErrorMessage(null);
 
@@ -134,7 +141,9 @@ export default function TaskCompletionModal({
 
     try {
       let res;
-      if (isDefined) {
+      if (isSubtask) {
+        res = await completeSubtaskWithExpense(subtask.id, validation.payload, notes);
+      } else if (isDefined) {
         res = await completeResponsibleStepWithExpense(
           task.id,
           cycleNumber,
@@ -146,13 +155,20 @@ export default function TaskCompletionModal({
       }
 
       if (!res.success) {
-        setErrorMessage(res.error || 'Failed to complete task.');
+        setErrorMessage(res.error || (isSubtask ? 'Failed to complete subtask.' : 'Failed to complete task.'));
         setSubmitting(false);
         return;
       }
 
       // Success feedback
-      if (isDefined) {
+      if (isSubtask) {
+        showToast(
+          hasExpense
+            ? `Subtask "${subtask.title}" completed with expense recorded!`
+            : `Subtask "${subtask.title}" completed!`,
+          'success'
+        );
+      } else if (isDefined) {
         const stepStatus = res.data?.status || res.data?.step_result?.status;
         const remainingResp = res.data?.step_result?.remaining_responsible;
 
@@ -188,28 +204,32 @@ export default function TaskCompletionModal({
       onClose();
     } catch (err) {
       console.error('[TaskCompletionModal] submit error:', err);
-      setErrorMessage(err.message || 'An unexpected error occurred while completing the task.');
+      setErrorMessage(err.message || 'An unexpected error occurred during completion.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!isOpen || !task) return null;
+  if (!isOpen || (!task && !subtask)) return null;
+
+  const modalTitle = isSubtask ? 'Complete Subtask' : 'Complete Task';
+  const displayTitle = isSubtask ? (subtask?.title || 'Untitled Subtask') : (task?.title || 'Untitled Task');
+  const parentTitle = isSubtask ? (parentTaskTitle || task?.title) : null;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={submitting ? undefined : onClose}
-      title="Complete Task"
+      title={modalTitle}
       size="lg"
     >
       <form onSubmit={handleSubmit} className={styles.form} noValidate>
-        {/* Task Header Summary Banner */}
+        {/* Header Summary Banner */}
         <div className={styles.taskBanner}>
           <div className={styles.taskBannerHeader}>
             <span className={styles.taskTitleBadge}>
               <CheckCircle2 size={14} className={styles.taskCheckIcon} />
-              <span className={styles.taskTitleText}>{task.title || 'Untitled Task'}</span>
+              <span className={styles.taskTitleText}>{displayTitle}</span>
             </span>
             {isDefined && (
               <span className={styles.cycleBadge} title="Defined Process Rework Cycle">
@@ -217,10 +237,14 @@ export default function TaskCompletionModal({
               </span>
             )}
           </div>
-          {task.task_lists?.name && (
+          {parentTitle && (
+            <span className={styles.taskListMeta}>Task: {parentTitle}</span>
+          )}
+          {!isSubtask && task?.task_lists?.name && (
             <span className={styles.taskListMeta}>List: {task.task_lists.name}</span>
           )}
         </div>
+
 
         {/* Choice Cards: Complete without Expense vs Add Expense & Complete */}
         <div className={styles.choiceGroup}>
@@ -516,12 +540,12 @@ export default function TaskCompletionModal({
             {submitting ? (
               <>
                 <Loader2 size={16} className={styles.spinIcon} />
-                {hasExpense ? 'Recording Expense & Completing...' : 'Completing Task...'}
+                {hasExpense ? 'Recording Expense & Completing...' : (isSubtask ? 'Completing Subtask...' : 'Completing Task...')}
               </>
             ) : (
               <>
                 <CheckCircle2 size={16} />
-                {hasExpense ? 'Record Expense & Complete' : 'Complete Task'}
+                {hasExpense ? 'Record Expense & Complete' : (isSubtask ? 'Complete Subtask' : 'Complete Task')}
               </>
             )}
           </button>
