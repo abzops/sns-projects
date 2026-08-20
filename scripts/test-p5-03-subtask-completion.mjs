@@ -480,9 +480,79 @@ async function runTests() {
     assert.equal(privAclCheck.rows[0].anon_ok, false, 'anon CANNOT execute internal engine');
     pass('34. private.complete_subtask_with_expense_internal ACL: authenticated=true, anon=false, sec_def=true');
 
+    // ── 35. Single Total ₹123.45 exact database verification ───────────────────
+    const stSingleId = randomUUID();
+    await client.query(`
+      INSERT INTO public.subtasks (id, task_id, title, status, created_by)
+      VALUES ($1, $2, 'Single Total Test Subtask', 'todo', $3)`,
+      [stSingleId, ids.task, ids.owner]);
+    const singlePayload = JSON.stringify({
+      expense_date: '2026-08-20',
+      amount: 123.45,
+      category: 'Materials',
+      description: 'acceptance test',
+    });
+    const res35 = await asUser(client, ids.member,
+      `SELECT public.complete_subtask_with_expense($1, $2::jsonb, 'Single 123.45 notes')`,
+      [stSingleId, singlePayload]);
+    const r35 = res35.rows[0]['complete_subtask_with_expense'];
+    assert.equal(r35.success, true);
+    assert.notEqual(r35.transaction_id, null, 'transaction_id created for single total ₹123.45');
+    assert.equal(parseFloat(r35.total_expense), 123.45);
+
+    const tx35 = await client.query(
+      `SELECT task_id, subtask_id, status FROM public.expense_transactions WHERE id=$1`,
+      [r35.transaction_id]);
+    assert.equal(tx35.rows[0].task_id, ids.task);
+    assert.equal(tx35.rows[0].subtask_id, stSingleId);
+    assert.equal(tx35.rows[0].status, 'active');
+
+    const items35 = await client.query(
+      `SELECT line_number, amount, category, description FROM public.expense_items WHERE transaction_id=$1`,
+      [r35.transaction_id]);
+    assert.equal(items35.rows.length, 1);
+    assert.equal(parseFloat(items35.rows[0].amount), 123.45);
+    assert.equal(items35.rows[0].category, 'Materials');
+    assert.equal(items35.rows[0].description, 'acceptance test');
+    pass('35. Single Total ₹123.45 (Materials, acceptance test): transaction, line item, and response verified');
+
+    // ── 36. Itemized ₹350.00 (100+200+50) exact database verification ────────────
+    const stItemId = randomUUID();
+    await client.query(`
+      INSERT INTO public.subtasks (id, task_id, title, status, created_by)
+      VALUES ($1, $2, 'Itemized Test Subtask', 'todo', $3)`,
+      [stItemId, ids.task, ids.owner]);
+    const itemizedPayload = JSON.stringify({
+      expense_date: '2026-08-20',
+      description: 'Itemized acceptance package',
+      items: [
+        { line_number: 1, amount: 100.00, category: 'Hardware', description: 'Item 1' },
+        { line_number: 2, amount: 200.00, category: 'Materials', description: 'Item 2' },
+        { line_number: 3, amount: 50.00, category: 'Logistics', description: 'Item 3' },
+      ],
+    });
+    const res36 = await asUser(client, ids.member,
+      `SELECT public.complete_subtask_with_expense($1, $2::jsonb, 'Itemized notes')`,
+      [stItemId, itemizedPayload]);
+    const r36 = res36.rows[0]['complete_subtask_with_expense'];
+    assert.equal(r36.success, true);
+    assert.notEqual(r36.transaction_id, null, 'transaction_id created for itemized ₹350.00');
+    assert.equal(parseFloat(r36.total_expense), 350.00);
+
+    const items36 = await client.query(
+      `SELECT line_number, amount, category, description FROM public.expense_items WHERE transaction_id=$1 ORDER BY line_number`,
+      [r36.transaction_id]);
+    assert.equal(items36.rows.length, 3);
+    assert.equal(parseFloat(items36.rows[0].amount), 100.00);
+    assert.equal(parseFloat(items36.rows[1].amount), 200.00);
+    assert.equal(parseFloat(items36.rows[2].amount), 50.00);
+    const sum36 = items36.rows.reduce((acc, row) => acc + parseFloat(row.amount), 0);
+    assert.equal(sum36, 350.00);
+    pass('36. Itemized ₹350.00 (100+200+50): 3 line items, parent linking, and total verified');
+
     console.log('');
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log(`  ALL ${passed} P5-03 / P5-03B SUBTASK COMPLETION ASSERTIONS PASSED!  `);
+    console.log(`  ALL ${passed} P5-03 / P5-03C SUBTASK COMPLETION ASSERTIONS PASSED!  `);
     console.log('═══════════════════════════════════════════════════════════════════════════');
 
   } finally {

@@ -121,11 +121,11 @@ export default function TaskDetailPanel({
     subtasks = [],
     createSubtask,
     reopenSubtask,
-    toggleSubtask,
     deleteSubtask,
     doneCount,
     totalCount,
     progress: subtaskProgress,
+    refetch: refetchSubtasks,
   } = useSubtasks(task?.id);
 
   // Defined Task Action States
@@ -167,7 +167,7 @@ export default function TaskDetailPanel({
   const [newSubtaskDue, setNewSubtaskDue] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
 
-  // Sync form with task when opened
+  // Sync form with task when opened or when canonical task updates
   useEffect(() => {
     if (task && isOpen) {
       setForm({
@@ -180,19 +180,23 @@ export default function TaskDetailPanel({
         phase_id: task.phase_id || '',
         task_list_id: task.task_list_id || '',
       });
+    }
+  }, [task, isOpen]);
+
+  // Reset transient forms and subtask modals only when opening or switching tasks
+  useEffect(() => {
+    if (isOpen && task?.id) {
       setConfirmDelete(false);
       setAddRaciRole(null);
       setSelectedTargetId('');
       setNewSubtaskTitle('');
       setNewSubtaskAssignee('');
       setNewSubtaskDue('');
-      setShowCompletionModal(false);
-      setSelectedSubtaskForCompletion(null);
       setShowEvidenceForm(false);
       setShowConsultForm(false);
       setShowRejectForm(false);
     }
-  }, [task, isOpen]);
+  }, [task?.id, isOpen]);
 
   // ESC key to close
   const handleKeyDown = useCallback(
@@ -276,7 +280,10 @@ export default function TaskDetailPanel({
     setForm((prev) => ({ ...prev, status_id: newStatusId }));
   };
 
-  const handleCompletionSuccess = () => {
+  const handleCompletionSuccess = async () => {
+    setShowCompletionModal(false);
+    await refetchSubtasks?.();
+    await onSubtasksChange?.();
     if (isDefinedTask) {
       onWorkflowUpdated?.();
     } else {
@@ -286,7 +293,6 @@ export default function TaskDetailPanel({
       }
       onWorkflowUpdated?.();
     }
-    setShowCompletionModal(false);
   };
 
   const handleSubmitEvidence = async (e) => {
@@ -441,7 +447,9 @@ export default function TaskDetailPanel({
       setNewSubtaskTitle('');
       setNewSubtaskAssignee('');
       setNewSubtaskDue('');
+      await refetchSubtasks?.();
       await onSubtasksChange?.();
+      onWorkflowUpdated?.();
     } finally {
       setIsAddingSubtask(false);
     }
@@ -456,6 +464,7 @@ export default function TaskDetailPanel({
         showToast(error.message || 'Failed to reopen subtask', 'error');
         return;
       }
+      await refetchSubtasks?.();
       await onSubtasksChange?.();
       onWorkflowUpdated?.();
       return;
@@ -478,6 +487,7 @@ export default function TaskDetailPanel({
       }
       return;
     }
+    await refetchSubtasks?.();
     await onSubtasksChange?.();
     onWorkflowUpdated?.();
   };
@@ -1286,6 +1296,7 @@ export default function TaskDetailPanel({
           onClose={() => setSelectedSubtaskForCompletion(null)}
           onSuccess={async () => {
             setSelectedSubtaskForCompletion(null);
+            await refetchSubtasks?.();
             await onSubtasksChange?.();
             onWorkflowUpdated?.();
           }}

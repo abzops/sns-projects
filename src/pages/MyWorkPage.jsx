@@ -51,6 +51,15 @@ export default function MyWorkPage() {
   const [error, setError] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
 
+  // Keep selectedTask synchronized with canonical refreshed tasks collection
+  useEffect(() => {
+    if (!selectedTask?.id || !tasks || tasks.length === 0) return;
+    const refreshed = tasks.find((t) => t.id === selectedTask.id);
+    if (refreshed && refreshed !== selectedTask) {
+      setSelectedTask(refreshed);
+    }
+  }, [tasks, selectedTask]);
+
   // Parallelized, non-blocking fetch
   const fetchMyWork = useCallback(
     async (options = {}) => {
@@ -765,6 +774,7 @@ export default function MyWorkPage() {
           onSave={handleTaskSave}
           onDelete={handleTaskDelete}
           onWorkflowUpdated={() => fetchMyWork({ silent: true })}
+          onSubtasksChange={() => fetchMyWork({ silent: true })}
           statuses={[]}
           members={[]}
           departments={departments}

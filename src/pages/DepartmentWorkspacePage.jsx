@@ -46,6 +46,15 @@ export default function DepartmentWorkspacePage() {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
 
+  // Keep selectedTask synchronized with canonical refreshed deptTasks collection
+  useEffect(() => {
+    if (!selectedTask?.id || !deptTasks || deptTasks.length === 0) return;
+    const refreshed = deptTasks.find((t) => t.id === selectedTask.id);
+    if (refreshed && refreshed !== selectedTask) {
+      setSelectedTask(refreshed);
+    }
+  }, [deptTasks, selectedTask]);
+
   // Fetch department tasks across all projects
   const fetchDeptTasks = useCallback(async () => {
     if (!departmentId || !workspaceId) {
@@ -547,6 +556,7 @@ export default function DepartmentWorkspacePage() {
             setSelectedTask(null);
           }}
           onWorkflowUpdated={() => fetchDeptTasks()}
+          onSubtasksChange={() => fetchDeptTasks()}
           statuses={[]}
           members={deptMembers}
           departments={departments}

@@ -314,6 +314,15 @@ export default function TasksPage() {
   const [sortDir, setSortDir] = useState('asc');
   const [selectedTask, setSelectedTask] = useState(null);
 
+  // Keep selectedTask synchronized with canonical refreshed tasks collection
+  useEffect(() => {
+    if (!selectedTask?.id || !tasks || tasks.length === 0) return;
+    const refreshed = tasks.find((t) => t.id === selectedTask.id);
+    if (refreshed && refreshed !== selectedTask) {
+      setSelectedTask(refreshed);
+    }
+  }, [tasks, selectedTask]);
+
   // Collapsed state for Hierarchy accordion
   const [collapsedPhases, setCollapsedPhases] = useState(new Set());
   const [collapsedTaskLists, setCollapsedTaskLists] = useState(new Set());

@@ -160,10 +160,19 @@ export default function TaskCompletionModal({
         return;
       }
 
+      // Defensive contract guard: If expense was requested, verify backend confirmed transaction_id
+      if (hasExpense && !res.data?.transaction_id) {
+        setErrorMessage(
+          'Contract Error: Expense was submitted but backend completion response did not return a confirmed transaction ID.'
+        );
+        setSubmitting(false);
+        return;
+      }
+
       // Success feedback
       if (isSubtask) {
         showToast(
-          hasExpense
+          hasExpense && res.data?.transaction_id
             ? `Subtask "${subtask.title}" completed with expense recorded!`
             : `Subtask "${subtask.title}" completed!`,
           'success'

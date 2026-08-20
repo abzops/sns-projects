@@ -261,7 +261,7 @@ check(
   'TaskDetailPanel.handleCompletionSuccess does NOT invoke onSave() after successful RPC completion'
 );
 check(
-  taskDetailPanel.includes('handleCompletionSuccess = () =>') && taskDetailPanel.includes('onWorkflowUpdated?.()'),
+  (taskDetailPanel.includes('handleCompletionSuccess = () =>') || taskDetailPanel.includes('handleCompletionSuccess = async () =>')) && taskDetailPanel.includes('onWorkflowUpdated?.()'),
   'TaskDetailPanel.handleCompletionSuccess revalidates queries and updates local state without DB mutation'
 );
 
@@ -457,7 +457,80 @@ check(
   'TaskCompletionModal CSS module contains responsive breakpoints for tablet (768px) and mobile (390px)'
 );
 
+// ── Suite 6: P5-03C Subtask Live State Sync & Expense Contract Hardening ─────
+console.log('\n--- Suite 6: P5-03C Subtask Live State Sync & Expense Contract Hardening ---');
+
+// 32. refetchSubtasks is destructured and called in TaskDetailPanel
+check(
+  taskDetailPanel.includes('refetch: refetchSubtasks') &&
+    taskDetailPanel.includes('await refetchSubtasks?.()'),
+  'refetchSubtasks is destructured from useSubtasks and called upon subtask completion, toggle, add, and delete'
+);
+
+// 33. selectedTask synchronization effect in TasksPage
+check(
+  tasksPage.includes('setSelectedTask(refreshed)') &&
+    tasksPage.includes('t.id === selectedTask.id'),
+  'TasksPage contains synchronization effect keeping selectedTask in sync with refreshed tasks'
+);
+
+// 34. selectedTask synchronization effect in MyWorkPage
+check(
+  myWorkPage.includes('setSelectedTask(refreshed)') &&
+    myWorkPage.includes('onSubtasksChange'),
+  'MyWorkPage contains synchronization effect and passes onSubtasksChange to TaskDetailPanel'
+);
+
+// 35. Defensive response contract guard in TaskCompletionModal
+check(
+  taskCompletionModal.includes('hasExpense && !res.data?.transaction_id') &&
+    taskCompletionModal.includes('Contract Error'),
+  'TaskCompletionModal defends against contract mismatches when expense is requested but transaction_id is missing'
+);
+
+// 36. Runtime Single Total Expense Payload Construction (₹123.45, Materials, 'acceptance test')
+const runtimeSingle = validateExpenseForm({
+  hasExpense: true,
+  mode: 'single',
+  expenseDate: '2026-08-20',
+  singleAmount: '123.45',
+  singleCategory: 'Materials',
+  singleDescription: 'acceptance test',
+});
+check(
+  runtimeSingle.isValid === true &&
+    runtimeSingle.payload !== null &&
+    runtimeSingle.payload.amount === 123.45 &&
+    runtimeSingle.payload.category === 'Materials' &&
+    runtimeSingle.payload.description === 'acceptance test' &&
+    runtimeSingle.payload.expense_date === '2026-08-20',
+  'Runtime Single Total expense form produces non-null payload with exact amount (123.45), category (Materials), and description'
+);
+
+// 37. Runtime Itemized Expense Payload Construction (100 + 200 + 50 = 350)
+const runtimeItemized = validateExpenseForm({
+  hasExpense: true,
+  mode: 'itemized',
+  expenseDate: '2026-08-20',
+  overallDescription: 'Hardware package',
+  items: [
+    { amount: '100.00', category: 'Hardware', description: 'Item 1' },
+    { amount: '200.00', category: 'Materials', description: 'Item 2' },
+    { amount: '50.00', category: 'Logistics', description: 'Item 3' },
+  ],
+});
+check(
+  runtimeItemized.isValid === true &&
+    runtimeItemized.payload !== null &&
+    runtimeItemized.payload.items.length === 3 &&
+    runtimeItemized.payload.items[0].amount === 100.00 &&
+    runtimeItemized.payload.items[1].amount === 200.00 &&
+    runtimeItemized.payload.items[2].amount === 50.00 &&
+    runtimeItemized.payload.items.reduce((s, i) => s + i.amount, 0) === 350.00,
+  'Runtime Itemized expense form produces valid payload with 3 lines totaling ₹350.00'
+);
+
 console.log('\n======================================================================');
-console.log(`P5-02C / P5-03: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
+console.log(`P5-02C / P5-03C: ${passed} PASSED, 0 FAILED (Total: ${passed})`);
 console.log('======================================================================\n');
 
