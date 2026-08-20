@@ -130,6 +130,13 @@ async function runTests() {
     await client.query(p5_03aSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
     console.log('[SETUP] Applied P5-03A hotfix migration 20260820073423');
 
+    const p4_01bSql = await readFile(
+      path.join('supabase', 'migrations', '20260820174313_p4_01b_finance_active_tenancy_authorization_closure.sql'),
+      'utf8',
+    );
+    await client.query(p4_01bSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P4-01B migration 20260820174313');
+
     // 2. Set up test entities
 
     const ids = {

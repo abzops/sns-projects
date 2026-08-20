@@ -88,6 +88,7 @@ async function runTests() {
       ['P5-03',  '20260820072145_p5_03_subtask_completion_expense_parent_closure.sql'],
       ['P5-03A', '20260820073423_p5_03a_drop_ambiguous_expense_overload.sql'],
       ['P5-03B', '20260820082034_p5_03b_subtask_rpc_execution_hotfix.sql'],
+      ['P4-01B', '20260820174313_p4_01b_finance_active_tenancy_authorization_closure.sql'],
     ]) {
       const sql = await readFile(path.join('supabase', 'migrations', file), 'utf8');
       await client.query(sql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));

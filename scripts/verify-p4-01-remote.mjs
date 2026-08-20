@@ -66,6 +66,16 @@ async function verifyRemote() {
   console.log(`\n=== SECURITY DEFINER FUNCTIONS IN PUBLIC SCHEMA (Count: ${pubSecDef.length}, Expected <= 6) ===`);
   console.table(pubSecDef);
 
+  // 3b. Live can_manage_budgets definition and privileges
+  const { rows: [canManageDef] } = await client.query(`
+    SELECT pg_get_functiondef(p.oid) AS def, p.prosecdef, p.proacl::text AS acl, p.proconfig
+    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'private' AND p.proname = 'can_manage_budgets';
+  `);
+  console.log('\n=== LIVE private.can_manage_budgets DEFINITION ===');
+  console.log(canManageDef.def);
+  console.log(`SECURITY DEFINER: ${canManageDef.prosecdef}, search_path config: ${JSON.stringify(canManageDef.proconfig)}, ACL: ${canManageDef.acl}`);
+
   // 4. Data Row Counts in Operational V1 Tables
   const { rows: opCounts } = await client.query(`
     SELECT

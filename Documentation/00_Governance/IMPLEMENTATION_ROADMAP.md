@@ -27,8 +27,8 @@ This roadmap defines the canonical execution sequence for SNS Projects V2 platfo
 | **Package 5** | `P5-01..C` | Expense Execution Runtime & Audit APIs | **`VERIFIED`** | [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · Migration tip `20260819190058` |
 | **Package 5** | `P5-02..C` | Expense Execution Frontend & Action Modals | **`VERIFIED`** | [P5-02 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · Migration tip `20260819214046` (P5-02A) · Manual acceptance PASSED |
 | **Package 5** | `P5-03` | Subtask Completion, Expense Capture & Parent Closure Convergence | **`VERIFIED`** | [P5-03 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) · Migration tip `20260820082034` (P5-03B ACL hotfix) · Frontend `47d17ce` (P5-03C live state sync) · All 37 test assertions passed · Manual production acceptance PASSED |
-| **Package 4 (prereq)** | `P4-01B` | Finance Active-Tenancy Authorization Closure | **`NEXT`** | Immediate prerequisite before P6 — Finance active-tenancy authorization closure |
-| **Package 6** | `P6-01` | Finance Overview / Dashboard | **`PLANNED`** | Starting after P4-01B — high-level financial summary, budget utilization, risk metrics, project portfolio burn rates |
+| **Package 4 (prereq)** | `P4-01B` | Finance Active-Tenancy Authorization Closure | **`VERIFIED`** | [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) · Migration `20260820174313` · All 74 assertions passed |
+| **Package 6** | `P6-01` | Finance Overview / Dashboard | **`NEXT`** | Starting with P6-01 Finance Overview / Dashboard (P4-01B prerequisite verified) |
 | **Package 7** | `P7-01..` | Financial Hierarchy UX (Compact Bars, Hover Cards, Rollups) | **`PLANNED`** | Hierarchical financial visualization |
 | **Package 8** | `P8-01..` | System Regression + Defined Process Excel Import | **`PLANNED`** | Bulk template ingestion & E2E certification |
 
@@ -90,8 +90,8 @@ graph TD
 - **OV1-D (`VERIFIED`)**: Operational V1 Final Production Acceptance & Stability Closure. Replaced transient loading flashes with an atomic, session-cached `useUserContext` (`userId:workspaceId`) and fail-closed scoped hooks (`useProjects`, `useDefinedProcesses`, `useProcessInstance`, `useTasks`). Replaced generic unstyled cold loader with branded `AppColdLoader` component with ambient breathing glow, orbital rotation, and `@media (prefers-reduced-motion: reduce)` support. Corrected `DepartmentWorkspacePage` task loading state. All 24 loading-stabilization regression assertions, 37 OV1-B assertions, 43 OV1-C assertions, 35 navigation UX contracts, and full signed-in manual production acceptance across 1440/1024/768/390 CSS px passed. GitHub Pages deployment run `32150807393` serves verified bundle `index-D9yNtP1g.js` / `index-CVDxZAOV.css`. Operational V1 is certified STABLE. [Operational V1 Certification](../07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md).
 
 ### Package 4: Finance Database Foundation
-- **P4-01 / P4-01A (`VERIFIED`)**: Complete Finance database foundation with Base Budgets, nominal Safety Buffers, strict Project $\to$ Phase $\to$ Task List hierarchy validation triggers, Phase $\to$ Task List budget reduction invariant enforcement (P4-01A), hardened audit actor resolution and anti-spoofing overrides (P4-01A), immutable audit logging, sibling-only budget reallocations, itemized leaf expense transactions with automatic tenancy derivation, fail-closed DML protection on direct browser expense mutation, deterministic risk engine (`calculate_financial_risk_band`), scoped financial visibility avoiding sibling container leaks, and zero new Security Advisor warnings. [P4-01 / P4-01A Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md).
-- **Package 4 Status**: **`P4-01 / P4-01A VERIFIED / FOUNDATION DEPLOYED`**.
+- **P4-01 / P4-01A / P4-01B (`VERIFIED`)**: Complete Finance database foundation with Base Budgets, nominal Safety Buffers, strict Project $\to$ Phase $\to$ Task List hierarchy validation triggers, Phase $\to$ Task List budget reduction invariant enforcement (P4-01A), hardened audit actor resolution and anti-spoofing overrides (P4-01A), P4-01B active-tenancy authorization closure eliminating historical workspace creator shortcuts from `private.can_manage_budgets`, immutable audit logging, sibling-only budget reallocations, itemized leaf expense transactions with automatic tenancy derivation, fail-closed DML protection on direct browser expense mutation, deterministic risk engine (`calculate_financial_risk_band`), scoped financial visibility avoiding sibling container leaks, and zero new Security Advisor warnings. [P4-01 Spec](../06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md).
+- **Package 4 Status**: **`P4-01 / P4-01A / P4-01B VERIFIED / FOUNDATION DEPLOYED`**.
 
 ### Package 5: Expense Execution Integration
 - **P5-01 / P5-01A / P5-01B / P5-01C (`VERIFIED`)**: Expense Execution Runtime, Exact-Scope Authorization, and Single Parent Completion Ownership. Migrations `20260819131603` through `20260819190058`. [P5-01 Spec](../06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md).
@@ -101,10 +101,7 @@ graph TD
 
 ### Package 6: Finance Frontend
 
-> [!IMPORTANT]
-> **Immediate prerequisite before P6**: **P4-01B — Finance Active-Tenancy Authorization Closure** must be implemented and verified before starting P6-01.
-
-- **P6-01 (`PLANNED`)**: Finance Overview / Dashboard — high-level financial summary, budget utilization, risk metrics, and project portfolio burn rates. Starts after P4-01B is VERIFIED.
+- **P6-01 (`NEXT`)**: Finance Overview / Dashboard — high-level financial summary, budget utilization, risk metrics, and project portfolio burn rates. Starts after P4-01B active-tenancy prerequisite is certified.
 - **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
 - **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 

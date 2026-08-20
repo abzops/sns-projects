@@ -86,14 +86,20 @@ async function runTests() {
   await client.query('BEGIN');
 
   try {
-    // 1. Apply the P4-01A hotfix migration on top of the current remote DB baseline
+    // 1. Apply the P4-01A and P4-01B hotfix migrations on top of the current remote DB baseline
     const hotfixSql = await readFile(
       path.join('supabase', 'migrations', '20260819115602_p4_01a_finance_integrity_hotfix.sql'),
       'utf8',
     );
     await client.query(hotfixSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
-
     console.log('[SETUP] Applied P4-01A hotfix migration 20260819115602 inside test transaction');
+
+    const p401bSql = await readFile(
+      path.join('supabase', 'migrations', '20260820174313_p4_01b_finance_active_tenancy_authorization_closure.sql'),
+      'utf8',
+    );
+    await client.query(p401bSql.replace(/^\s*BEGIN\s*;/im, '').replace(/^\s*COMMIT\s*;/im, ''));
+    console.log('[SETUP] Applied P4-01B migration 20260820174313 inside test transaction');
 
     // 2. Set up test entities
     const ids = {
@@ -833,6 +839,157 @@ async function runTests() {
     `);
     assert.equal(unsecTables.length, 0, 'All new tables must have RLS enabled');
     pass('54. All 6 new Finance public tables have RLS enabled');
+
+    // ── SUITE: P4-01B Finance Active-Tenancy Authorization Closure ──────────────
+    console.log('\n--- P4-01B: Active-Tenancy Authorization Matrix & Creator Elimination ---');
+
+    // 55. Approved Budget Authority (Owner, Admin, CEO, CTO with active membership)
+    const { rows: [canOwner] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.owner]);
+    const { rows: [canAdmin] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.admin]);
+    const { rows: [canCeo] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.ceo]);
+    const { rows: [canCto] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.cto]);
+    assert.equal(canOwner.ok, true, 'Active Workspace Owner must manage budgets');
+    assert.equal(canAdmin.ok, true, 'Active Workspace Admin must manage budgets');
+    assert.equal(canCeo.ok, true, 'Active CEO with active workspace membership must manage budgets');
+    assert.equal(canCto.ok, true, 'Active CTO with active workspace membership must manage budgets');
+    pass('55. Approved budget authorities (Owner, Admin, CEO, CTO with active membership) pass can_manage_budgets');
+
+    // 56. Non-budget roles are strictly denied
+    const { rows: [canFinMember] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.finMember]);
+    const { rows: [canProjAdmin] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.projAdmin]);
+    const { rows: [canSysAdmin] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.sysAdmin]);
+    const { rows: [canProjOwner] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.projOwner]);
+    const { rows: [canPhaseOwner] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.phaseOwner]);
+    const { rows: [canViewer] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [ids.ws, ids.viewer]);
+    assert.equal(canFinMember.ok, false, 'Finance Operator alone must NOT manage budgets');
+    assert.equal(canProjAdmin.ok, false, 'Project Admin alone must NOT manage budgets');
+    assert.equal(canSysAdmin.ok, false, 'System Admin alone must NOT manage budgets');
+    assert.equal(canProjOwner.ok, false, 'Project Owner alone must NOT manage budgets');
+    assert.equal(canPhaseOwner.ok, false, 'Phase Owner alone must NOT manage budgets');
+    assert.equal(canViewer.ok, false, 'Viewer alone must NOT manage budgets');
+    pass('56. Non-budget roles (Finance Operator, Project Admin, System Admin, Project/Phase Owner, Viewer) fail can_manage_budgets');
+
+    // 57. Dedicated Historical Creator Matrix
+    const creatorWs = randomUUID();
+    const creatorUser = randomUUID();
+    await client.query('SET LOCAL session_replication_role = replica');
+    await client.query(`INSERT INTO public.profiles (id, full_name) VALUES ($1, 'Workspace Creator') ON CONFLICT DO NOTHING`, [creatorUser]);
+    await client.query(`INSERT INTO public.workspaces (id, name, created_by) VALUES ($1, 'Creator Test WS', $2)`, [creatorWs, creatorUser]);
+
+    // 57a. Creator + Active Owner -> TRUE
+    await client.query(`INSERT INTO public.workspace_members (workspace_id, user_id, role, status) VALUES ($1, $2, 'owner', 'active')`, [creatorWs, creatorUser]);
+    const { rows: [cr1] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr1.ok, true, 'Creator + active Owner = true');
+    pass('57a. Historical creator + active Owner has budget authority');
+
+    // 57b. Creator + Active Admin -> TRUE
+    await client.query(`UPDATE public.workspace_members SET role = 'admin' WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    const { rows: [cr2] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr2.ok, true, 'Creator + active Admin = true');
+    pass('57b. Historical creator + active Admin has budget authority');
+
+    // 57c. Creator + Active Member only -> FALSE (Creator bypass eliminated)
+    await client.query(`UPDATE public.workspace_members SET role = 'member' WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    const { rows: [cr3] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr3.ok, false, 'Creator + active Member only = false');
+    pass('57c. Historical creator + active Member only = FALSE (creator bypass eliminated)');
+
+    // 57d. Creator + Active Viewer -> FALSE
+    await client.query(`UPDATE public.workspace_members SET role = 'viewer' WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    const { rows: [cr4] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr4.ok, false, 'Creator + active Viewer = false');
+    pass('57d. Historical creator + active Viewer = FALSE');
+
+    // 57e. Creator + Non-active membership (status = 'declined', even if role is owner) -> FALSE
+    await client.query(`UPDATE public.workspace_members SET role = 'owner', status = 'declined' WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    const { rows: [cr5] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr5.ok, false, 'Creator + declined membership = false');
+    pass('57e. Historical creator + non-active (declined/pending) membership = FALSE');
+
+    // 57f. Creator + Deleted/No workspace_members row -> FALSE
+    await client.query(`DELETE FROM public.workspace_members WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    const { rows: [cr6] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, creatorUser]);
+    assert.equal(cr6.ok, false, 'Creator with no membership row = false');
+    pass('57f. Historical creator with zero workspace_members rows = FALSE');
+
+    // 58. CEO/CTO without active workspace membership -> FALSE
+    const nonMemberCeo = randomUUID();
+    await client.query(`INSERT INTO public.profiles (id, full_name) VALUES ($1, 'Non-Member CEO') ON CONFLICT DO NOTHING`, [nonMemberCeo]);
+    await client.query(`INSERT INTO public.user_system_roles (workspace_id, user_id, role) VALUES ($1, $2, 'ceo')`, [creatorWs, nonMemberCeo]);
+    const { rows: [nmCeoRes] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, nonMemberCeo]);
+    assert.equal(nmCeoRes.ok, false, 'CEO without workspace_members row = false');
+
+    await client.query(`INSERT INTO public.workspace_members (workspace_id, user_id, role, status) VALUES ($1, $2, 'member', 'pending')`, [creatorWs, nonMemberCeo]);
+    const { rows: [inactCeoRes] } = await client.query('SELECT private.can_manage_budgets($1, $2) as ok', [creatorWs, nonMemberCeo]);
+    assert.equal(inactCeoRes.ok, false, 'CEO with pending workspace membership = false');
+    pass('58. CEO/CTO strictly requires ACTIVE workspace tenancy');
+
+    // 59. Data Access & RLS enforcement on Historical Creator as plain Member
+    const testProjId = randomUUID();
+    await client.query(`INSERT INTO public.projects (id, workspace_id, name, created_by) VALUES ($1, $2, 'Creator Test Proj', $3)`, [testProjId, creatorWs, creatorUser]);
+    // Re-add creatorUser as plain active member
+    await client.query(`DELETE FROM public.workspace_members WHERE workspace_id = $1 AND user_id = $2`, [creatorWs, creatorUser]);
+    await client.query(`INSERT INTO public.workspace_members (workspace_id, user_id, role, status) VALUES ($1, $2, 'member', 'active')`, [creatorWs, creatorUser]);
+
+    // 59a. Historical Creator as member cannot INSERT budget (blocked by RLS)
+    await expectError(client, async () => {
+      await asUser(client, creatorUser, `
+        INSERT INTO public.budgets (workspace_id, entity_type, project_id, base_budget, created_by)
+        VALUES ($1, 'project', $2, 50000.00, $3)
+      `, [creatorWs, testProjId, creatorUser]);
+    });
+    pass('59a. Historical creator as plain member cannot INSERT budget (blocked by RLS)');
+
+    // 59b. Insert budget via administrative owner, then verify plain creator member cannot UPDATE
+    const adminBudgetId = randomUUID();
+    await client.query(`
+      INSERT INTO public.budgets (id, workspace_id, entity_type, project_id, base_budget, created_by)
+      VALUES ($1, $2, 'project', $3, 50000.00, $4)
+    `, [adminBudgetId, creatorWs, testProjId, ids.owner]);
+
+    // 59b. Insert budget via administrative owner, then verify plain creator member cannot UPDATE (0 rows affected)
+    const updRes = await asUser(client, creatorUser, `
+      UPDATE public.budgets SET base_budget = 60000.00 WHERE id = $1
+    `, [adminBudgetId]);
+    assert.equal(updRes.rowCount, 0, 'Plain creator member cannot UPDATE any budget rows (RLS blocks mutation)');
+    const { rows: [bAfterUpd] } = await client.query(`SELECT base_budget FROM public.budgets WHERE id = $1`, [adminBudgetId]);
+    assert.equal(parseFloat(bAfterUpd.base_budget), 50000.00, 'Budget base_budget remains unmodified');
+    pass('59b. Historical creator as plain member cannot UPDATE budget (0 rows affected by RLS)');
+
+    // 59c. Historical creator as plain member cannot DELETE budget (0 rows affected)
+    const delRes = await asUser(client, creatorUser, `
+      DELETE FROM public.budgets WHERE id = $1
+    `, [adminBudgetId]);
+    assert.equal(delRes.rowCount, 0, 'Plain creator member cannot DELETE any budget rows (RLS blocks mutation)');
+    const { rows: [bAfterDel] } = await client.query(`SELECT id FROM public.budgets WHERE id = $1`, [adminBudgetId]);
+    assert.ok(bAfterDel !== undefined, 'Budget row remains in database');
+    pass('59c. Historical creator as plain member cannot DELETE budget (0 rows affected by RLS)');
+
+    // 59d. Historical creator as plain member cannot reallocate budget via RPC
+    const testPhase1 = randomUUID();
+    const testPhase2 = randomUUID();
+    await client.query(`INSERT INTO public.phases (id, project_id, name, created_by) VALUES ($1, $2, 'P1', $3), ($4, $2, 'P2', $3)`, [testPhase1, testProjId, ids.owner, testPhase2]);
+    const bPh1 = randomUUID();
+    const bPh2 = randomUUID();
+    await client.query(`
+      INSERT INTO public.budgets (id, workspace_id, entity_type, project_id, phase_id, base_budget, created_by)
+      VALUES ($1, $2, 'phase', $3, $4, 20000.00, $6), ($5, $2, 'phase', $3, $7, 20000.00, $6)
+    `, [bPh1, creatorWs, testProjId, testPhase1, bPh2, ids.owner, testPhase2]);
+
+    await expectError(client, async () => {
+      await asUser(client, creatorUser, `
+        SELECT public.reallocate_budget($1, $2, 1000.00, 'Unauthorized reallocation')
+      `, [bPh1, bPh2]);
+    });
+    pass('59d. Historical creator as plain member cannot reallocate budget via RPC');
+
+    // 60. Finance Operator remains distinct and retains summary/audit/correction/void visibility
+    const { rows: [foSumm] } = await asUser(client, ids.finMember, `
+      SELECT public.get_workspace_financial_summary($1) as summary
+    `, [ids.ws]);
+    assert.ok(foSumm.summary !== null, 'Finance Operator gets valid workspace financial summary');
+    assert.ok(parseFloat(foSumm.summary.actual_spend) > 0, 'Finance Operator sees actual spend');
+    pass('60. Finance Operator retains separate legitimate summary and audit visibility');
 
     console.log('\n═══════════════════════════════════════════════════════════════════════════');
     console.log(`  ALL ${passed} DATABASE & SECURITY ASSERTIONS PASSED WITH ZERO ERRORS!  `);

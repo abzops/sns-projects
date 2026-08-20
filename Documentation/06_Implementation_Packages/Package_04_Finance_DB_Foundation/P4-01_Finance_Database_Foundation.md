@@ -1,17 +1,17 @@
-# P4-01 / P4-01A: Finance Database Foundation
+# P4-01 / P4-01A / P4-01B: Finance Database Foundation & Active-Tenancy Closure
 
 **Package**: Package 04 — Finance Foundation  
-**Status**: Implemented & Certified  
-**Deployment Migration Tip**: `20260819115602_p4_01a_finance_integrity_hotfix.sql`  
+**Status**: `P4-01 / P4-01A / P4-01B VERIFIED`  
+**Deployment Migration Tip**: `20260820174313_p4_01b_finance_active_tenancy_authorization_closure.sql`  
 **Base Foundation Migration**: `20260819101557_p4_01_finance_database_foundation.sql`  
 **Remote Project**: `gqerfixdmgbqahgslzsq`  
-**Certification Date**: 2026-08-19  
+**Certification Date**: 2026-08-20  
 
 ---
 
 ## 1. Overview
 
-P4-01 delivers the canonical Finance database foundation for SNS Projects without altering or destabilizing Operational V1. P4-01A adds critical integrity closures for Phase $\to$ Task List budget reduction invariants and hardened audit actor resolution.
+P4-01 delivers the canonical Finance database foundation for SNS Projects without altering or destabilizing Operational V1. P4-01A adds critical integrity closures for Phase $\to$ Task List budget reduction invariants and hardened audit actor resolution. P4-01B closes the active-tenancy authorization model by removing historical workspace creator shortcuts from `private.can_manage_budgets`.
 
 ---
 
@@ -72,18 +72,26 @@ Deterministic risk band evaluation implemented in `public.calculate_financial_ri
 
 ## 4. Authorization & Security Architecture
 
-1. **Management Authority**:
-   - Budget mutations permitted strictly to Workspace Owner, Workspace Admin, CEO, and CTO (`private.can_manage_budgets`).
-   - Project Admin, System Admin, and Finance Operators alone are denied budget mutation.
+1. **Management Authority & Active Tenancy (P4-01B Closure)**:
+   - Budget management requires **active workspace tenancy** (`private.can_manage_budgets`):
+     - Active Workspace Owner or Workspace Admin (`workspace_members.role IN ('owner', 'admin') AND status = 'active'`).
+     - Active CEO or Active CTO with active workspace membership (`user_system_roles.role IN ('ceo', 'cto') AND workspace_members.status = 'active'`).
+   - **Historical Creator Elimination**: Historical workspace creation (`workspaces.created_by`) grants **ZERO** Finance authority. Creators who are not active Owners/Admins/CEOs/CTOs cannot insert, update, delete, or reallocate budgets.
+   - Project Admin, System Admin, Project Owner, Phase Owner, Task Owner, RACI roles, and Finance Operators alone are strictly denied budget mutation.
 
-2. **Read Scope & Anti-Leak Rules**:
+2. **Finance Operator Role Separation**:
+   - `private.is_finance_operator(p_workspace_id)` checks active membership in the Finance department (`FIN`).
+   - **CAN**: View workspace financial summaries, inspect expenses, view audit logs, correct expenses, void expenses.
+   - **CANNOT**: Set Base Budgets, modify Safety Buffers, reallocate budgets, or hard-delete voided expenses.
+
+3. **Read Scope & Anti-Leak Rules**:
    - Workspace Owner, Admin, CEO, CTO, and Finance Operator (`FIN` department) receive workspace-wide financial visibility.
    - Project Owner receives financial visibility for their owned project and descendant phases/lists.
    - Phase Owner receives financial visibility for their owned phase and descendant lists.
    - General Members and Viewers cannot view container aggregate summaries without ownership, avoiding sibling container leaks.
    - Viewers can view exact expense values only on operational tasks they are authorized to view (Decision 58).
 
-3. **Security Advisor Compliance**:
+4. **Security Advisor Compliance**:
    - Zero `SECURITY DEFINER` functions introduced in the `public` schema.
    - All private helpers placed in `private` schema with `SET search_path = ''`.
    - Explicit `REVOKE ALL FROM PUBLIC, anon` and restricted `GRANT EXECUTE TO authenticated`.
@@ -93,9 +101,16 @@ Deterministic risk band evaluation implemented in `public.calculate_financial_ri
 
 ## 5. Verification & Test Suite
 
-The test suite `scripts/test-p4-01-finance-foundation.mjs` executes 60 numbered behavioral assertions inside an isolated transaction:
+The test suite `scripts/test-p4-01-finance-foundation.mjs` executes 74 numbered behavioral assertions inside an isolated transaction:
 - **Hierarchy & Allocation Rules**: Tests 1–13 (Project, Phase, Task List configurations, allocation ceilings, non-allocatable buffers, Phase reduction constraints 12a/12b/12c, unbudgeted rollups).
 - **Risk Engine Boundaries**: Tests 14–20 (Exact GREEN, YELLOW, ORANGE, RED thresholds).
 - **Expense Aggregations**: Tests 21–30 (Single totals, split items, leaf rollups, task movement reattribution, standalone vs project spend).
 - **Role-Based Authority & Visibility**: Tests 31–41 (Owner/Admin/CEO/CTO mutation rights, Project Admin/System Admin/Finance Operator mutation blocks, scoped summaries, anti-leak checks, Decision 58 Viewer reads).
 - **Fail-Closed DML & Integrity Protection**: Tests 42–54 (Blocked direct expense DML, `ON DELETE RESTRICT` operational protection, entity immutability, anti-spoofing overrides 49a/49b/49c, mandatory audit reasons, sibling reallocation restrictions, Security Advisor zero-definer check, RLS table enablement).
+- **P4-01B Active-Tenancy Matrix & Creator Elimination**: Tests 55–60:
+  - Approved authorities (Owner, Admin, CEO, CTO with active membership) pass `can_manage_budgets` (55).
+  - Non-budget roles (Finance Operator, Project Admin, System Admin, Project/Phase Owner, Viewer) fail `can_manage_budgets` (56).
+  - Historical creator matrix: Creator+Owner = true (57a), Creator+Admin = true (57b), Creator+Member = FALSE (57c), Creator+Viewer = FALSE (57d), Creator+Non-Active = FALSE (57e), Creator+No-Membership = FALSE (57f).
+  - CEO/CTO active tenancy requirement (58).
+  - Data access & RLS enforcement on plain member creator: INSERT blocked by RLS (59a), UPDATE blocked (59b), DELETE blocked (59c), Reallocate blocked (59d).
+  - Finance Operator legitimate summary and audit visibility preserved (60).
