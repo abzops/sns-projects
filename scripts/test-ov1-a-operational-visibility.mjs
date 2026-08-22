@@ -215,6 +215,11 @@ async function main() {
          VALUES ($1, $2, 'To Do', '#888888', 0, 'todo')`,
         [statusId, projectId],
       );
+      await client.query(
+        `INSERT INTO public.task_statuses (id, project_id, name, color, position, system_code)
+         VALUES ($1, $2, 'Done', '#00AA00', 1, 'done')`,
+        [randomUUID(), projectId],
+      );
     }
 
     for (const [taskId, projectId, phaseId, listId, statusId, title, assigneeId, parentTaskId] of [
