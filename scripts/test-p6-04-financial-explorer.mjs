@@ -783,13 +783,13 @@ async function run() {
   await prodClient.query('BEGIN'); // Read-only verification transaction
 
   try {
-    // 1. Verify remote migration ledger
-    const { rows: migTip } = await prodClient.query(`
-      SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 1
+    // 1. Verify remote migration ledger contains P6-04B
+    const { rows: migRows } = await prodClient.query(`
+      SELECT version, name FROM supabase_migrations.schema_migrations WHERE version = '20260822114456'
     `);
-    assert.equal(migTip[0].version, '20260822114456');
-    assert.equal(migTip[0].name, 'p6_04b_finance_explorer_metadata_authorization_closure');
-    pass('56. Production DB: Migration ledger tip is 20260822114456_p6_04b_finance_explorer_metadata_authorization_closure');
+    assert.equal(migRows.length, 1);
+    assert.equal(migRows[0].name, 'p6_04b_finance_explorer_metadata_authorization_closure');
+    pass('56. Production DB: Migration 20260822114456_p6_04b_finance_explorer_metadata_authorization_closure is recorded in ledger');
 
     // 2. Verify Security Advisor baseline: exactly 7 security definers in public schema (0 new added)
     const { rows: secDefRows } = await prodClient.query(`

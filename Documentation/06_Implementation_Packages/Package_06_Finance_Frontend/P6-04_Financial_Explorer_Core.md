@@ -122,7 +122,8 @@ The comprehensive test suite `scripts/test-p6-04-financial-explorer.mjs` validat
 | **Deliverables Certified** | P6-04 (Explorer Core), P6-04A (Semantic Hardening), P6-04B (Metadata Auth Closure) |
 | **Certification Status** | **`VERIFIED / FROZEN`** |
 | **Manual Production Acceptance** | **`PASSED`** |
-| **Package 6 Status** | **`IN PROGRESS`** (P6-01..04B VERIFIED / FROZEN · P6-04C Saved Views NOT STARTED) |
+| **Package 6 Status** | **`IN PROGRESS`** (P6-01..04B VERIFIED / FROZEN · P6-04C Saved Views IMPLEMENTED / MANUAL ACCEPTANCE PENDING) |
+| **Saved Views Extension** | [P6-04C Specification](P6-04C_Persistent_Financial_Explorer_Saved_Views.md) |
 | **Route** | `/workspace/:workspaceId/finance/explorer` |
 | **Frontend Baseline Commit** | `8b37e1862ca3ddbd1c1c66f0d3abd14b3b598199` |
 | **Database Tip** | `20260822114456_p6_04b_finance_explorer_metadata_authorization_closure` |

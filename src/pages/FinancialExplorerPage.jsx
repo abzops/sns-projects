@@ -16,12 +16,14 @@ import {
 import { useFinanceAccess } from '../hooks/useFinanceAccess.js';
 import { useFinancialExplorer } from '../hooks/useFinancialExplorer.js';
 import { useExpenseLedger } from '../hooks/useExpenseLedger.js';
+import { useFinancialExplorerSavedViews } from '../hooks/useFinancialExplorerSavedViews.js';
 import { formatCurrency } from '../lib/expenseExecution.js';
 import PageHeader from '../components/PageHeader.jsx';
 import RoleBadge from '../components/RoleBadge.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { MetricCardsSkeleton, Skeleton } from '../components/Skeleton.jsx';
 import ExpenseDetailModal from '../components/finance/ExpenseDetailModal.jsx';
+import FinancialExplorerSavedViewsBar from '../components/finance/FinancialExplorerSavedViewsBar.jsx';
 import styles from './FinancialExplorerPage.module.css';
 
 function ExplorerSkeleton() {
@@ -89,6 +91,22 @@ export default function FinancialExplorerPage() {
   // Selected Expense for Detail Inspection
   const [selectedExpenseForDetail, setSelectedExpenseForDetail] = useState(null);
 
+  // Saved Views hook
+  const {
+    savedViews,
+    loading: savedViewsLoading,
+    error: savedViewsError,
+    activeSavedViewId,
+    isSaving: savedViewsSaving,
+    fetchSavedViews,
+    selectSavedView,
+    createSavedView,
+    updateSavedView,
+    renameSavedView,
+    deleteSavedView,
+    hasUnsavedChanges,
+  } = useFinancialExplorerSavedViews(workspaceId);
+
   // Clear local filters on workspace change
   useEffect(() => {
     setEntityType('all');
@@ -112,6 +130,112 @@ export default function FinancialExplorerPage() {
     setSortOrder('asc');
     setSelectedExpenseForDetail(null);
   }, [workspaceId]);
+
+  // Current Explorer Configuration State Bundle
+  const currentExplorerState = useMemo(
+    () => ({
+      entityType,
+      selectedProject,
+      selectedPhase,
+      selectedTaskList,
+      selectedTask,
+      selectedOwner,
+      selectedDepartment,
+      selectedStatus,
+      selectedRisk,
+      overBudgetOnly,
+      selectedCreator,
+      dateFrom,
+      dateTo,
+      amountMin,
+      amountMax,
+      searchQuery,
+      groupBy,
+      sortBy,
+      sortOrder,
+    }),
+    [
+      entityType,
+      selectedProject,
+      selectedPhase,
+      selectedTaskList,
+      selectedTask,
+      selectedOwner,
+      selectedDepartment,
+      selectedStatus,
+      selectedRisk,
+      overBudgetOnly,
+      selectedCreator,
+      dateFrom,
+      dateTo,
+      amountMin,
+      amountMax,
+      searchQuery,
+      groupBy,
+      sortBy,
+      sortOrder,
+    ]
+  );
+
+  // Metadata bundle for hierarchy validation
+  const metadataBundle = useMemo(
+    () => ({
+      projects: hierarchyData.projects,
+      phases: hierarchyData.phases,
+      task_lists: hierarchyData.taskLists,
+      tasks: hierarchyData.tasks,
+      profiles: hierarchyData.profiles,
+      primary_departments: hierarchyData.primaryDepartments,
+    }),
+    [hierarchyData]
+  );
+
+  const isCurrentViewDirty = hasUnsavedChanges(currentExplorerState);
+
+  const handleApplySavedView = (viewId) => {
+    if (!viewId) {
+      selectSavedView(null);
+      return;
+    }
+    const normalized = selectSavedView(viewId, metadataBundle);
+    if (normalized) {
+      setEntityType(normalized.entityType);
+      setSelectedProject(normalized.selectedProject);
+      setSelectedPhase(normalized.selectedPhase);
+      setSelectedTaskList(normalized.selectedTaskList);
+      setSelectedTask(normalized.selectedTask);
+      setSelectedOwner(normalized.selectedOwner);
+      setSelectedDepartment(normalized.selectedDepartment);
+      setSelectedStatus(normalized.selectedStatus);
+      setSelectedRisk(normalized.selectedRisk);
+      setOverBudgetOnly(normalized.overBudgetOnly);
+      setSelectedCreator(normalized.selectedCreator);
+      setDateFrom(normalized.dateFrom);
+      setDateTo(normalized.dateTo);
+      setAmountMin(normalized.amountMin);
+      setAmountMax(normalized.amountMax);
+      setSearchQuery(normalized.searchQuery);
+      setGroupBy(normalized.groupBy);
+      setSortBy(normalized.sortBy);
+      setSortOrder(normalized.sortOrder);
+    }
+  };
+
+  const handleSaveCurrentView = async (name) => {
+    await createSavedView(name, currentExplorerState, metadataBundle);
+  };
+
+  const handleUpdateCurrentView = async (viewId) => {
+    await updateSavedView(viewId, currentExplorerState, metadataBundle);
+  };
+
+  const handleRenameView = async (viewId, newName) => {
+    await renameSavedView(viewId, newName);
+  };
+
+  const handleDeleteView = async (viewId) => {
+    await deleteSavedView(viewId);
+  };
 
   // Cascading Filter Option Lists
   const availablePhases = useMemo(() => {
@@ -716,6 +840,22 @@ export default function FinancialExplorerPage() {
           <div className={styles.summaryCardSub}>Unique Orange / Red sources</div>
         </div>
       </div>
+
+      {/* Saved Views Bar */}
+      <FinancialExplorerSavedViewsBar
+        savedViews={savedViews}
+        loading={savedViewsLoading}
+        error={savedViewsError}
+        activeSavedViewId={activeSavedViewId}
+        isDirty={isCurrentViewDirty}
+        isSaving={savedViewsSaving}
+        onSelectView={handleApplySavedView}
+        onSaveCurrentView={handleSaveCurrentView}
+        onUpdateCurrentView={handleUpdateCurrentView}
+        onRenameView={handleRenameView}
+        onDeleteView={handleDeleteView}
+        onRetryFetch={fetchSavedViews}
+      />
 
       {/* Control Toolbar: Search, Grouping, Sorting, Multi-Dimensional Filters */}
       <div className={styles.controlsPanel}>
