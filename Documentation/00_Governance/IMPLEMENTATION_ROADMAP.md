@@ -101,7 +101,8 @@ graph TD
 
 ### Package 6: Finance Frontend
 - **P6-01 / P6-01A (`VERIFIED`)**: Finance Overview / Dashboard — command-center financial visibility, approved Base Budget, Safety Buffer, Net Spend, backend-derived Utilization %, Overrun alerting, Spend Composition (Project vs Standalone), Portfolio Health distribution, and Project Portfolio burn rates. Fail-closed access matrix, zero client-side calculation risks, single canonical summary normalizer in `src/lib/finance.js`, and responsive layout across desktop and mobile. Frontend baseline `2bf3fd1`. Manual production acceptance PASSED. [P6-01 Spec](../06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md).
-- **Package 6 Status**: **`IN PROGRESS`** (P6-01 VERIFIED / FROZEN).
+- **P6-02 (`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`)**: Central Budget Configuration UI (`/workspace/:workspaceId/finance/budgets`). Hierarchical budget management across Projects, Phases, and Task Lists with Base Budget and Safety Buffer configuration, allocatable capacity tracking, fail-closed authorization (Owner, Admin, CEO/CTO with active tenancy), immutable audit logging, and strict exclusion of deletion and reallocation UI. All 34 test assertions pass. [P6-02 Spec](../06_Implementation_Packages/Package_06_Finance_Frontend/P6-02_Budget_Configuration_UI.md).
+- **Package 6 Status**: **`IN PROGRESS`** (P6-01 VERIFIED / FROZEN, P6-02 IMPLEMENTED / MANUAL ACCEPTANCE PENDING).
 - **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
 - **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 

@@ -1,0 +1,228 @@
+.modalContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.entityHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+}
+
+.entityIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--yellow, #eab308);
+  flex-shrink: 0;
+}
+
+.entityMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.entityTypeTag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary, #888890);
+}
+
+.entityTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contextBox {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle, #252528);
+  border-radius: var(--radius-md, 8px);
+}
+
+.contextItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contextLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #888890);
+}
+
+.contextValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #cccccc);
+  font-family: var(--font-mono, monospace);
+}
+
+.capacityHighlight {
+  color: var(--yellow, #eab308);
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #cccccc);
+}
+
+.optionalTag {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary, #888890);
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currencyPrefix {
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-tertiary, #888890);
+  pointer-events: none;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px 10px 28px;
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary, #ffffff);
+  font-size: 14px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  border-color: var(--yellow, #eab308);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary, #666670);
+}
+
+.inputHint {
+  font-size: 11px;
+  color: var(--text-tertiary, #888890);
+  line-height: 1.4;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md, 8px);
+  color: var(--red, #ef4444);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #252528);
+}
+
+.cancelBtn {
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-secondary, #cccccc);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #ffffff);
+}
+
+.submitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  background: var(--yellow, #eab308);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  color: #000000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.submitBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

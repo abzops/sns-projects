@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   FolderKanban,
   Building2,
+  Sliders,
 } from 'lucide-react';
 import { useFinanceAccess } from '../hooks/useFinanceAccess';
 import { useFinanceOverview } from '../hooks/useFinanceOverview';
@@ -181,16 +182,28 @@ export default function FinanceOverviewPage() {
         subtitle="Workspace financial command center"
         badge={headerBadge}
         actions={
-          <button
-            type="button"
-            className={styles.refreshBtn}
-            onClick={() => refetch()}
-            disabled={refreshing}
-            aria-label="Refresh financial data"
-          >
-            <RefreshCw size={15} className={refreshing ? styles.spinning : ''} />
-            <span>{refreshing ? 'Updating...' : 'Refresh'}</span>
-          </button>
+          <div className={styles.headerActions}>
+            {canManageBudgets && (
+              <Link
+                to={`/workspace/${workspaceId}/finance/budgets`}
+                className={styles.manageBudgetsBtn}
+                aria-label="Manage workspace budgets"
+              >
+                <Sliders size={14} />
+                <span>Manage Budgets</span>
+              </Link>
+            )}
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={() => refetch()}
+              disabled={refreshing}
+              aria-label="Refresh financial data"
+            >
+              <RefreshCw size={15} className={refreshing ? styles.spinning : ''} />
+              <span>{refreshing ? 'Updating...' : 'Refresh'}</span>
+            </button>
+          </div>
         }
       />
 

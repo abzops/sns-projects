@@ -1,0 +1,562 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 32px 48px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.breadcrumbNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -12px;
+}
+
+.breadcrumbLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary, #888890);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.breadcrumbLink:hover {
+  color: var(--yellow, #eab308);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-secondary, #cccccc);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #ffffff);
+  border-color: var(--border-hover, #3a3a3e);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Workspace Summary Card ────────────────────────────────────────────────── */
+
+.summaryBar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.summaryCard {
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary, #888890);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(234, 179, 8, 0.1);
+  color: var(--yellow, #eab308);
+}
+
+.summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: -0.02em;
+}
+
+.summarySubtext {
+  font-size: 12px;
+  color: var(--text-tertiary, #888890);
+}
+
+/* ── Tree Section & Filter Bar ─────────────────────────────────────────────── */
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sectionTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  letter-spacing: -0.01em;
+}
+
+.sectionSubtitle {
+  font-size: 13px;
+  color: var(--text-tertiary, #888890);
+}
+
+.searchBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 260px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-tertiary, #888890);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary, #ffffff);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.searchInput:focus {
+  border-color: var(--yellow, #eab308);
+}
+
+/* ── Hierarchy Tree Container ─────────────────────────────────────────────── */
+
+.treeContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.projectCard {
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.projectCard:hover {
+  border-color: var(--border-hover, #3a3a3e);
+}
+
+.projectHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.entityInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+  flex: 1;
+}
+
+.expandBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--border-default, #2a2a2e);
+  color: var(--text-tertiary, #888890);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.expandBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #ffffff);
+}
+
+.projectDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.entityTitleBox {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.entityNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.entityName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.entityCode {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary, #888890);
+  font-family: var(--font-mono, monospace);
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+}
+
+/* ── Financial Metrics Columns in Row ──────────────────────────────────────── */
+
+.metricsGroup {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.metricCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.metricCellLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #888890);
+  text-transform: uppercase;
+}
+
+.metricCellValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  font-family: var(--font-mono, monospace);
+}
+
+.metricCellSub {
+  font-size: 11px;
+  color: var(--text-tertiary, #888890);
+}
+
+/* ── Budget State Badges ───────────────────────────────────────────────────── */
+
+.budgetBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badgeOwn {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--green, #22c55e);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.badgeInherited {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.badgeUnbudgeted {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-tertiary, #94a3b8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* ── Action Buttons ────────────────────────────────────────────────────────── */
+
+.actionCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setBudgetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: var(--yellow, #eab308);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  color: #000000;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.setBudgetBtn:hover {
+  opacity: 0.9;
+}
+
+.editBudgetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-secondary, #cccccc);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.editBudgetBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #ffffff);
+  border-color: var(--yellow, #eab308);
+}
+
+/* ── Nested Phase & Task List Sections ────────────────────────────────────── */
+
+.nestedContainer {
+  border-top: 1px solid var(--border-subtle, #252528);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px 20px 16px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nestedHeader {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary, #888890);
+  margin-bottom: 4px;
+}
+
+.phaseCard {
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-subtle, #2a2a2e);
+  border-left: 3px solid #60a5fa;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.phaseHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.taskListNestedContainer {
+  border-top: 1px solid var(--border-subtle, #252528);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 16px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.taskListCard {
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-subtle, #2a2a2e);
+  border-left: 3px solid #a78bfa;
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.emptyNestedState {
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text-tertiary, #888890);
+  font-style: italic;
+  text-align: center;
+}
+
+/* ── Fail-Closed State ─────────────────────────────────────────────────────── */
+
+.accessDeniedContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+  gap: 16px;
+  background: var(--bg-card, #1c1c1f);
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-lg, 12px);
+  max-width: 600px;
+  margin: 40px auto;
+}
+
+.accessDeniedIcon {
+  color: var(--orange, #f97316);
+}
+
+.accessDeniedTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+}
+
+.accessDeniedDesc {
+  font-size: 13px;
+  color: var(--text-secondary, #cccccc);
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+.backBtn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border-default, #2a2a2e);
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.backBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--yellow, #eab308);
+}
+
+/* ── Responsive Queries ────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .page {
+    padding: 20px 24px 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 16px 16px 32px;
+    gap: 20px;
+  }
+
+  .projectHeaderRow,
+  .phaseHeaderRow,
+  .taskListCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metricsGroup {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .actionCell {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  .nestedContainer {
+    padding: 12px 14px 14px 18px;
+  }
+}
+
+@media (max-width: 390px) {
+  .metricCell {
+    min-width: 70px;
+  }
+}
