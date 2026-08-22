@@ -68,19 +68,32 @@ The React frontend does **not** duplicate business calculations or threshold eva
 | **Navigation** | `src/components/AppLayout.jsx` | Adds Finance link under `OPERATIONS` with `WalletCards` icon |
 | **Access Hook** | `src/hooks/useFinanceAccess.js` | Derives workspace Finance permissions based on active tenancy and role matrix |
 | **Data Hook** | `src/hooks/useFinanceOverview.js` | Fetches workspace & project summaries via canonical RPCs with cache isolation |
-| **View** | `src/pages/FinanceOverviewPage.jsx` | Command-center dashboard component |
+| **Normalizer** | `src/lib/finance.js` | Single canonical financial summary normalizer across frontend |
+| **View** | `src/pages/FinanceOverviewPage.jsx` | Command-center dashboard component (consumes backend `utilization_pct`) |
 | **Styles** | `src/pages/FinanceOverviewPage.module.css` | Industrial dark command-center design system styles |
 | **Risk Pill** | `src/components/finance/FinanceRiskBadge.jsx` | Presentation component for canonical risk states |
-| **Test Suite** | `scripts/test-p6-01-finance-overview.mjs` | Automated 30-assertion validation suite |
+| **Test Suite** | `scripts/test-p6-01-finance-overview.mjs` | Automated 34-assertion validation suite |
 
 ---
 
-## 4. Verification Evidence
+## 4. Certified Behavior & Acceptance Evidence
 
-All 30 assertions in `scripts/test-p6-01-finance-overview.mjs` passed:
+### 4.1 Certified Production Behavior
+- **Route**: `/workspace/:workspaceId/finance` mounted under workspace context.
+- **Access Guard**: Navigation and route visible only for active Workspace Owner, Workspace Admin, CEO, CTO, and `FIN` Department Operator (CEO/CTO strictly require active workspace tenancy; Project Admin alone, System Admin alone, normal Member, Viewer fail closed).
+- **Backend RPC Ownership**: `public.get_workspace_financial_summary` and `public.get_project_financial_summary` own 100% of financial calculations (rollups, utilization, risk bands, buffer usage, overruns).
+- **Zero Client Calculation**: Frontend does not recalculate risk bands or financial thresholds.
+- **Contract Parity**: Single canonical summary normalizer in `src/lib/finance.js`; `FinanceOverviewPage.jsx` consumes backend `utilization_pct` directly.
+- **Read-Only**: Zero mutation UI or DML in P6-01.
+- **Cold Load & Caching**: Skeletons for cold load (no false ₹0 flash), isolated cache per `${userId}:${workspaceId}`, manual refresh without page reload.
+- **Responsive**: Command-center layout verified across 1440px desktop, 1024px tablet, and 390px mobile screens.
+- **Database**: Zero Supabase migrations required.
+
+### 4.2 Automated Test Evidence
+All 34 assertions in `scripts/test-p6-01-finance-overview.mjs` passed:
 - **Suite 1**: Frontend Authorization & Active-Tenancy Matrix (11 assertions passed)
 - **Suite 2**: Summary Normalization & Canonical Contract (4 assertions passed)
-- **Suite 3**: Source Code Contracts & UI Architecture (8 assertions passed)
+- **Suite 3**: Source Code Contracts & UI Architecture (12 assertions passed)
 - **Suite 4**: PostgreSQL Live RPC Integration (7 assertions passed)
 
 Full platform regression suite results:
@@ -94,7 +107,11 @@ Full platform regression suite results:
 
 ---
 
-## 5. Status & Next Steps
+## 5. Certification Status
 
-- **P6-01 Status**: **`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`**
-- **Do NOT start P6-02** until manual production acceptance of P6-01 is certified.
+- **P6-01 Status**: **`VERIFIED / FROZEN`**
+- **P6-01A Status**: **`VERIFIED`**
+- **User Manual Production Acceptance**: **`PASSED`**
+- **Frontend Baseline**: `2bf3fd19740a2a7418e50808af1f90f2b9d1d276`
+- **Package 6 Status**: **`IN PROGRESS`** (P6-01 certified; Package 6 remains in progress)
+

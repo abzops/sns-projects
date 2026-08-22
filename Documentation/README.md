@@ -32,6 +32,7 @@
 - **Operational V1 Stability & Acceptance**: **`OV1-D VERIFIED`** ([Certification Evidence](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md))
 - **Package 4 Status**: **`P4-01 / P4-01A / P4-01B VERIFIED`** ([Finance Foundation](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md))
 - **Package 5 Status**: **`COMPLETE / VERIFIED / FROZEN`** (`P5-01`..`C` VERIFIED · `P5-02`..`C` VERIFIED · `P5-03`..`C` [Subtask Completion & Closure](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) VERIFIED · Manual production acceptance PASSED · Frontend baseline `47d17ce`)
+- **Package 6 Status**: **`IN PROGRESS`** (`P6-01 / P6-01A` [Finance Overview / Dashboard](06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md) VERIFIED / FROZEN · Manual production acceptance PASSED · Frontend baseline `2bf3fd1`)
 
 > [!IMPORTANT]
 > **Zero Secrets Policy**: Committing secrets, service keys, private tokens, or user passwords to documentation or source code is strictly prohibited.
@@ -97,7 +98,7 @@ When consulting documentation, the following hierarchy of authority applies:
 | | `OV1-D` Operational V1 Final Production Acceptance & Stability Closure | **`VERIFIED`** | Frontend commit `0bd418d` · deployment run `32150807393` · [Certification](07_Testing_and_QA/SNS_Projects_Operational_V1_Stability_Certification.md) |
 | **Package 4: Finance DB Foundation** | `P4-01 / P4-01A / P4-01B` Budgets, Buffers, Risk Engine, Ledgers & Active Tenancy | **`VERIFIED`** | Migrations `20260819070817`..`20260820174313` · [P4-01 Spec](06_Implementation_Packages/Package_04_Finance_DB_Foundation/P4-01_Finance_Database_Foundation.md) |
 | **Package 5: Expense Execution** | `P5-01..C` Runtime & `P5-02..C` Frontend Completion & `P5-03..C` Subtask Closure | **`COMPLETE / VERIFIED / FROZEN`** | Migrations `20260819131603`..`20260820082034` · Frontend `47d17ce` · [P5-01 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-01_Expense_Execution_Runtime.md) · [P5-02 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-02_Expense_Execution_Frontend.md) · [P5-03 Spec](06_Implementation_Packages/Package_05_Expense_Execution/P5-03_Subtask_Completion_Expense_Parent_Closure.md) · All suites passed · Manual production acceptance PASSED |
-| **Package 6: Finance Frontend** | `P6-01` Workspace Finance Overview / Dashboard | **`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`** | [P6-01 Spec](06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md) · All 30 assertions passed |
+| **Package 6: Finance Frontend** | `P6-01 / P6-01A` Workspace Finance Overview / Dashboard | **`VERIFIED`** | [P6-01 Spec](06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md) · Frontend baseline `2bf3fd1` · All 34 assertions passed · Manual acceptance PASSED (Package 6 in progress) |
 | **Package 7: Financial Hierarchy**| Compact financial utilization bars, hover summaries | **`PLANNED`** | Upcoming Package 7 |
 | **Package 8: Regression & Excel** | Defined Process Excel import, Day-N certification | **`PLANNED`** | Upcoming Package 8 |
 

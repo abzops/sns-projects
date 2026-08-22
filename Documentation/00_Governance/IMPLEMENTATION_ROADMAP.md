@@ -100,8 +100,8 @@ graph TD
 - **Package 5 Status**: **`COMPLETE / VERIFIED / FROZEN`**.
 
 ### Package 6: Finance Frontend
-
-- **P6-01 (`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`)**: Finance Overview / Dashboard — command-center financial visibility, approved Base Budget, Safety Buffer, Net Spend, Utilization %, Overrun alerting, Spend Composition (Project vs Standalone), Portfolio Health distribution, and Project Portfolio burn rates. Fail-closed access matrix, zero client-side calculation risks, and responsive layout across desktop and mobile. [P6-01 Spec](../06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md).
+- **P6-01 / P6-01A (`VERIFIED`)**: Finance Overview / Dashboard — command-center financial visibility, approved Base Budget, Safety Buffer, Net Spend, backend-derived Utilization %, Overrun alerting, Spend Composition (Project vs Standalone), Portfolio Health distribution, and Project Portfolio burn rates. Fail-closed access matrix, zero client-side calculation risks, single canonical summary normalizer in `src/lib/finance.js`, and responsive layout across desktop and mobile. Frontend baseline `2bf3fd1`. Manual production acceptance PASSED. [P6-01 Spec](../06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md).
+- **Package 6 Status**: **`IN PROGRESS`** (P6-01 VERIFIED / FROZEN).
 - **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
 - **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 
