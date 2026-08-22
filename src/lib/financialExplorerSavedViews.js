@@ -12,6 +12,7 @@
  * - Unknown JSON keys are safely stripped
  * - Invalid enum values, malformed types, and stale entity references safely fall back to canonical defaults
  * - Cascading hierarchy references (Project -> Phase -> Task List -> Task) validated against current live metadata
+ * - Aligns 100% with canonical frozen P6-04 controls, enums, and naming
  */
 
 export const SAVED_VIEW_SCHEMA_VERSION = 1;
@@ -28,11 +29,11 @@ export const VALID_ENTITY_TYPES = Object.freeze([
 
 export const VALID_STATUSES = Object.freeze([
   'all',
-  'active',
-  'completed',
-  'cancelled',
-  'corrected',
-  'voided',
+  'Active',
+  'Completed',
+  'Cancelled',
+  'Corrected',
+  'Voided',
 ]);
 
 export const VALID_RISKS = Object.freeze([
@@ -51,18 +52,18 @@ export const VALID_GROUP_BYS = Object.freeze([
   'task_list',
   'owner',
   'department',
-  'entity_type',
+  'rowType',
   'status',
-  'risk',
+  'riskBand',
 ]);
 
 export const VALID_SORT_BYS = Object.freeze([
   'name',
   'actualSpend',
-  'utilization',
-  'risk',
+  'utilizationPct',
+  'riskBand',
   'date',
-  'owner',
+  'ownerName',
 ]);
 
 export const VALID_SORT_ORDERS = Object.freeze(['asc', 'desc']);
@@ -137,7 +138,7 @@ export function serializeSavedViewState(state = {}) {
  * currently authorized workspace metadata.
  *
  * @param {Object} rawState - Raw view_state JSON from Supabase
- * @param {Object} metadata - Current workspace metadata (projects, phases, task_lists, tasks, profiles, primary_departments)
+ * @param {Object} metadata - Current workspace metadata (projects, phases, task_lists, tasks, owners, creators, departments)
  * @returns {Object} Normalized Explorer state ready for React application
  */
 export function normalizeSavedViewState(rawState = {}, metadata = null) {
@@ -184,17 +185,32 @@ export function normalizeSavedViewState(rawState = {}, metadata = null) {
   if (metadata && typeof metadata === 'object') {
     const rawProjects = Array.isArray(metadata.projects) ? metadata.projects : [];
     const rawPhases = Array.isArray(metadata.phases) ? metadata.phases : [];
-    const rawTaskLists = Array.isArray(metadata.task_lists) ? metadata.task_lists : [];
+    const rawTaskLists = Array.isArray(metadata.task_lists)
+      ? metadata.task_lists
+      : Array.isArray(metadata.taskLists)
+      ? metadata.taskLists
+      : [];
     const rawTasks = Array.isArray(metadata.tasks) ? metadata.tasks : [];
-    const rawProfiles = Array.isArray(metadata.profiles) ? metadata.profiles : [];
-    const rawPrimaryDepts = Array.isArray(metadata.primary_departments) ? metadata.primary_departments : [];
+    const rawOwners = Array.isArray(metadata.owners)
+      ? metadata.owners
+      : Array.isArray(metadata.profiles)
+      ? metadata.profiles
+      : [];
+    const rawCreators = Array.isArray(metadata.creators)
+      ? metadata.creators
+      : Array.isArray(metadata.profiles)
+      ? metadata.profiles
+      : [];
+    const rawDepartments = Array.isArray(metadata.departments) ? metadata.departments : [];
 
-    const projectIds = new Set(rawProjects.map((p) => p.id));
-    const phaseMap = new Map(rawPhases.map((ph) => [ph.id, ph]));
-    const taskListMap = new Map(rawTaskLists.map((tl) => [tl.id, tl]));
-    const taskMap = new Map(rawTasks.map((t) => [t.id, t]));
-    const profileIds = new Set(rawProfiles.map((pr) => pr.id));
-    const departmentIds = new Set(rawPrimaryDepts.map((d) => d.department_id || d.id));
+    const projectIds = new Set(rawProjects.map((p) => p?.id).filter(Boolean));
+    const phaseMap = new Map(rawPhases.map((ph) => [ph?.id, ph]));
+    const taskListMap = new Map(rawTaskLists.map((tl) => [tl?.id, tl]));
+    const taskMap = new Map(rawTasks.map((t) => [t?.id, t]));
+    const ownerIds = new Set(rawOwners.map((o) => o?.id).filter(Boolean));
+    const creatorIds = new Set(rawCreators.map((c) => c?.id).filter(Boolean));
+    // The frozen Explorer stores department NAME as selectedDepartment
+    const departmentNames = new Set(rawDepartments.map((d) => d?.name).filter(Boolean));
 
     // A. Project check
     if (normalized.selectedProject !== 'all' && !projectIds.has(normalized.selectedProject)) {
@@ -240,18 +256,22 @@ export function normalizeSavedViewState(rawState = {}, metadata = null) {
       }
     }
 
-    // E. Owner check
-    if (normalized.selectedOwner !== 'all' && !profileIds.has(normalized.selectedOwner)) {
+    // E. Owner check: validate against owners[].id
+    if (normalized.selectedOwner !== 'all' && !ownerIds.has(normalized.selectedOwner)) {
       normalized.selectedOwner = 'all';
     }
 
-    // F. Creator check
-    if (normalized.selectedCreator !== 'all' && !profileIds.has(normalized.selectedCreator)) {
+    // F. Creator check: validate against creators[].id
+    if (normalized.selectedCreator !== 'all' && !creatorIds.has(normalized.selectedCreator)) {
       normalized.selectedCreator = 'all';
     }
 
-    // G. Department check
-    if (normalized.selectedDepartment !== 'all' && !departmentIds.has(normalized.selectedDepartment)) {
+    // G. Department check: validate against departments[].name or 'Unassigned'
+    if (
+      normalized.selectedDepartment !== 'all' &&
+      normalized.selectedDepartment !== 'Unassigned' &&
+      !departmentNames.has(normalized.selectedDepartment)
+    ) {
       normalized.selectedDepartment = 'all';
     }
   }

@@ -1,28 +1,34 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-04C PERSISTENT SAVED VIEWS SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-04C & P6-04C1 PERSISTENT SAVED VIEWS SUITE
  *
  * Automated verification for:
  * 1. Frontend Serializer, Normalizer & State Contracts
  *    - Strict schemaVersion = 1
  *    - Explicit whitelist serialization (no cache, rows, summaries or identities)
  *    - All 19 Explorer filter/group/sort fields round-trip
- *    - Invalid enums, types, and unknown keys normalized to canonical defaults
+ *    - Frozen P6-04 Enum alignment:
+ *      * Status: Active, Completed, Cancelled, Corrected, Voided
+ *      * Group By: none, project, phase, task_list, owner, department, rowType, status, riskBand
+ *      * Sort By: name, actualSpend, utilizationPct, riskBand, date, ownerName
+ *    - Metadata normalization using actual shape (owners, creators, departments with name and 'Unassigned')
  *    - Cascading hierarchy references sanitized against current metadata
  *    - Dirty state checking accurately detects unsaved modifications
- *    - Source code audits: no localStorage as authoritative store, no mutations to Finance facts
+ *    - Source code audits: no canAccessFinance, real enabled contract, no localStorage, no Finance fact mutations
+ *    - Generation token (activeFetchIdRef) & synchronous cache flush on scope shift
+ *    - Update error handling in SavedViewsBar
  *
- * 2. Database Schema, RLS Policies & Anti-Spoofing Triggers
+ * 2. Database Schema, RLS Policies, Grants & Anti-Spoofing Triggers
  *    - public.finance_explorer_saved_views table structure and constraints
  *    - Unique case-insensitive name per user per workspace
  *    - Anti-spoofing trigger forces user_id to auth.uid() on INSERT
  *    - Immutability of user_id, workspace_id, and created_at on UPDATE
- *    - Authenticated CRUD allowed for active Finance Owner
- *    - Authenticated CRUD allowed for active Finance Operator
+ *    - Authenticated table privileges are strictly SELECT, INSERT, UPDATE, DELETE (TRUNCATE, REFERENCES, TRIGGER false)
+ *    - Anon has zero table privileges
+ *    - Authenticated CRUD allowed for active Finance Owner & Finance Operator
  *    - User isolation: User A cannot read, update, or delete User B's Saved Views
  *    - Cross-workspace isolation: Workspace A views invisible in Workspace B
  *    - Access control: Member, Viewer, Project Admin only, System Admin only, inactive denied
  *    - Access revocation preserves records in DB but denies RLS access
- *    - Anonymous role denied
  *    - Security Advisor baseline intact (0 new public SECURITY DEFINER)
  *    - Clean transaction rollback
  *
@@ -39,6 +45,9 @@ import { randomUUID } from 'node:crypto';
 import {
   SAVED_VIEW_SCHEMA_VERSION,
   DEFAULT_EXPLORER_VIEW_STATE,
+  VALID_STATUSES,
+  VALID_GROUP_BYS,
+  VALID_SORT_BYS,
   serializeSavedViewState,
   normalizeSavedViewState,
   isSavedViewDirty,
@@ -121,8 +130,8 @@ async function runFrontendContractsSuite() {
     selectedTaskList: 'list-789',
     selectedTask: 'task-001',
     selectedOwner: 'user-001',
-    selectedDepartment: 'dept-fin',
-    selectedStatus: 'active',
+    selectedDepartment: 'Finance',
+    selectedStatus: 'Active',
     selectedRisk: 'ORANGE',
     overBudgetOnly: true,
     selectedCreator: 'user-002',
@@ -147,7 +156,8 @@ async function runFrontendContractsSuite() {
   assert.equal(serialized.schemaVersion, 1);
   assert.equal(serialized.entityType, 'task');
   assert.equal(serialized.selectedProject, 'proj-123');
-  assert.equal(serialized.selectedDepartment, 'dept-fin');
+  assert.equal(serialized.selectedDepartment, 'Finance');
+  assert.equal(serialized.selectedStatus, 'Active');
   assert.equal(serialized.overBudgetOnly, true);
   assert.equal(serialized.searchQuery, 'cloud licenses');
   assert.equal(serialized.groupBy, 'department');
@@ -190,8 +200,9 @@ async function runFrontendContractsSuite() {
     phases: [{ id: 'ph1', project_id: 'p1' }],
     task_lists: [{ id: 'tl1', phase_id: 'ph1', project_id: 'p1' }],
     tasks: [{ id: 't1', task_list_id: 'tl1', phase_id: 'ph1', project_id: 'p1' }],
-    profiles: [{ id: 'u1' }],
-    primary_departments: [{ department_id: 'dept1' }],
+    owners: [{ id: 'u1' }],
+    creators: [{ id: 'c1' }],
+    departments: [{ name: 'Engineering' }, { name: 'Finance' }],
   };
 
   // Case A: Stale project resets all descendants
@@ -201,7 +212,7 @@ async function runFrontendContractsSuite() {
     selectedTaskList: 'tl1',
     selectedTask: 't1',
     selectedOwner: 'u1',
-    selectedDepartment: 'dept1',
+    selectedDepartment: 'Finance',
   };
   const sanitizedA = normalizeSavedViewState(staleProjectState, mockMetadata);
   assert.equal(sanitizedA.selectedProject, 'all');
@@ -209,7 +220,7 @@ async function runFrontendContractsSuite() {
   assert.equal(sanitizedA.selectedTaskList, 'all');
   assert.equal(sanitizedA.selectedTask, 'all');
   assert.equal(sanitizedA.selectedOwner, 'u1');
-  assert.equal(sanitizedA.selectedDepartment, 'dept1');
+  assert.equal(sanitizedA.selectedDepartment, 'Finance');
   pass('Stale Project reference safely resets Project, Phase, Task List, and Task to "all"');
 
   // Case B: Phase belongs to different project than selected
@@ -226,7 +237,7 @@ async function runFrontendContractsSuite() {
   assert.equal(sanitizedB.selectedTask, 'all');
   pass('Cascading phase/project misalignment resets Phase and lower descendants');
 
-  // Case C: Stale Owner & Department
+  // Case C: Stale Owner, Creator & Department
   const staleOwnerDeptState = {
     selectedOwner: 'deleted-user',
     selectedDepartment: 'deleted-dept',
@@ -257,6 +268,143 @@ async function runFrontendContractsSuite() {
   assert.ok(pageSource.includes('FinancialExplorerSavedViewsBar'), 'FinancialExplorerPage must render SavedViewsBar');
   assert.ok(pageSource.includes('useFinancialExplorerSavedViews'), 'FinancialExplorerPage must use saved views hook');
   pass('FinancialExplorerPage integrates Saved Views bar and state management cleanly');
+
+  // P6-04C1 Required Assertions A through Q & W, X, Y
+  console.log('\n--- P6-04C1: Runtime, Enums & Metadata Hardening Assertions ---');
+
+  // Assertion A: source contract contains NO reference to canAccessFinance
+  assert.ok(!hookSource.includes('canAccessFinance'), 'Hook must NOT reference canAccessFinance');
+  assert.ok(!pageSource.includes('canAccessFinance'), 'Page must NOT reference canAccessFinance');
+  pass('[Req A] Source contract contains NO reference to canAccessFinance');
+
+  // Assertion B: Saved View hook uses real Finance enable contract
+  assert.ok(hookSource.includes('{ enabled = true }'), 'Hook signature must take { enabled } option');
+  assert.ok(pageSource.includes('enabled: canViewWorkspaceFinance && !financeAccessError'), 'Page must pass enabled condition');
+  pass('[Req B] Saved View hook uses the real Finance enable contract (canViewWorkspaceFinance && !financeAccessError)');
+
+  // Assertion C: scope key contains userId + workspaceId + authorizationScopeKey
+  assert.ok(
+    hookSource.includes('userId') && hookSource.includes('workspaceId') && hookSource.includes('authorizationScopeKey'),
+    'Hook scope key must combine userId, workspaceId, and authorizationScopeKey'
+  );
+  pass('[Req C] Saved View scope key contains userId + workspaceId + authorizationScopeKey');
+
+  // Assertion D: scope change synchronously clears previous savedViews
+  assert.ok(
+    hookSource.includes('setSavedViews([])') && hookSource.includes('activeScopeKey !== activeCacheKey'),
+    'Hook must synchronously flush savedViews on scope change'
+  );
+  pass('[Req D] Scope change synchronously clears previous savedViews');
+
+  // Assertion E: stale fetch response is discarded via generation token
+  assert.ok(
+    hookSource.includes('activeFetchIdRef') && hookSource.includes('fetchId !== activeFetchIdRef.current'),
+    'Hook must discard responses if fetchId !== activeFetchIdRef.current'
+  );
+  pass('[Req E] Stale async fetch response is safely discarded via activeFetchIdRef generation token');
+
+  // Assertion F: Active status round-trips exactly
+  assert.ok(VALID_STATUSES.includes('Active'), 'VALID_STATUSES must contain "Active"');
+  assert.equal(serializeSavedViewState({ selectedStatus: 'Active' }).selectedStatus, 'Active');
+  assert.equal(normalizeSavedViewState({ selectedStatus: 'Active' }).selectedStatus, 'Active');
+  pass('[Req F] Status = "Active" round-trips exactly (case-sensitive preserved)');
+
+  // Assertion G: Completed, Corrected and Voided round-trip exactly
+  for (const st of ['Completed', 'Cancelled', 'Corrected', 'Voided']) {
+    assert.ok(VALID_STATUSES.includes(st), `VALID_STATUSES must contain "${st}"`);
+    assert.equal(serializeSavedViewState({ selectedStatus: st }).selectedStatus, st);
+    assert.equal(normalizeSavedViewState({ selectedStatus: st }).selectedStatus, st);
+  }
+  pass('[Req G] Statuses "Completed", "Cancelled", "Corrected", "Voided" round-trip exactly');
+
+  // Assertion H: rowType grouping round-trips exactly
+  assert.ok(VALID_GROUP_BYS.includes('rowType'), 'VALID_GROUP_BYS must contain "rowType"');
+  assert.equal(serializeSavedViewState({ groupBy: 'rowType' }).groupBy, 'rowType');
+  assert.equal(normalizeSavedViewState({ groupBy: 'rowType' }).groupBy, 'rowType');
+  pass('[Req H] Group By = "rowType" round-trips exactly');
+
+  // Assertion I: riskBand grouping round-trips exactly
+  assert.ok(VALID_GROUP_BYS.includes('riskBand'), 'VALID_GROUP_BYS must contain "riskBand"');
+  assert.equal(serializeSavedViewState({ groupBy: 'riskBand' }).groupBy, 'riskBand');
+  assert.equal(normalizeSavedViewState({ groupBy: 'riskBand' }).groupBy, 'riskBand');
+  pass('[Req I] Group By = "riskBand" round-trips exactly');
+
+  // Assertion J: utilizationPct sorting round-trips exactly
+  assert.ok(VALID_SORT_BYS.includes('utilizationPct'), 'VALID_SORT_BYS must contain "utilizationPct"');
+  assert.equal(serializeSavedViewState({ sortBy: 'utilizationPct' }).sortBy, 'utilizationPct');
+  assert.equal(normalizeSavedViewState({ sortBy: 'utilizationPct' }).sortBy, 'utilizationPct');
+  pass('[Req J] Sort By = "utilizationPct" round-trips exactly');
+
+  // Assertion K: riskBand sorting round-trips exactly
+  assert.ok(VALID_SORT_BYS.includes('riskBand'), 'VALID_SORT_BYS must contain "riskBand"');
+  assert.equal(serializeSavedViewState({ sortBy: 'riskBand' }).sortBy, 'riskBand');
+  assert.equal(normalizeSavedViewState({ sortBy: 'riskBand' }).sortBy, 'riskBand');
+  pass('[Req K] Sort By = "riskBand" round-trips exactly');
+
+  // Assertion L: ownerName sorting round-trips exactly
+  assert.ok(VALID_SORT_BYS.includes('ownerName'), 'VALID_SORT_BYS must contain "ownerName"');
+  assert.equal(serializeSavedViewState({ sortBy: 'ownerName' }).sortBy, 'ownerName');
+  assert.equal(normalizeSavedViewState({ sortBy: 'ownerName' }).sortBy, 'ownerName');
+  pass('[Req L] Sort By = "ownerName" round-trips exactly');
+
+  // Assertion M: Owner filter survives normalization using actual owner option shape
+  const ownerMeta = { owners: [{ id: 'user-alice-01', full_name: 'Alice Owner' }] };
+  assert.equal(
+    normalizeSavedViewState({ selectedOwner: 'user-alice-01' }, ownerMeta).selectedOwner,
+    'user-alice-01'
+  );
+  pass('[Req M] Owner filter survives normalization using actual owner option shape (owners[].id)');
+
+  // Assertion N: Creator filter survives normalization using actual creator option shape
+  const creatorMeta = { creators: [{ id: 'user-bob-02', full_name: 'Bob Creator' }] };
+  assert.equal(
+    normalizeSavedViewState({ selectedCreator: 'user-bob-02' }, creatorMeta).selectedCreator,
+    'user-bob-02'
+  );
+  pass('[Req N] Creator filter survives normalization using actual creator option shape (creators[].id)');
+
+  // Assertion O: Department NAME survives normalization
+  const deptMeta = { departments: [{ id: 'dept-1', name: 'Finance & Accounts' }] };
+  assert.equal(
+    normalizeSavedViewState({ selectedDepartment: 'Finance & Accounts' }, deptMeta).selectedDepartment,
+    'Finance & Accounts'
+  );
+  pass('[Req O] Department NAME survives normalization using actual department options (departments[].name)');
+
+  // Assertion P: Unassigned Department survives normalization
+  assert.equal(
+    normalizeSavedViewState({ selectedDepartment: 'Unassigned' }, deptMeta).selectedDepartment,
+    'Unassigned'
+  );
+  pass('[Req P] "Unassigned" Department is preserved as a valid filter value');
+
+  // Assertion Q: metadata bundle does NOT rely on nonexistent hierarchyData.profiles/primaryDepartments
+  assert.ok(!pageSource.includes('hierarchyData.profiles'), 'Page must NOT reference hierarchyData.profiles');
+  assert.ok(!pageSource.includes('hierarchyData.primaryDepartments'), 'Page must NOT reference hierarchyData.primaryDepartments');
+  assert.ok(pageSource.includes('owners: hierarchyData?.owners'), 'Page must supply owners from hierarchyData');
+  assert.ok(pageSource.includes('creators: hierarchyData?.creators'), 'Page must supply creators from hierarchyData');
+  assert.ok(pageSource.includes('departments: hierarchyData?.departments'), 'Page must supply departments from hierarchyData');
+  pass('[Req Q] Page metadata bundle exclusively uses real hierarchyData.owners/creators/departments');
+
+  // Assertion W: Update mutation failure has visible error handling
+  const barSource = await readFile(path.join(repoRoot, 'src', 'components', 'finance', 'FinancialExplorerSavedViewsBar.jsx'), 'utf8');
+  assert.ok(
+    barSource.includes('handleUpdateClick') && barSource.includes('setUpdateError'),
+    'SavedViewsBar must catch update error and set visible updateError state'
+  );
+  pass('[Req W] Update Current View error is caught and surfaced visibly in SavedViewsBar');
+
+  // Assertion X: Browser refresh reload path is enabled for authorized Finance user
+  assert.ok(pageSource.includes('onRetryFetch={fetchSavedViews}'), 'Page supplies onRetryFetch callback to SavedViewsBar');
+  assert.ok(barSource.includes('onRetryFetch'), 'SavedViewsBar wires retry button');
+  pass('[Req X] Browser refresh and manual retry path are fully wired for authorized users');
+
+  // Assertion Y: User/workspace switch cannot display stale saved-view names
+  assert.ok(
+    hookSource.includes('setActiveSavedViewId(null)') && hookSource.includes('setSavedViews([])'),
+    'Hook clears activeSavedViewId and savedViews on scope switch'
+  );
+  pass('[Req Y] User/workspace switch guarantees previous saved-view names are purged immediately');
 }
 
 async function runDatabaseSuite() {
@@ -285,6 +433,7 @@ async function runDatabaseSuite() {
     const projAdminA = randomUUID();
     const sysAdminA = randomUUID();
     const inactiveUserA = randomUUID();
+
     const ownerB = randomUUID();
 
     const deptFinA = randomUUID();
@@ -318,7 +467,9 @@ async function runDatabaseSuite() {
 
     // 2. Insert Workspaces
     await client.query(
-      `INSERT INTO public.workspaces (id, name, created_by) VALUES ($1, 'SavedView WS A', $2), ($3, 'SavedView WS B', $4)`,
+      `INSERT INTO public.workspaces (id, name, created_by) VALUES
+       ($1, 'Workspace A', $2),
+       ($3, 'Workspace B', $4)`,
       [wsA, ownerA, wsB, ownerB]
     );
 
@@ -349,18 +500,60 @@ async function runDatabaseSuite() {
 
     // 5. Insert System Roles for ProjAdmin & SysAdmin
     await client.query(`
-      INSERT INTO public.user_system_roles (workspace_id, user_id, role, created_by) VALUES
-        ('${wsA}', '${projAdminA}', 'project_admin', '${ownerA}'),
-        ('${wsA}', '${sysAdminA}', 'system_admin', '${ownerA}');
+      INSERT INTO public.user_system_roles (workspace_id, user_id, role) VALUES
+        ('${wsA}', '${projAdminA}', 'project_admin'),
+        ('${wsA}', '${sysAdminA}', 'system_admin');
     `);
 
-    // Assertion 8: Table Structure & RLS enabled
-    const { rows: rlsCheck } = await client.query(`
-      SELECT relrowsecurity FROM pg_class WHERE relname = 'finance_explorer_saved_views'
+    // Assertion 8: Table exists and RLS is enabled
+    const { rows: tableCheck } = await client.query(`
+      SELECT rowsecurity FROM pg_tables WHERE tablename = 'finance_explorer_saved_views' AND schemaname = 'public'
     `);
-    assert.equal(rlsCheck.length, 1);
-    assert.equal(rlsCheck[0].relrowsecurity, true, 'RLS must be enabled on finance_explorer_saved_views');
+    assert.equal(tableCheck.length, 1, 'public.finance_explorer_saved_views table must exist');
+    assert.equal(tableCheck[0].rowsecurity, true, 'Row Level Security must be enabled');
     pass('Table public.finance_explorer_saved_views exists and has Row Level Security enabled');
+
+    // P6-04C1 Required Assertions R, S, T, U, V on Table Privileges
+    console.log('\n--- P6-04C1: Database Table Privilege & Grant Hardening ---');
+
+    // Assertion R: Authenticated table privileges are SELECT, INSERT, UPDATE, DELETE
+    const { rows: privSelect } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'SELECT') AS has_priv`);
+    const { rows: privInsert } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'INSERT') AS has_priv`);
+    const { rows: privUpdate } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'UPDATE') AS has_priv`);
+    const { rows: privDelete } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'DELETE') AS has_priv`);
+    assert.equal(privSelect[0].has_priv, true, 'authenticated role must have SELECT');
+    assert.equal(privInsert[0].has_priv, true, 'authenticated role must have INSERT');
+    assert.equal(privUpdate[0].has_priv, true, 'authenticated role must have UPDATE');
+    assert.equal(privDelete[0].has_priv, true, 'authenticated role must have DELETE');
+    pass('[Req R] authenticated role has SELECT, INSERT, UPDATE, DELETE privileges');
+
+    // Assertion S: Authenticated TRUNCATE is false
+    const { rows: privTruncate } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'TRUNCATE') AS has_priv`);
+    assert.equal(privTruncate[0].has_priv, false, 'authenticated role must NOT have TRUNCATE');
+    pass('[Req S] authenticated TRUNCATE is strictly false');
+
+    // Assertion T: Authenticated REFERENCES is false
+    const { rows: privReferences } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'REFERENCES') AS has_priv`);
+    assert.equal(privReferences[0].has_priv, false, 'authenticated role must NOT have REFERENCES');
+    pass('[Req T] authenticated REFERENCES is strictly false');
+
+    // Assertion U: Authenticated TRIGGER is false
+    const { rows: privTrigger } = await client.query(`SELECT has_table_privilege('authenticated', 'public.finance_explorer_saved_views', 'TRIGGER') AS has_priv`);
+    assert.equal(privTrigger[0].has_priv, false, 'authenticated role must NOT have TRIGGER');
+    pass('[Req U] authenticated TRIGGER is strictly false');
+
+    // Assertion V: Anon has no privileges
+    const { rows: anonSelect } = await client.query(`SELECT has_table_privilege('anon', 'public.finance_explorer_saved_views', 'SELECT') AS has_priv`);
+    const { rows: anonInsert } = await client.query(`SELECT has_table_privilege('anon', 'public.finance_explorer_saved_views', 'INSERT') AS has_priv`);
+    const { rows: anonUpdate } = await client.query(`SELECT has_table_privilege('anon', 'public.finance_explorer_saved_views', 'UPDATE') AS has_priv`);
+    const { rows: anonDelete } = await client.query(`SELECT has_table_privilege('anon', 'public.finance_explorer_saved_views', 'DELETE') AS has_priv`);
+    assert.equal(anonSelect[0].has_priv, false, 'anon role must NOT have SELECT');
+    assert.equal(anonInsert[0].has_priv, false, 'anon role must NOT have INSERT');
+    assert.equal(anonUpdate[0].has_priv, false, 'anon role must NOT have UPDATE');
+    assert.equal(anonDelete[0].has_priv, false, 'anon role must NOT have DELETE');
+    pass('[Req V] anon role has zero table privileges (all false)');
+
+    console.log('\n--- Core P6-04C Database RLS & Immutability Assertions ---');
 
     // Assertion 9: Constraints - invalid name length & non-object state
     await assert.rejects(
@@ -393,70 +586,83 @@ async function runDatabaseSuite() {
     );
     pass('Non-object view_state JSON is rejected by table constraint');
 
-    // Assertion 10: Owner A can insert and select own Saved View
-    const testState = { schemaVersion: 1, entityType: 'project', groupBy: 'phase' };
-    const { rows: ownerInsert } = await asUser(
+    // Assertion 10: Workspace Owner creates Saved View (Anti-spoofing forces user_id to auth.uid())
+    const spoofAttemptUserId = randomUUID();
+    const testState = {
+      schemaVersion: 1,
+      entityType: 'task',
+      selectedStatus: 'Active',
+      groupBy: 'department',
+      sortBy: 'actualSpend',
+      sortOrder: 'desc',
+    };
+
+    const { rows: insertedOwnerView } = await asUser(
       client,
       ownerA,
-      `INSERT INTO public.finance_explorer_saved_views (workspace_id, name, view_state)
-       VALUES ($1, 'Q3 Executive View', $2)
+      `INSERT INTO public.finance_explorer_saved_views (workspace_id, user_id, name, view_state)
+       VALUES ($1, $2, 'Q3 Executive View', $3)
        RETURNING id, workspace_id, user_id, name, view_state`,
-      [wsA, JSON.stringify(testState)]
+      [wsA, spoofAttemptUserId, JSON.stringify(testState)]
     );
-    assert.equal(ownerInsert.length, 1);
-    assert.equal(ownerInsert[0].user_id, ownerA, 'Anti-spoofing trigger must assign user_id to auth.uid()');
-    assert.equal(ownerInsert[0].name, 'Q3 Executive View');
-    const viewA1Id = ownerInsert[0].id;
+    assert.equal(insertedOwnerView.length, 1);
+    assert.equal(insertedOwnerView[0].user_id, ownerA, 'Trigger must overwrite user_id spoof attempt with auth.uid()');
+    assert.equal(insertedOwnerView[0].name, 'Q3 Executive View');
     pass('Workspace Owner can create own Saved View with anti-spoofing ownership resolution');
 
-    // Assertion 11: Owner A can SELECT own Saved View
-    const { rows: ownerSelect } = await asUser(
+    const viewA1Id = insertedOwnerView[0].id;
+
+    // Assertion 11: Owner can SELECT own views
+    const { rows: ownerViews } = await asUser(
       client,
       ownerA,
-      `SELECT id, name, view_state FROM public.finance_explorer_saved_views WHERE workspace_id = $1`,
+      `SELECT id, name FROM public.finance_explorer_saved_views WHERE workspace_id = $1`,
       [wsA]
     );
-    assert.equal(ownerSelect.length, 1);
-    assert.equal(ownerSelect[0].id, viewA1Id);
+    assert.equal(ownerViews.length, 1);
+    assert.equal(ownerViews[0].id, viewA1Id);
     pass('Workspace Owner can SELECT own Saved Views');
 
-    // Assertion 12: Finance Operator can create and read own Saved View
-    const { rows: finOpInsert } = await asUser(
+    // Assertion 12: Finance Operator creates own Saved View
+    const { rows: insertedFinOpView } = await asUser(
       client,
       finOpA,
       `INSERT INTO public.finance_explorer_saved_views (workspace_id, name, view_state)
-       VALUES ($1, 'Finance Operator Drilldown', $2)
+       VALUES ($1, 'FinOp Ledger View', $2)
        RETURNING id, user_id, name`,
-      [wsA, JSON.stringify({ schemaVersion: 1, entityType: 'expense' })]
+      [wsA, JSON.stringify(testState)]
     );
-    assert.equal(finOpInsert.length, 1);
-    assert.equal(finOpInsert[0].user_id, finOpA);
-    const viewFinOpId = finOpInsert[0].id;
+    assert.equal(insertedFinOpView.length, 1);
+    assert.equal(insertedFinOpView[0].user_id, finOpA);
     pass('Finance Operator can create own Saved View');
 
-    // Assertion 13: User Isolation - Owner A cannot see FinOp A's view and vice versa
-    const { rows: ownerIsolation } = await asUser(
+    const viewFinOpId = insertedFinOpView[0].id;
+
+    // Assertion 13: Personal User Isolation - Owner cannot see FinOp's view, FinOp cannot see Owner's view
+    const { rows: ownerViewCheck } = await asUser(
       client,
       ownerA,
-      `SELECT id FROM public.finance_explorer_saved_views WHERE id = $1`,
-      [viewFinOpId]
+      `SELECT id FROM public.finance_explorer_saved_views WHERE workspace_id = $1`,
+      [wsA]
     );
-    assert.equal(ownerIsolation.length, 0, 'Owner A must not see FinOp A saved view');
+    assert.equal(ownerViewCheck.length, 1, 'Owner A should see ONLY own view (1 row)');
+    assert.equal(ownerViewCheck[0].id, viewA1Id);
 
-    const { rows: finOpIsolation } = await asUser(
+    const { rows: finOpViewCheck } = await asUser(
       client,
       finOpA,
-      `SELECT id FROM public.finance_explorer_saved_views WHERE id = $1`,
-      [viewA1Id]
+      `SELECT id FROM public.finance_explorer_saved_views WHERE workspace_id = $1`,
+      [wsA]
     );
-    assert.equal(finOpIsolation.length, 0, 'FinOp A must not see Owner A saved view');
+    assert.equal(finOpViewCheck.length, 1, 'FinOp A should see ONLY own view (1 row)');
+    assert.equal(finOpViewCheck[0].id, viewFinOpId);
     pass('Personal User Isolation: Users cannot see other users Saved Views');
 
-    // Assertion 14: User Isolation - Owner A cannot UPDATE or DELETE FinOp A's view
+    // Assertion 14: Personal User Isolation - Owner cannot UPDATE or DELETE FinOp's view
     const { rowCount: updateCount } = await asUser(
       client,
       ownerA,
-      `UPDATE public.finance_explorer_saved_views SET name = 'Hacked Name' WHERE id = $1`,
+      `UPDATE public.finance_explorer_saved_views SET name = 'Hijacked' WHERE id = $1`,
       [viewFinOpId]
     );
     assert.equal(updateCount, 0, 'Owner A must not be able to UPDATE FinOp A view');
@@ -615,7 +821,7 @@ async function runDatabaseSuite() {
 
 async function run() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — P6-04C PERSISTENT SAVED VIEWS VERIFICATION SUITE           ');
+  console.log('  SNS PROJECTS — P6-04C / P6-04C1 SAVED VIEWS VERIFICATION SUITE            ');
   console.log('═══════════════════════════════════════════════════════════════════════════');
 
   try {
@@ -623,7 +829,7 @@ async function run() {
     await runDatabaseSuite();
 
     console.log('\n═══════════════════════════════════════════════════════════════════════════');
-    console.log(`  ALL ${assertionCount} P6-04C PERSISTENT SAVED VIEWS ASSERTIONS PASSED!           `);
+    console.log(`  ALL ${assertionCount} P6-04C & P6-04C1 SAVED VIEWS ASSERTIONS PASSED!       `);
     console.log('═══════════════════════════════════════════════════════════════════════════\n');
   } catch (err) {
     console.error('\n[FATAL TEST FAILURE]', err);

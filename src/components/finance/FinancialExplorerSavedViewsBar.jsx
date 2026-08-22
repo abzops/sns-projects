@@ -15,6 +15,7 @@ export default function FinancialExplorerSavedViewsBar({
   savedViews = [],
   loading = false,
   error = null,
+  actionError = null,
   activeSavedViewId = null,
   isDirty = false,
   isSaving = false,
@@ -28,12 +29,19 @@ export default function FinancialExplorerSavedViewsBar({
   const [modalMode, setModalMode] = useState(null); // 'save' | 'rename' | 'delete' | null
   const [viewNameInput, setViewNameInput] = useState('');
   const [modalError, setModalError] = useState(null);
+  const [updateError, setUpdateError] = useState(null);
 
   const activeView = savedViews.find((v) => v.id === activeSavedViewId) || null;
+
+  const handleSelect = (val) => {
+    setUpdateError(null);
+    onSelectView(val);
+  };
 
   const handleOpenSaveModal = () => {
     setViewNameInput('');
     setModalError(null);
+    setUpdateError(null);
     setModalMode('save');
   };
 
@@ -41,12 +49,14 @@ export default function FinancialExplorerSavedViewsBar({
     if (!activeView) return;
     setViewNameInput(activeView.name);
     setModalError(null);
+    setUpdateError(null);
     setModalMode('rename');
   };
 
   const handleOpenDeleteModal = () => {
     if (!activeView) return;
     setModalError(null);
+    setUpdateError(null);
     setModalMode('delete');
   };
 
@@ -54,6 +64,16 @@ export default function FinancialExplorerSavedViewsBar({
     setModalMode(null);
     setViewNameInput('');
     setModalError(null);
+  };
+
+  const handleUpdateClick = async () => {
+    if (!activeSavedViewId || !isDirty) return;
+    setUpdateError(null);
+    try {
+      await onUpdateCurrentView(activeSavedViewId);
+    } catch (err) {
+      setUpdateError(err?.message || 'Failed to update view');
+    }
   };
 
   const handleSaveSubmit = async (e) => {
@@ -99,6 +119,8 @@ export default function FinancialExplorerSavedViewsBar({
     }
   };
 
+  const displayedActionError = updateError || actionError;
+
   return (
     <div className={styles.container}>
       <div className={styles.leftGroup}>
@@ -117,7 +139,10 @@ export default function FinancialExplorerSavedViewsBar({
             <button
               type="button"
               className={styles.btn}
-              onClick={onRetryFetch}
+              onClick={() => {
+                setUpdateError(null);
+                onRetryFetch();
+              }}
               title="Retry loading saved views"
               aria-label="Retry loading saved views"
             >
@@ -129,7 +154,7 @@ export default function FinancialExplorerSavedViewsBar({
           <select
             className={styles.viewSelect}
             value={activeSavedViewId || ''}
-            onChange={(e) => onSelectView(e.target.value || null)}
+            onChange={(e) => handleSelect(e.target.value || null)}
             aria-label="Select a Saved View"
           >
             <option value="">
@@ -167,7 +192,7 @@ export default function FinancialExplorerSavedViewsBar({
             <button
               type="button"
               className={`${styles.btn} ${isDirty ? styles.btnPrimary : ''}`}
-              onClick={() => onUpdateCurrentView(activeSavedViewId)}
+              onClick={handleUpdateClick}
               disabled={loading || isSaving || !isDirty}
               title={isDirty ? 'Update saved view with current configuration' : 'No unsaved changes'}
             >
@@ -199,6 +224,13 @@ export default function FinancialExplorerSavedViewsBar({
           </>
         )}
       </div>
+
+      {displayedActionError && (
+        <div className={styles.errorMessage} role="alert">
+          <AlertCircle size={13} />
+          <span>Action failed: {displayedActionError}</span>
+        </div>
+      )}
 
       {/* Save View Modal */}
       {modalMode === 'save' && (

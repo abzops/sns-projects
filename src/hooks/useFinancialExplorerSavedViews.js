@@ -4,30 +4,37 @@
  * Provides authenticated, workspace-scoped, user-isolated Saved Views CRUD.
  *
  * Security & Invariants:
- * - Scoped by userId, workspaceId, authorizationScopeKey
+ * - Scoped by userId, workspaceId, authorizationScopeKey, enabled
  * - Direct PostgREST queries against public.finance_explorer_saved_views under RLS
  * - Fails closed on unauthorized access or network errors
  * - Error states are explicitly surfaced and NOT disguised as empty views
+ * - Generation token (activeFetchIdRef) prevents stale async fetch race conditions
+ * - Synchronous state flush on scope change or when enabled becomes false
  * - Zero direct mutation of finance facts/ledgers
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useFinanceAccess } from './useFinanceAccess';
 import {
   serializeSavedViewState,
   normalizeSavedViewState,
   isSavedViewDirty,
 } from '../lib/financialExplorerSavedViews';
 
-export function useFinancialExplorerSavedViews(workspaceId) {
+export function useFinancialExplorerSavedViews(
+  workspaceId,
+  authorizationScopeKey = 'default',
+  { enabled = true } = {}
+) {
   const { user } = useAuth();
   const userId = user?.id || null;
-  const { canAccessFinance, authorizationScopeKey } = useFinanceAccess(workspaceId);
+
+  const activeScopeKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
+  const [activeCacheKey, setActiveCacheKey] = useState(activeScopeKey);
 
   const [savedViews, setSavedViews] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(enabled && userId && workspaceId));
   const [error, setError] = useState(null);
 
   // Active saved view tracking
@@ -38,18 +45,32 @@ export function useFinancialExplorerSavedViews(workspaceId) {
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState(null);
 
-  const activeScopeKey = `${userId || 'anon'}:${workspaceId || 'none'}:${authorizationScopeKey || 'none'}`;
-  const lastFetchedScopeRef = useRef(null);
+  const activeFetchIdRef = useRef(0);
+
+  // Synchronously isolate state when scope key shifts or when enabled becomes false
+  useEffect(() => {
+    if (activeScopeKey !== activeCacheKey || !enabled) {
+      activeFetchIdRef.current++;
+      setActiveCacheKey(activeScopeKey);
+      setSavedViews([]);
+      setActiveSavedViewId(null);
+      setActiveBaselineState(null);
+      setActionError(null);
+      setError(null);
+      setLoading(Boolean(enabled && userId && workspaceId));
+    }
+  }, [activeScopeKey, activeCacheKey, enabled, userId, workspaceId]);
 
   // 1. Fetch saved views
   const fetchSavedViews = useCallback(async () => {
-    if (!userId || !workspaceId || !canAccessFinance) {
+    if (!userId || !workspaceId || !enabled) {
       setSavedViews([]);
       setLoading(false);
       setError(null);
       return;
     }
 
+    const fetchId = ++activeFetchIdRef.current;
     setLoading(true);
     setError(null);
     setActionError(null);
@@ -61,30 +82,31 @@ export function useFinancialExplorerSavedViews(workspaceId) {
         .eq('workspace_id', workspaceId)
         .order('name', { ascending: true });
 
+      if (fetchId !== activeFetchIdRef.current) return;
+
       if (queryError) {
         throw queryError;
       }
 
       setSavedViews(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (fetchId !== activeFetchIdRef.current) return;
       console.error('[useFinancialExplorerSavedViews] Failed to fetch saved views:', err);
       setError(err?.message || 'Failed to load saved views');
       setSavedViews([]);
     } finally {
-      setLoading(false);
+      if (fetchId === activeFetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [userId, workspaceId, canAccessFinance]);
+  }, [userId, workspaceId, enabled]);
 
-  // 2. Lifecycle & Scope Reset
+  // 2. Trigger fetch on scope change when enabled
   useEffect(() => {
-    if (lastFetchedScopeRef.current !== activeScopeKey) {
-      lastFetchedScopeRef.current = activeScopeKey;
-      setActiveSavedViewId(null);
-      setActiveBaselineState(null);
-      setActionError(null);
+    if (enabled && userId && workspaceId) {
       fetchSavedViews();
     }
-  }, [activeScopeKey, fetchSavedViews]);
+  }, [activeScopeKey, enabled, userId, workspaceId, fetchSavedViews]);
 
   // 3. Select / Apply a Saved View
   const selectSavedView = useCallback(

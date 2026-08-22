@@ -96,6 +96,7 @@ export default function FinancialExplorerPage() {
     savedViews,
     loading: savedViewsLoading,
     error: savedViewsError,
+    actionError: savedViewsActionError,
     activeSavedViewId,
     isSaving: savedViewsSaving,
     fetchSavedViews,
@@ -105,7 +106,9 @@ export default function FinancialExplorerPage() {
     renameSavedView,
     deleteSavedView,
     hasUnsavedChanges,
-  } = useFinancialExplorerSavedViews(workspaceId);
+  } = useFinancialExplorerSavedViews(workspaceId, authorizationScopeKey, {
+    enabled: canViewWorkspaceFinance && !financeAccessError,
+  });
 
   // Clear local filters on workspace change
   useEffect(() => {
@@ -180,12 +183,13 @@ export default function FinancialExplorerPage() {
   // Metadata bundle for hierarchy validation
   const metadataBundle = useMemo(
     () => ({
-      projects: hierarchyData.projects,
-      phases: hierarchyData.phases,
-      task_lists: hierarchyData.taskLists,
-      tasks: hierarchyData.tasks,
-      profiles: hierarchyData.profiles,
-      primary_departments: hierarchyData.primaryDepartments,
+      projects: hierarchyData?.projects || [],
+      phases: hierarchyData?.phases || [],
+      task_lists: hierarchyData?.taskLists || [],
+      tasks: hierarchyData?.tasks || [],
+      owners: hierarchyData?.owners || [],
+      creators: hierarchyData?.creators || [],
+      departments: hierarchyData?.departments || [],
     }),
     [hierarchyData]
   );
@@ -846,6 +850,7 @@ export default function FinancialExplorerPage() {
         savedViews={savedViews}
         loading={savedViewsLoading}
         error={savedViewsError}
+        actionError={savedViewsActionError}
         activeSavedViewId={activeSavedViewId}
         isDirty={isCurrentViewDirty}
         isSaving={savedViewsSaving}
