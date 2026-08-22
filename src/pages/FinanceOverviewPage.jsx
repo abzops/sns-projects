@@ -13,6 +13,7 @@ import {
   Building2,
   Sliders,
   Receipt,
+  Compass,
 } from 'lucide-react';
 import { useFinanceAccess } from '../hooks/useFinanceAccess';
 import { useFinanceOverview } from '../hooks/useFinanceOverview';
@@ -184,6 +185,16 @@ export default function FinanceOverviewPage() {
         badge={headerBadge}
         actions={
           <div className={styles.headerActions}>
+            {canViewWorkspaceFinance && (
+              <Link
+                to={`/workspace/${workspaceId}/finance/explorer`}
+                className={styles.manageBudgetsBtn}
+                aria-label="Open Financial Explorer"
+              >
+                <Compass size={14} />
+                <span>Financial Explorer</span>
+              </Link>
+            )}
             {canViewWorkspaceFinance && (
               <Link
                 to={`/workspace/${workspaceId}/finance/expenses`}
