@@ -1,27 +1,30 @@
-# P6-04C — Persistent Financial Explorer Saved Views
+# P6-04C / P6-04C1 — Persistent Financial Explorer Saved Views
 
 **Package**: Package 6 — Finance Frontend  
-**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING`  
-**Frontend Baseline**: `3b07e209fea1c425fb86cec3c70c533a1c8dd115` (P6-04C baseline) — P6-04C1 applied on top  
+**Status**: `VERIFIED / FROZEN` (P6-04C, P6-04C1)  
+**Manual Production Acceptance**: `PASSED`  
+**Frontend Baseline**: `ff3a3bb9a8636eb0efb334404711f6ccf53b32e8`  
 **Database Tip**: `20260822140004_p6_04c1_saved_view_grant_hardening`  
+**Deployment Run**: `32577780067` (`SUCCESS`)  
 **Route**: `/workspace/:workspaceId/finance/explorer`  
 **Authoritative Backend Contracts**:
 - `public.finance_explorer_saved_views` (table with RLS, authenticated PostgREST CRUD)
 - `private.trg_fn_finance_explorer_saved_views_immutability()` (trigger enforcement)
+- Migration: `20260822140004_p6_04c1_saved_view_grant_hardening.sql`
 
 ---
 
 ## 1. Executive Summary
 
-P6-04C & P6-04C1 deliver authenticated, cross-device **Persistent Saved Views** for the Financial Explorer at `/workspace/:workspaceId/finance/explorer`. Users authorized for workspace Finance can save their multi-dimensional filter, grouping, and sorting configurations, load and atomically apply them without full page reloads, update active views when configurations change, rename views, and delete views.
+P6-04C and P6-04C1 deliver authenticated, cross-device **Persistent Saved Views** for the Financial Explorer at `/workspace/:workspaceId/finance/explorer`. Users authorized for workspace Finance can save their multi-dimensional filter, grouping, and sorting configurations, load and atomically apply them without full page reloads, update active views when configurations change, rename views, and delete views.
 
-### Scope & Constraints:
-- **Personal Ownership**: Saved Views in P6-04C are strictly personal (`user_id = auth.uid()`). No shared, team, or public views are introduced.
+### Scope & Certified Invariants:
+- **Personal Ownership**: Saved Views are strictly personal (`user_id = auth.uid()`). No shared, team, public, or organization template views exist.
 - **Authoritative Database Storage**: All Saved Views are stored in `public.finance_explorer_saved_views` under strict RLS. `localStorage` is not used as an authoritative store.
-- **Zero Fact Mutation**: Saved Views are user preference configurations only. Zero writes or mutations are made to budgets, expenses, projects, tasks, or financial summary data.
-- **Grant Hardening (P6-04C1)**: `authenticated` role is granted exclusively `SELECT, INSERT, UPDATE, DELETE` (`TRUNCATE, REFERENCES, TRIGGER` revoked). `anon` and `PUBLIC` have zero table privileges.
-- **Runtime Isolation & Generation Tokens (P6-04C1)**: Synchronous cache flush on scope changes (`userId:workspaceId:authorizationScopeKey`) and generation token (`activeFetchIdRef`) to discard stale asynchronous fetch responses.
-- **Zero Public Security Definer RPCs**: Standard PostgREST CRUD under table RLS is used. Baseline 7 public SECURITY DEFINER functions maintained (0 new).
+- **Zero Fact Mutation**: Saved Views write only user preference configuration data. ZERO mutations are made to budgets, expenses, projects, tasks, or financial summaries.
+- **Grant Hardening (P6-04C1)**: `authenticated` role is granted exclusively `SELECT, INSERT, UPDATE, DELETE` (`TRUNCATE`, `REFERENCES`, and `TRIGGER` revoked). `anon` and `PUBLIC` have zero table privileges.
+- **Runtime Isolation & Generation Tokens (P6-04C1)**: Synchronous cache and state flush on scope changes (`userId:workspaceId:authorizationScopeKey`) and generation tokens (`activeFetchIdRef`) to discard stale asynchronous fetch responses.
+- **Security Advisor Baseline**: Exactly 6 accepted warnings (5 existing public Process SECURITY DEFINER warnings + 1 leaked-password-protection warning). Database public SECURITY DEFINER count remains 7 (0 new introduced).
 
 ---
 
@@ -39,9 +42,11 @@ Saved View CRUD is strictly gated by workspace Finance authority:
 | **Project Admin / System Admin Alone** | ❌ Denied | Fails closed under `can_manage_budgets` / `is_finance_operator` |
 | **Inactive Tenancy / Suspended Member** | ❌ Denied | RLS denies access; records preserved in DB |
 
+Backend RLS remains the final authority.
+
 ---
 
-## 3. Database Architecture & Immutability
+## 3. Database Architecture, RLS & Grant Hardening
 
 ### 3.1 Table Definition & Grants
 ```sql
@@ -70,31 +75,92 @@ REVOKE ALL PRIVILEGES ON TABLE public.finance_explorer_saved_views FROM anon, PU
 ### 3.3 Row-Level Security
 - `SELECT`, `INSERT`, `UPDATE`, `DELETE` policies enforce `user_id = auth.uid()` AND (`private.can_manage_budgets(workspace_id, auth.uid()) OR private.is_finance_operator(workspace_id, auth.uid())`).
 - Unique case-insensitive index on `(workspace_id, user_id, lower(trim(name)))`.
+- Access revocation preserves records in the database while blocking RLS access.
 
 ---
 
-## 4. Frontend View State Contract & Normalization
+## 4. Persisted State Contract & Normalization
 
 ### 4.1 Persisted Configuration State (`schemaVersion: 1`)
-- **Persisted**: `entityType`, `selectedProject`, `selectedPhase`, `selectedTaskList`, `selectedTask`, `selectedOwner`, `selectedDepartment`, `selectedStatus`, `selectedRisk`, `overBudgetOnly`, `selectedCreator`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `searchQuery`, `groupBy`, `sortBy`, `sortOrder`.
-- **Excluded**: `workspaceId`, `userId`, `authorizationScopeKey`, loaded rows, financial summaries, expense data, cache objects.
-- **Frozen P6-04 Enum Alignment**:
-  - `selectedStatus`: `all`, `Active`, `Completed`, `Cancelled`, `Corrected`, `Voided`
-  - `groupBy`: `none`, `project`, `phase`, `task_list`, `owner`, `department`, `rowType`, `status`, `riskBand`
-  - `sortBy`: `name`, `actualSpend`, `utilizationPct`, `riskBand`, `date`, `ownerName`
-  - `sortOrder`: `asc`, `desc`
+- **Persisted (19 Fields)**:
+  1. `entityType`
+  2. `selectedProject`
+  3. `selectedPhase`
+  4. `selectedTaskList`
+  5. `selectedTask`
+  6. `selectedOwner`
+  7. `selectedDepartment`
+  8. `selectedStatus`
+  9. `selectedRisk`
+  10. `overBudgetOnly`
+  11. `selectedCreator`
+  12. `dateFrom`
+  13. `dateTo`
+  14. `amountMin`
+  15. `amountMax`
+  16. `searchQuery`
+  17. `groupBy`
+  18. `sortBy`
+  19. `sortOrder`
+- **Explicitly Excluded**: `workspaceId`, `userId`, `authorizationScopeKey`, loaded rows, financial summaries, expense data, cache objects, selected expense modal state, loading/error states.
 
-### 4.2 Stale Reference Sanitization & Cascading Integrity
+### 4.2 Frozen P6-04 Enum Parity
+- **Status**: `all`, `Active`, `Completed`, `Cancelled`, `Corrected`, `Voided`
+- **Group By**: `none`, `project`, `phase`, `task_list`, `owner`, `department`, `rowType`, `status`, `riskBand`
+- **Sort By**: `name`, `actualSpend`, `utilizationPct`, `riskBand`, `date`, `ownerName`
+- **Sort Order**: `asc`, `desc`
+
+### 4.3 Stale Reference Safety & Metadata Normalization
 - Saved View state is validated against current authorized hierarchy metadata (`projects`, `phases`, `task_lists`, `tasks`, `owners`, `creators`, `departments`).
-- `selectedDepartment` is validated against `departments[].name` while preserving `'Unassigned'`.
+- `selectedOwner` validates against `owners[].id`.
+- `selectedCreator` validates against `creators[].id`.
+- `selectedDepartment` validates against `departments[].name` while preserving `'Unassigned'`.
 - Stale or deleted entity IDs safely fall back to `'all'`.
 - Cascading invalidation: Stale `Project` resets `Phase`, `Task List`, `Task`; stale `Phase` resets `Task List`, `Task`.
+- Saved View JSON never resurrects inaccessible hierarchy records.
 
 ---
 
-## 5. Verification & Automated Test Suite
+## 5. P6-04C1 Runtime Hardening
 
-The test suite `scripts/test-p6-04c-saved-views.mjs` executes 50 automated assertions covering database RLS, grants, ownership immutability, anti-spoofing, and frontend contracts:
+- **Access Gate Correction**: Replaced nonexistent `canAccessFinance` with `canViewWorkspaceFinance && !financeAccessError`.
+- **Scope Key Isolation**: Keyed by `userId:workspaceId:authorizationScopeKey`. Synchronous state flush on scope changes immediately purges stale Saved View names, active selections, baseline state, and errors.
+- **Generation Protection**: `activeFetchIdRef` discards stale asynchronous fetch responses, eliminating previous-user/workspace view state flash.
+- **Visible Update Error Handling**: Update Current View errors are caught and surfaced visibly in `FinancialExplorerSavedViewsBar`.
+
+---
+
+## 6. Manual Production Acceptance
+
+Manual production acceptance: **`PASSED`**
+
+Verified browser flows in production:
+- Save Current View
+- Persistence across browser refresh / re-login / device switch
+- Load and atomic apply
+- Exact filter, grouping, and sorting restoration
+- Unsaved changes indicator
+- Update active view with current configuration
+- Rename active view with duplicate-name guard
+- Delete active view while retaining current Explorer filter configuration
+- Owner / Creator / Department filter restoration
+- Finance Operator personal Saved Views
+- Personal user isolation and workspace isolation
+- Unauthorized role fail-closed behavior
+- Mobile / responsive layout usability
+- Preserved frozen P6-04 financial exploration semantics
+
+Post-acceptance production verification confirmed:
+- Budgets: 5
+- Expense Transactions: 2
+- Expense Items: 3
+- Saved Views Table: 0 rows (expected as manual acceptance test views were cleaned up upon completion)
+
+---
+
+## 7. Verification & Automated Test Suite
+
+All test suites passed cleanly with zero regressions:
 
 - `test-p6-04c-saved-views.mjs` (50/50 assertions passed)
 - `test-p6-04-financial-explorer.mjs` (60/60 assertions passed)

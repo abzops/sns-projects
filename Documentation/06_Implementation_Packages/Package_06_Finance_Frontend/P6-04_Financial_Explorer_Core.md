@@ -24,7 +24,7 @@ P6-04 / P6-04A / P6-04B delivers the centralized **Financial Explorer Core** for
 - **Read-Only**: Financial Explorer performs zero client-side mutations (no budget editing, expense correction, void, hard delete, or reallocation).
 - **P6-04A Closure**: Hardens financial semantics against RPC failures (null values, never fake ₹0 / GREEN / UNBUDGETED), canonical Phase/Task List ownership, primary department exclusivity, descendant financial activity dates, item text search, high-risk budget unit deduplication, and non-blocking cached refresh.
 - **P6-04B Closure**: Resolves Finance Operator metadata authorization via dedicated `get_workspace_finance_explorer_metadata` RPC (SECURITY INVOKER delegating to private SECURITY DEFINER engine). Preserves 100% of operational RLS without broadening `public.phases` or `public.task_lists` SELECT policies. Fixes empty-workspace cross-tenancy query leakage.
-- **Saved Views (P6-04C)**: Persistent Saved Views are deferred to P6-04C pending canonical database storage.
+- **Saved Views (P6-04C / P6-04C1)**: Persistent Saved Views are delivered and certified in [P6-04C Spec](P6-04C_Persistent_Financial_Explorer_Saved_Views.md) (`VERIFIED / FROZEN`).
 - **Alert Center**: Finance Alerts and notification lifecycle belong to the dedicated Alert Center package.
 
 ---
