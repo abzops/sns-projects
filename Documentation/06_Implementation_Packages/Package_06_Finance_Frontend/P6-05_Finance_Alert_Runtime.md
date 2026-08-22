@@ -1,14 +1,16 @@
-# P6-05 — Finance Alert Runtime & Persistent Alert Backend
+# P6-05 / P6-05R1 — Finance Alert Runtime & Persistent Alert Backend
 
 **Package**: Package 6 — Finance Frontend  
-**Status**: `VERIFIED / FROZEN` (P6-05)  
-**Database Migration Tip**: `20260822144843_p6_05_finance_alert_runtime`  
+**Status**: `IMPLEMENTED / REVIEW PENDING` (P6-05, P6-05R1)  
+**Database Migration Tip**: `20260822152000_p6_05r1_finance_alert_runtime_security_closure`  
 **Security Advisor Baseline**: Exactly 6 accepted warnings (5 Process SECURITY DEFINER + 1 leaked password protection)  
-**Public SECURITY DEFINER Count**: Exactly 7 functions (0 new added by P6-05)  
+**Public SECURITY DEFINER Count**: Exactly 7 functions (0 new added by P6-05 / P6-05R1)  
 **Authoritative Backend Contracts**:
-- `public.finance_alerts` (persistent incident ledger with RLS & partial unique index `uq_finance_alerts_unresolved`)
+- `public.finance_alerts` (persistent incident ledger with RLS, transition sequence tracking & partial unique index `uq_finance_alerts_unresolved`)
 - `private.finance_alert_risk_state` (internal tracked risk state, strictly zero browser access)
-- `private.reconcile_finance_alerts_for_workspace` (private SECURITY DEFINER reconciliation engine)
+- `private.finance_alert_notification_events` (internal deterministic notification event ledger, zero browser access)
+- `private.reconcile_finance_alerts_for_workspace` (private SECURITY DEFINER reconciliation engine, EXECUTE revoked from authenticated/anon/PUBLIC)
+- `private.emit_finance_risk_notification` (private SECURITY DEFINER finance notification emitter, EXECUTE revoked from authenticated/anon/PUBLIC)
 - `public.acknowledge_finance_alert(p_alert_id uuid)` (SECURITY INVOKER RPC, `search_path = ''`)
 - `public.resolve_finance_alert(p_alert_id uuid, p_resolution_note text)` (SECURITY INVOKER RPC, `search_path = ''`)
 - Realtime publication: `public.finance_alerts` in `supabase_realtime`
@@ -18,7 +20,7 @@
 
 ## 1. Executive Summary
 
-P6-05 establishes the authoritative **Finance Alert Runtime & Persistent Alert Backend** for Stack n Stock Projects. The alert engine monitors budget consumption and risk band thresholds across Project, Phase, and Task List entities using the canonical calculation engine `private.compute_financial_summary`.
+P6-05 and P6-05R1 establish the authoritative **Finance Alert Runtime & Persistent Alert Backend** for Stack n Stock Projects. The alert engine monitors budget consumption and risk band thresholds across Project, Phase, and Task List entities using the canonical calculation engine `private.compute_financial_summary`.
 
 ### Scope & Certified Invariants:
 1. **Governing Risk Bands**: GREEN (< 80%), YELLOW (80%–100%), ORANGE (> 100% and <= 100% + buffer), RED (> 100% + buffer, or > 100% when buffer is 0.00).
@@ -28,11 +30,12 @@ P6-05 establishes the authoritative **Finance Alert Runtime & Persistent Alert B
 5. **Role Separation (Decisions 56 & 66)**:
    - **Finance Operator**: Can SELECT alerts and mutate `open` -> `acknowledged`. Strictly DENIED `resolve` authority.
    - **Budget Managers (`can_manage_budgets`)**: Active Workspace Owner, Admin, CEO, CTO can acknowledge AND resolve alerts.
-6. **Condition Recovery & Re-breach**:
+6. **Condition Recovery & Re-breach (P6-05R1)**:
    - Risk drop to GREEN/YELLOW does NOT auto-resolve. Sets `condition_cleared_at = now()`.
-   - Re-breach before resolution clears `condition_cleared_at`, updates metrics, and sends fresh executive notifications.
+   - Re-breach before resolution clears `condition_cleared_at`, increments `transition_sequence`, and sends fresh executive notifications via `private.emit_finance_risk_notification` without interference from generic notification deduplication.
+   - Rapid re-entry cycles (`< 10s`) while previous notifications remain unread emit distinct genuine threshold notifications.
    - Resolution requires that current canonical risk has dropped to GREEN or YELLOW (resolution while ORANGE or RED is strictly rejected).
-7. **Zero Public Definers**: Mutation RPCs (`acknowledge_finance_alert`, `resolve_finance_alert`) are `SECURITY INVOKER` with `SET search_path = ''`.
+7. **Private Engine & Trigger Execution Closure (P6-05R1)**: Execution on all private P6-05 functions (`reconcile_finance_alerts_for_workspace`, `trg_fn_finance_alerts_guard_mutation`, `trg_fn_finance_alerts_reconcile_*`, `emit_finance_risk_notification`) is strictly revoked from `PUBLIC`, `anon`, and `authenticated` roles.
 8. **Deferred Reconciliation**: Deferred constraint triggers on `budgets`, `expense_transactions`, `expense_items`, and `tasks` reconcile finance alerts atomically at transaction commit.
 
 ---
@@ -74,6 +77,7 @@ CREATE TABLE public.finance_alerts (
   overrun numeric(15,2) NOT NULL DEFAULT 0.00,
   utilization_pct numeric(7,2) NOT NULL DEFAULT 0.00,
   lifecycle_status text NOT NULL DEFAULT 'open' CHECK (lifecycle_status IN ('open', 'acknowledged', 'resolved')),
+  transition_sequence integer NOT NULL DEFAULT 1,
   opened_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   last_breached_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   red_at timestamptz,
@@ -93,9 +97,9 @@ CREATE UNIQUE INDEX uq_finance_alerts_unresolved
   WHERE (lifecycle_status <> 'resolved');
 ```
 
-### 3.2 `private.finance_alert_risk_state`
-Private table used by the alert engine to track transitions and suppress redundant notifications for same-band updates.
+### 3.2 Private Tracking Tables
 ```sql
+-- Internal risk state cache for change detection
 CREATE TABLE private.finance_alert_risk_state (
   workspace_id uuid NOT NULL,
   entity_type text NOT NULL,
@@ -105,6 +109,17 @@ CREATE TABLE private.finance_alert_risk_state (
   last_actual_spend numeric(15,2) NOT NULL DEFAULT 0.00,
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (workspace_id, entity_type, entity_id)
+);
+
+-- Internal deterministic transition event tracking for notification idempotency
+CREATE TABLE private.finance_alert_notification_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id uuid NOT NULL REFERENCES public.finance_alerts(id) ON DELETE CASCADE,
+  recipient_user_id uuid NOT NULL,
+  transition_key text NOT NULL,
+  notification_type text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CONSTRAINT uq_finance_alert_notification_event UNIQUE (alert_id, recipient_user_id, transition_key)
 );
 ```
 
@@ -136,13 +151,19 @@ AS $$ ... $$;
 
 ## 4. Verification & Test Suite
 
-The verification suite `scripts/test-p6-05-finance-alert-runtime.mjs` executes 35 automated integration assertions across 3 comprehensive suites:
-1. **Suite 1: Production Deployment & Bootstrap State** (Assertions 1–9)
-2. **Suite 2: Isolated Integration Fixtures & Risk Transitions** (Assertions 10–18)
-3. **Suite 3: Lifecycle Mutation & Permissions Matrix** (Assertions 19–35)
+The verification suite `scripts/test-p6-05-finance-alert-runtime.mjs` executes 40 automated integration assertions across 3 comprehensive suites:
+1. **Suite 1: Production Deployment & Bootstrap State** (Assertions 1–10)
+2. **Suite 2: Isolated Integration Fixtures & Risk Transitions** (Assertions 11–22)
+3. **Suite 3: Lifecycle Mutation & Permissions Matrix** (Assertions 23–40)
 
 ```bash
 node scripts/test-p6-05-finance-alert-runtime.mjs
 ```
 
-Result: `ALL 35 P6-05 FINANCE ALERT RUNTIME ASSERTIONS PASSED!`
+Result: `ALL 40 P6-05 / P6-05R1 FINANCE ALERT RUNTIME ASSERTIONS PASSED!`
+
+---
+
+## 5. Operational V1 Test Fixture Governance
+
+During test suite verification, `scripts/test-ov1-a-operational-visibility.mjs` was updated to insert a `Done` (`system_code = 'done'`) task status for test projects alongside `To Do`. This was required for fixture compatibility with canonical closure triggers (`private.resolve_project_done_status(uuid)` called by `private.trg_fn_subtask_parent_sync()`) deployed during Package 5 subtask closure, without altering any operational RLS policies or access control rules.

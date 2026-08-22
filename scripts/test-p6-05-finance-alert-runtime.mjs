@@ -1,18 +1,19 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-05 FINANCE ALERT RUNTIME & PERSISTENT BACKEND TEST SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-05 & P6-05R1 FINANCE ALERT RUNTIME TEST SUITE
  *
  * Automated verification for:
  * 1. Schema, Grants, RLS & Immutability
  *    - public.finance_alerts table structure, constraints, partial unique unresolved index
- *    - private.finance_alert_risk_state table structure, constraint, privilege revocation
+ *    - private.finance_alert_risk_state & private.finance_alert_notification_events isolation
  *    - notifications_type_check constraint extension (finance_risk_orange, finance_risk_red + all 20 existing)
- *    - Table grants: authenticated has SELECT & restricted UPDATE only (no direct INSERT, DELETE, TRUNCATE, REFERENCES, TRIGGER)
+ *    - Table grants: authenticated has SELECT & restricted UPDATE only
  *    - anon has zero table privileges (all false)
  *    - Row-Level Security: can_manage_budgets OR is_finance_operator allowed; Member, Viewer, Project Admin, System Admin, Inactive denied
  *    - Mutation guard: direct client INSERT/DELETE blocked, arbitrary snapshot mutations prevented
  *    - Public mutation RPCs: acknowledge_finance_alert & resolve_finance_alert are SECURITY INVOKER with search_path=''
  *    - Public SECURITY DEFINER baseline intact (exactly 7 functions in database, 0 new)
  *    - Realtime publication: public.finance_alerts in supabase_realtime
+ *    - Private engine/trigger functions: EXECUTE revoked from PUBLIC, anon, and authenticated
  *
  * 2. Threshold Engine & Risk State Machine
  *    - GREEN -> YELLOW creates no alert and no notification
@@ -22,7 +23,8 @@
  *    - RED same-band update creates no duplicate
  *    - RED -> ORANGE sends no executive notification
  *    - High risk -> GREEN/YELLOW sets condition_cleared_at without auto-resolving lifecycle
- *    - Re-breach before resolution reuses same unresolved incident and sends a fresh executive notification
+ *    - Rapid re-breach (<10s) with previous notifications UNREAD sends a fresh executive notification
+ *    - Rapid recover -> ORANGE -> recover -> ORANGE in <10s emits two distinct transition notifications
  *    - After RESOLVED, a future breach creates a NEW incident while retaining history
  *
  * 3. Executive Notification Routing
@@ -45,11 +47,9 @@
  * 5. Transaction Correctness & Deferred Reconciliations
  *    - Multi-line item expense transaction triggers deferred reconciliation seeing final state
  *    - Repeated trigger callbacks inside one transaction cause zero duplicate alerts or notifications
- *    - Expense correction updates risk
- *    - Expense void lowers risk
  *    - Budget modification updates risk
  *    - Task hierarchy movement reattributes expenses and updates risk
- *    - Alert evaluations never block operational completion
+ *    - Engine-write marker cannot be exploited by authenticated client
  *
  * 6. Production Bootstrap Verification
  *    - 5 existing high-risk entities bootstrapped into finance_alerts (1 ORANGE, 4 RED)
@@ -131,7 +131,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function run() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — P6-05 FINANCE ALERT RUNTIME VERIFICATION SUITE              ');
+  console.log('  SNS PROJECTS — P6-05 & P6-05R1 FINANCE ALERT RUNTIME VERIFICATION SUITE   ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   const envAdmin = parseEnv(await readFile(envAdminPath, 'utf8'));
@@ -147,13 +147,14 @@ async function run() {
     // ══════════════════════════════════════════════════════════════════════════
     console.log('--- Suite 1: Production Deployment & Bootstrap State ---');
 
-    // 1. Migration ledger check
+    // 1. Migration ledger check (P6-05 & P6-05R1)
     const { rows: migCheck } = await client.query(`
       SELECT version, name FROM supabase_migrations.schema_migrations
-      WHERE version = '20260822144843'
+      WHERE version IN ('20260822144843', '20260822152000')
+      ORDER BY version
     `);
-    assert.equal(migCheck.length, 1, 'Migration 20260822144843 must be recorded in ledger');
-    pass('Migration 20260822144843_p6_05_finance_alert_runtime is recorded in schema_migrations');
+    assert.equal(migCheck.length, 2, 'Both P6-05 and P6-05R1 migrations must be recorded in ledger');
+    pass('Migrations 20260822144843 & 20260822152000 are recorded in schema_migrations');
 
     // 2. Production Security Advisor Baseline: exactly 7 public SECURITY DEFINER functions (0 new)
     const { rows: secDefRows } = await client.query(`
@@ -163,7 +164,7 @@ async function run() {
       ORDER BY proname
     `);
     assert.equal(secDefRows.length, 7, 'Database must have exactly 7 public SECURITY DEFINER functions (0 new)');
-    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05)');
+    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05/R1)');
 
     // 3. Public RPCs are SECURITY INVOKER with search_path = ''
     const { rows: invokerFuncs } = await client.query(`
@@ -192,10 +193,11 @@ async function run() {
         'trg_fn_finance_alerts_reconcile_budgets',
         'trg_fn_finance_alerts_reconcile_expense_transactions',
         'trg_fn_finance_alerts_reconcile_expense_items',
-        'trg_fn_finance_alerts_reconcile_tasks'
+        'trg_fn_finance_alerts_reconcile_tasks',
+        'emit_finance_risk_notification'
       )
     `);
-    assert.equal(definerFuncs.length, 6, 'All 6 private engine/trigger functions must exist in private schema');
+    assert.equal(definerFuncs.length, 7, 'All 7 private engine/trigger/notification functions must exist in private schema');
     for (const fn of definerFuncs) {
       assert.equal(fn.prosecdef, true, `private.${fn.proname} must be SECURITY DEFINER`);
       assert.ok(
@@ -203,9 +205,36 @@ async function run() {
         `private.${fn.proname} must have search_path setting in proconfig (got ${JSON.stringify(fn.proconfig)})`
       );
     }
-    pass('All private alert engine and trigger functions are private SECURITY DEFINER with search_path=""');
+    pass('All private alert engine, trigger, and notification functions are private SECURITY DEFINER with search_path=""');
 
-    // 5. Realtime publication check
+    // 5. Explicit Privilege Revocation on Private Engine & Trigger Functions (P6-05R1)
+    const { rows: privCheckRows } = await client.query(`
+      SELECT proname,
+             has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_exec,
+             has_function_privilege('anon', p.oid, 'EXECUTE') as anon_exec,
+             has_function_privilege('public', p.oid, 'EXECUTE') as public_exec
+      FROM pg_proc p
+      JOIN pg_namespace n ON pronamespace = n.oid
+      WHERE n.nspname = 'private'
+        AND proname IN (
+          'reconcile_finance_alerts_for_workspace',
+          'trg_fn_finance_alerts_guard_mutation',
+          'trg_fn_finance_alerts_reconcile_budgets',
+          'trg_fn_finance_alerts_reconcile_expense_transactions',
+          'trg_fn_finance_alerts_reconcile_expense_items',
+          'trg_fn_finance_alerts_reconcile_tasks',
+          'emit_finance_risk_notification'
+        )
+    `);
+    assert.equal(privCheckRows.length, 7, 'Must check privileges on all 7 private functions');
+    for (const row of privCheckRows) {
+      assert.equal(row.auth_exec, false, `authenticated must NOT have EXECUTE on private.${row.proname}`);
+      assert.equal(row.anon_exec, false, `anon must NOT have EXECUTE on private.${row.proname}`);
+      assert.equal(row.public_exec, false, `PUBLIC must NOT have EXECUTE on private.${row.proname}`);
+    }
+    pass('Private function execution strictly REVOKED from authenticated, anon, and PUBLIC roles (P6-05R1)');
+
+    // 6. Realtime publication check
     const { rows: rtCheck } = await client.query(`
       SELECT tablename FROM pg_publication_tables 
       WHERE pubname = 'supabase_realtime' AND tablename = 'finance_alerts'
@@ -213,7 +242,7 @@ async function run() {
     assert.equal(rtCheck.length, 1, 'public.finance_alerts must be in supabase_realtime publication');
     pass('public.finance_alerts is registered in supabase_realtime publication');
 
-    // 6. Notifications constraint includes all 22 valid types
+    // 7. Notifications constraint includes all 22 valid types
     const { rows: notifCheck } = await client.query(`
       SELECT pg_get_constraintdef(oid) as def 
       FROM pg_constraint 
@@ -224,7 +253,7 @@ async function run() {
     assert.ok(notifCheck[0].def.includes('task_assigned'), 'notifications_type_check must preserve existing types');
     pass('notifications_type_check correctly includes finance_risk_orange and finance_risk_red alongside all 20 existing types');
 
-    // 7. Table Grants check
+    // 8. Table Grants check
     const { rows: grantAlerts } = await client.query(`
       SELECT has_table_privilege('authenticated', 'public.finance_alerts', 'SELECT') as auth_select,
              has_table_privilege('authenticated', 'public.finance_alerts', 'INSERT') as auth_insert,
@@ -249,7 +278,7 @@ async function run() {
     assert.equal(grantAlerts[0].anon_delete, false, 'anon must NOT have DELETE');
     pass('Table privileges on public.finance_alerts strictly enforce least privilege (anon all false, auth SELECT/restricted UPDATE only)');
 
-    // 8. Bootstrap snapshot verification
+    // 9. Bootstrap snapshot verification
     const { rows: bootstrappedAlerts } = await client.query(`
       SELECT entity_type, entity_name, opened_risk_band, current_risk_band, lifecycle_status,
              base_budget, safety_buffer, actual_spend
@@ -266,7 +295,7 @@ async function run() {
     }
     pass('Production bootstrap: exactly 5 open Finance Alerts created (1 ORANGE: Kerala Pilot, 4 RED: Site, Installation, Property, Deployment)');
 
-    // 9. Zero retroactive notifications
+    // 10. Zero retroactive notifications
     const { rows: retroNotifs } = await client.query(`
       SELECT count(*) as cnt FROM public.notifications
       WHERE type IN ('finance_risk_orange', 'finance_risk_red')
@@ -277,7 +306,7 @@ async function run() {
     // ══════════════════════════════════════════════════════════════════════════
     // SUITE 2: ISOLATED TRANSACTION INTEGRATION & TEST FIXTURES
     // ══════════════════════════════════════════════════════════════════════════
-    console.log('\n--- Suite 2: Isolated Integration Fixtures & RLS Access Matrix ---');
+    console.log('\n--- Suite 2: Isolated Integration Fixtures & Risk Transitions ---');
     await client.query('BEGIN');
 
     // Create Test Workspace & Personas
@@ -407,15 +436,14 @@ async function run() {
       VALUES ('${projBudgetId}', '${wsId}', 'project', '${projId}', 10000.00, 2000.00, '${ownerId}')
     `);
 
-    // 10. Initial state check: Spend is 0, Risk is GREEN
+    // 11. Initial state check: Spend is 0, Risk is GREEN
     const { rows: initialAlerts } = await client.query(`
       SELECT * FROM public.finance_alerts WHERE workspace_id = '${wsId}'
     `);
     assert.equal(initialAlerts.length, 0, 'No alert should exist for newly budgeted project at 0 spend');
     pass('GREEN risk state on fresh budget generates zero alert rows');
 
-    // 11. Add expense: 8,500 (YELLOW)
-    // Inserting expense transaction and item
+    // 12. Add expense: 8,500 (YELLOW)
     const txId1 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -425,7 +453,6 @@ async function run() {
       VALUES ('${txId1}', 8500.00, 'Initial hardware invoice');
     `);
 
-    // Force deferred trigger reconciliation to execute
     await client.query('SET CONSTRAINTS ALL IMMEDIATE');
     await client.query('SET CONSTRAINTS ALL DEFERRED');
 
@@ -440,7 +467,7 @@ async function run() {
     assert.equal(yellowNotifs.length, 0, 'YELLOW risk must NOT generate executive notifications');
     pass('GREEN -> YELLOW transition (Spend = ₹8,500) generates 0 alerts and 0 notifications');
 
-    // 12. Add expense: +2,500 -> Total Spend = 11,000 (ORANGE, Over Base 10,000, under Ceiling 12,000)
+    // 13. Add expense: +2,500 -> Total Spend = 11,000 (ORANGE, Over Base 10,000, under Ceiling 12,000)
     const txId2 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -471,7 +498,7 @@ async function run() {
     assert.equal(alert1.condition_cleared_at, null);
     pass('YELLOW -> ORANGE threshold entry creates exactly one OPEN incident with accurate financial snapshot');
 
-    // 13. Notifications sent to active CEO & CTO ONLY
+    // 14. Notifications sent to active CEO & CTO ONLY
     const { rows: orangeNotifs } = await client.query(`
       SELECT user_id, type, title, message, entity_type, entity_id, project_id
       FROM public.notifications
@@ -491,7 +518,7 @@ async function run() {
     assert.equal(orangeNotifs[0].project_id, projId);
     pass('ORANGE notification routed exclusively to active CEO and CTO; non-executive roles excluded');
 
-    // 14. Same-band update: Add +200 -> Total Spend = 11,200 (Still ORANGE)
+    // 15. Same-band update: Add +200 -> Total Spend = 11,200 (Still ORANGE)
     const txId3 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -516,7 +543,7 @@ async function run() {
     assert.equal(orangeNotifsSameBand.length, 2, 'Same-band spend change must NOT send additional notifications');
     pass('ORANGE same-band spend update refreshes existing incident metrics without duplicate alerts or notifications');
 
-    // 15. Escalation: Add +1,000 -> Total Spend = 12,200 (RED, Exceeds Ceiling 12,000)
+    // 16. Escalation: Add +1,000 -> Total Spend = 12,200 (RED, Exceeds Ceiling 12,000)
     const txId4 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -546,9 +573,28 @@ async function run() {
     assert.equal(redNotifs.length, 2, 'Exactly 2 RED notifications sent to active CEO & CTO');
     pass('ORANGE -> RED escalation updates existing incident, sets red_at, and sends finance_risk_red notification');
 
-    // 16. Downward transition within high-risk: Void txId4 (1,000) -> Spend drops to 11,200 (ORANGE)
+    // 17. Repeated RED reconciliation: Add another RED item -> Spend = 12,500 (RED)
+    const txId4b = randomUUID();
     await client.query(`
-      UPDATE public.expense_transactions SET status = 'voided' WHERE id = '${txId4}'
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
+      VALUES ('${txId4b}', '${wsId}', '${taskId1}', 'active', '${ownerId}');
+
+      INSERT INTO public.expense_items (transaction_id, amount, description)
+      VALUES ('${txId4b}', 300.00, 'Additional RED spend');
+    `);
+
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+    const { rows: redNotifsSameBand } = await client.query(`
+      SELECT * FROM public.notifications WHERE workspace_id = '${wsId}' AND type = 'finance_risk_red'
+    `);
+    assert.equal(redNotifsSameBand.length, 2, 'Repeated RED spend updates must emit zero duplicate RED notifications');
+    pass('Repeated RED reconciliation generates zero duplicate RED notifications');
+
+    // 18. Downward transition within high-risk: Void txId4 (1,000) and txId4b (300) -> Spend drops to 11,200 (ORANGE)
+    await client.query(`
+      UPDATE public.expense_transactions SET status = 'voided' WHERE id IN ('${txId4}', '${txId4b}')
     `);
 
     await client.query('SET CONSTRAINTS ALL IMMEDIATE');
@@ -567,7 +613,7 @@ async function run() {
     assert.equal(Number(allNotifsAfterDownward[0].cnt), 4, 'RED -> ORANGE must NOT send any new notification');
     pass('RED -> ORANGE downward shift updates current_risk_band without sending new notifications');
 
-    // 17. Condition Cleared: Void txId2 (2,500) -> Spend drops to 8,700 (YELLOW)
+    // 19. Condition Cleared: Void txId2 (2,500) -> Spend drops to 8,700 (YELLOW)
     await client.query(`
       UPDATE public.expense_transactions SET status = 'voided' WHERE id = '${txId2}'
     `);
@@ -584,9 +630,12 @@ async function run() {
     assert.equal(recoveredAlerts[0].lifecycle_status, 'open', 'Lifecycle must NOT be auto-resolved; remains open');
     pass('Risk drop to YELLOW sets condition_cleared_at while preserving open lifecycle status (no auto-resolve)');
 
-    // 18. Re-breach before resolution: Un-void or add expense +3,000 -> Spend = 11,700 (ORANGE)
-    // Mark previous notifications as read (simulating user acknowledgment/time progression)
-    await client.query(`UPDATE public.notifications SET is_read = true WHERE workspace_id = '${wsId}'`);
+    // 20. Re-breach before resolution while previous notifications remain UNREAD: Add expense +3,000 -> Spend = 11,700 (ORANGE)
+    // NOTE: We DO NOT mark previous notifications as read! They remain is_read = false.
+    const { rows: unreadBeforeRebreach } = await client.query(`
+      SELECT count(*) as cnt FROM public.notifications WHERE workspace_id = '${wsId}' AND is_read = false
+    `);
+    assert.ok(Number(unreadBeforeRebreach[0].cnt) > 0, 'Previous notifications must remain UNREAD during re-breach test');
 
     const txId5 = randomUUID();
     await client.query(`
@@ -610,15 +659,69 @@ async function run() {
     const { rows: orangeNotifsAfterRebreach } = await client.query(`
       SELECT * FROM public.notifications WHERE workspace_id = '${wsId}' AND type = 'finance_risk_orange'
     `);
-    assert.equal(orangeNotifsAfterRebreach.length, 4, 'Re-breach from recovered state sends fresh executive notifications (2 new)');
-    pass('Re-breach after temporary recovery reuses unresolved incident, clears condition_cleared_at, and sends fresh notifications');
+    assert.equal(orangeNotifsAfterRebreach.length, 4, 'Re-breach sends fresh notifications even with previous unread notifications');
+    pass('Recover -> ORANGE immediately while previous notification remains UNREAD emits exactly one NEW notification per executive');
+
+    // 21. Rapid cycle: recover -> ORANGE in < 10 seconds while previous notifications remain UNREAD
+    // Void txId5 -> drops to YELLOW (8,700)
+    await client.query(`
+      UPDATE public.expense_transactions SET status = 'voided' WHERE id = '${txId5}'
+    `);
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+    // Add txId5b (+3,000) -> re-enters ORANGE (11,700) immediately
+    const txId5b = randomUUID();
+    await client.query(`
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
+      VALUES ('${txId5b}', '${wsId}', '${taskId1}', 'active', '${ownerId}');
+
+      INSERT INTO public.expense_items (transaction_id, amount, description)
+      VALUES ('${txId5b}', 3000.00, 'Rapid re-breach 2');
+    `);
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+    const { rows: orangeNotifsAfterRapidCycle } = await client.query(`
+      SELECT * FROM public.notifications WHERE workspace_id = '${wsId}' AND type = 'finance_risk_orange'
+    `);
+    // 2 initial + 2 from first re-breach + 2 from rapid second re-breach = 6 total orange notifications
+    assert.equal(orangeNotifsAfterRapidCycle.length, 6, 'Rapid re-breach cycle in <10s generates distinct transition notifications per executive');
+    pass('Rapid recover -> ORANGE -> recover -> ORANGE in <10s emits two distinct transition notifications per executive');
+
+    // 22. Re-breach directly to RED after recovery with unread notifications
+    // Void txId5b -> drops to YELLOW (8,700)
+    await client.query(`
+      UPDATE public.expense_transactions SET status = 'voided' WHERE id = '${txId5b}'
+    `);
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+    // Add txId5c (+4,500) -> Spend = 13,200 (RED)
+    const txId5c = randomUUID();
+    await client.query(`
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
+      VALUES ('${txId5c}', '${wsId}', '${taskId1}', 'active', '${ownerId}');
+
+      INSERT INTO public.expense_items (transaction_id, amount, description)
+      VALUES ('${txId5c}', 4500.00, 'Direct RED re-breach');
+    `);
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+    const { rows: redNotifsAfterRebreach } = await client.query(`
+      SELECT * FROM public.notifications WHERE workspace_id = '${wsId}' AND type = 'finance_risk_red'
+    `);
+    // 2 initial red + 2 re-breach red = 4 total red notifications
+    assert.equal(redNotifsAfterRebreach.length, 4, 'Re-breach into RED after recovery emits fresh RED notification even if previous RED notification is unread');
+    pass('Re-breach RED after recovery emits new RED notification even if previous notification is unread');
 
     // ══════════════════════════════════════════════════════════════════════════
     // SUITE 3: LIFECYCLE MUTATION & PERMISSIONS MATRIX
     // ══════════════════════════════════════════════════════════════════════════
     console.log('\n--- Suite 3: Lifecycle Mutation & Permissions Matrix ---');
 
-    // 19. Unauthorized user cannot SELECT alert
+    // 23. Unauthorized user cannot SELECT alert
     const { rows: memberAlertSelect } = await asUser(
       client,
       memberId,
@@ -656,7 +759,7 @@ async function run() {
     assert.equal(otherWsAlertSelect.length, 0, 'Other Workspace Owner cannot SELECT alerts from different workspace');
     pass('Unauthorized roles (Member, Viewer, ProjAdmin alone, SysAdmin alone, Other Workspace) strictly fail closed on SELECT');
 
-    // 20. Authorized users can SELECT alerts
+    // 24. Authorized users can SELECT alerts
     for (const [authUid, roleName] of [
       [ownerId, 'Workspace Owner'],
       [adminId, 'Workspace Admin'],
@@ -673,7 +776,7 @@ async function run() {
     }
     pass('Authorized personas (Owner, Admin, CEO, CTO, Finance Operator) can SELECT workspace alerts');
 
-    // 21. Finance Operator can OPEN -> ACKNOWLEDGED
+    // 25. Finance Operator can OPEN -> ACKNOWLEDGED
     const ackResult = await asUser(
       client,
       finOpId,
@@ -692,7 +795,7 @@ async function run() {
     assert.ok(dbAckCheck[0].acknowledged_at !== null);
     pass('Finance Operator can acknowledge open alert (OPEN -> ACKNOWLEDGED) with server-owned actor and timestamp');
 
-    // 22. Finance Operator CANNOT resolve (Budget Manager authority required)
+    // 26. Finance Operator CANNOT resolve (Budget Manager authority required)
     await assert.rejects(
       async () => {
         await asUser(
@@ -707,25 +810,25 @@ async function run() {
     );
     pass('Finance Operator is strictly DENIED resolution authority (Decision 56 / 66 enforced)');
 
-    // 23. Resolution rejected while current risk is ORANGE / RED
+    // 27. Resolution rejected while current risk is ORANGE / RED
     await assert.rejects(
       async () => {
         await asUser(
           client,
           ownerId,
-          `SELECT public.resolve_finance_alert($1, 'Attempted resolve while ORANGE')`,
+          `SELECT public.resolve_finance_alert($1, 'Attempted resolve while RED')`,
           [alert1.id]
         );
       },
-      /Cannot resolve finance alert while current risk is ORANGE/,
+      /Cannot resolve finance alert while current risk is RED/,
       'Resolution must be blocked while risk remains in high-risk band'
     );
     pass('Resolution is strictly REJECTED while underlying canonical risk remains ORANGE / RED');
 
-    // 24. Reduce spend to GREEN by voiding txId5 (3,000) and txId3 (200) -> Spend = 8,500 (YELLOW)
+    // 28. Reduce spend to GREEN by voiding txId5c (4,500) and txId3 (200) -> Spend = 8,500 (YELLOW)
     // Then void txId1 (8,500) -> Spend = 0 (GREEN)
     await client.query(`
-      UPDATE public.expense_transactions SET status = 'voided' WHERE id IN ('${txId5}', '${txId3}', '${txId1}')
+      UPDATE public.expense_transactions SET status = 'voided' WHERE id IN ('${txId5c}', '${txId3}', '${txId1}')
     `);
     await client.query('SET CONSTRAINTS ALL IMMEDIATE');
     await client.query('SET CONSTRAINTS ALL DEFERRED');
@@ -738,7 +841,7 @@ async function run() {
     assert.ok(greenAlertCheck[0].condition_cleared_at !== null);
     pass('Spend reduced to ₹0.00 (GREEN); condition_cleared_at recorded');
 
-    // 25. Budget Manager (Workspace Owner) resolves alert (ACKNOWLEDGED -> RESOLVED)
+    // 29. Budget Manager (Workspace Owner) resolves alert (ACKNOWLEDGED -> RESOLVED)
     const resolveResult = await asUser(
       client,
       ownerId,
@@ -759,7 +862,7 @@ async function run() {
     assert.equal(dbResolveCheck[0].resolution_note, 'Overspend rectified and verified with vendor');
     pass('Budget Manager successfully resolves alert once condition is GREEN (ACKNOWLEDGED -> RESOLVED)');
 
-    // 26. RESOLVED is terminal (cannot acknowledge or re-resolve)
+    // 30. RESOLVED is terminal (cannot acknowledge or re-resolve)
     await assert.rejects(
       async () => {
         await asUser(
@@ -774,7 +877,7 @@ async function run() {
     );
     pass('RESOLVED lifecycle status is terminal and immutable');
 
-    // 27. Future breach after resolution creates a NEW incident row
+    // 31. Future breach after resolution creates a NEW incident row
     const txId6 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -799,7 +902,7 @@ async function run() {
     assert.equal(allProjectAlerts[1].current_risk_band, 'ORANGE');
     pass('Future breach after incident resolution creates a fresh new alert while permanently preserving historical resolved incident');
 
-    // 28. Multi-item transaction correctness: inserting 3 expense items in 1 transaction evaluates once
+    // 32. Multi-item transaction correctness: inserting 3 expense items in 1 transaction evaluates once
     const txId7 = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
@@ -824,7 +927,7 @@ async function run() {
     assert.equal(Number(multiItemAlerts[0].actual_spend), 13000.00);
     pass('Itemized multi-line expense insertion reconciles atomically at transaction commit with zero intermediate duplicate alerts');
 
-    // 29. Budget modification re-evaluates risk: Increase Project Base to 20,000 -> Spend 13,000 becomes YELLOW (13,000 / 20,000 = 65% < 80% is GREEN!)
+    // 33. Budget modification re-evaluates risk: Increase Project Base to 20,000 -> Spend 13,000 becomes GREEN
     await client.query(`
       UPDATE public.budgets
       SET base_budget = 20000.00, safety_buffer = 5000.00
@@ -843,7 +946,7 @@ async function run() {
     assert.ok(budgetModifiedAlerts[0].condition_cleared_at !== null);
     pass('Budget modification trigger re-evaluates canonical risk and sets condition_cleared_at when risk drops');
 
-    // 31. Direct OPEN -> RESOLVED transition rejected
+    // 34. Direct OPEN -> RESOLVED transition rejected
     const openAlertId = budgetModifiedAlerts[0].id;
     await assert.rejects(
       async () => {
@@ -859,7 +962,7 @@ async function run() {
     );
     pass('Direct OPEN -> RESOLVED transition is rejected (Decision 66 Open -> Acknowledged -> Resolved enforced)');
 
-    // 32. Phase & Task List budget alert generation
+    // 35. Phase & Task List budget alert generation
     const phaseBudgetId = randomUUID();
     const taskListBudgetId = randomUUID();
 
@@ -888,7 +991,7 @@ async function run() {
     assert.equal(hierarchyAlerts[1].current_risk_band, 'RED');
     pass('Hierarchy alert derivation: Phase and Task List budget breaches generate dedicated persistent alerts');
 
-    // 33. Task movement across projects reattributes spend
+    // 36. Task movement across projects reattributes spend
     const proj2Id = randomUUID();
     const phase2Id = randomUUID();
     const taskList2Id = randomUUID();
@@ -929,7 +1032,7 @@ async function run() {
     assert.equal(Number(proj2Alerts[0].actual_spend), 11500.00);
     pass('Task hierarchy movement dynamically re-attributes spend and evaluates alerts for both source and destination entities');
 
-    // 34. Private risk state table access isolation
+    // 37. Private risk state and notification events tables access isolation
     await assert.rejects(
       async () => {
         await asUser(
@@ -941,9 +1044,20 @@ async function run() {
       /permission denied/,
       'Authenticated user must be denied SELECT on private risk state table'
     );
-    pass('private.finance_alert_risk_state is strictly internal (zero client/browser access)');
+    await assert.rejects(
+      async () => {
+        await asUser(
+          client,
+          ownerId,
+          `SELECT * FROM private.finance_alert_notification_events`
+        );
+      },
+      /permission denied/,
+      'Authenticated user must be denied SELECT on private notification events table'
+    );
+    pass('private.finance_alert_risk_state & private.finance_alert_notification_events are strictly internal');
 
-    // 35. Direct client DML protection on public.finance_alerts
+    // 38. Direct client DML protection on public.finance_alerts
     await assert.rejects(
       async () => {
         await asUser(
@@ -982,6 +1096,24 @@ async function run() {
     );
     pass('Direct client INSERT, DELETE, and arbitrary snapshot UPDATE on public.finance_alerts are strictly blocked');
 
+    // 39. Engine Write Marker Hardening: authenticated user cannot spoof engine write
+    await assert.rejects(
+      async () => {
+        await asUser(
+          client,
+          ownerId,
+          `
+            SELECT set_config('sns.finance_alert_engine_write', 'true', true);
+            INSERT INTO public.finance_alerts (workspace_id, entity_type, entity_id, entity_name, opened_risk_band, current_risk_band)
+            VALUES ('${wsId}', 'project', '${projId}', 'Spoofed Alert', 'ORANGE', 'ORANGE');
+          `
+        );
+      },
+      /permission denied/,
+      'Authenticated user cannot INSERT even if attempting to set engine write config'
+    );
+    pass('Authenticated client cannot gain engine write privileges or bypass mutation security');
+
   } finally {
     await client.query('ROLLBACK');
     await client.end();
@@ -989,7 +1121,7 @@ async function run() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log(`  ALL ${assertionCount} P6-05 FINANCE ALERT RUNTIME ASSERTIONS PASSED!       `);
+  console.log(`  ALL ${assertionCount} P6-05 / P6-05R1 FINANCE ALERT RUNTIME ASSERTIONS PASSED!`);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 
