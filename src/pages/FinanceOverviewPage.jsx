@@ -12,6 +12,7 @@ import {
   FolderKanban,
   Building2,
   Sliders,
+  Receipt,
 } from 'lucide-react';
 import { useFinanceAccess } from '../hooks/useFinanceAccess';
 import { useFinanceOverview } from '../hooks/useFinanceOverview';
@@ -183,6 +184,16 @@ export default function FinanceOverviewPage() {
         badge={headerBadge}
         actions={
           <div className={styles.headerActions}>
+            {canViewWorkspaceFinance && (
+              <Link
+                to={`/workspace/${workspaceId}/finance/expenses`}
+                className={styles.manageBudgetsBtn}
+                aria-label="View workspace expense ledger"
+              >
+                <Receipt size={14} />
+                <span>Expense Ledger</span>
+              </Link>
+            )}
             {canManageBudgets && (
               <Link
                 to={`/workspace/${workspaceId}/finance/budgets`}
