@@ -24,6 +24,7 @@ import FinanceOverviewPage from './pages/FinanceOverviewPage';
 import BudgetManagementPage from './pages/BudgetManagementPage';
 import ExpenseLedgerPage from './pages/ExpenseLedgerPage';
 import FinancialExplorerPage from './pages/FinancialExplorerPage';
+import FinanceAlertCenterPage from './pages/FinanceAlertCenterPage';
 import Spinner from './components/Spinner';
 import { useWorkspaces } from './hooks/useWorkspaces';
 
@@ -100,6 +101,7 @@ function App() {
                 <Route path="/workspace/:workspaceId/finance/budgets" element={<BudgetManagementPage />} />
                 <Route path="/workspace/:workspaceId/finance/expenses" element={<ExpenseLedgerPage />} />
                 <Route path="/workspace/:workspaceId/finance/explorer" element={<FinancialExplorerPage />} />
+                <Route path="/workspace/:workspaceId/finance/alerts" element={<FinanceAlertCenterPage />} />
 
                 {/* Administration Routes */}
                 <Route path="/workspace/:workspaceId/admin/users" element={<UsersAdminPage />} />

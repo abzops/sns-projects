@@ -187,6 +187,16 @@ export default function FinanceOverviewPage() {
           <div className={styles.headerActions}>
             {canViewWorkspaceFinance && (
               <Link
+                to={`/workspace/${workspaceId}/finance/alerts`}
+                className={styles.manageBudgetsBtn}
+                aria-label="View workspace finance alert center"
+              >
+                <ShieldAlert size={14} />
+                <span>Alert Center</span>
+              </Link>
+            )}
+            {canViewWorkspaceFinance && (
+              <Link
                 to={`/workspace/${workspaceId}/finance/explorer`}
                 className={styles.manageBudgetsBtn}
                 aria-label="Open Financial Explorer"

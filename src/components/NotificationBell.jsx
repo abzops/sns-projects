@@ -8,6 +8,7 @@ import {
   Layers,
   BellOff,
   ExternalLink,
+  ShieldAlert,
 } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import Spinner from './Spinner';
@@ -86,6 +87,20 @@ export default function NotificationBell({ workspaceId }) {
         await markAsRead(notif.id);
       }
       setIsOpen(false);
+
+      // Higher-priority Finance Alert navigation branch
+      if (
+        notif.entity_type === 'finance_alert' ||
+        notif.type === 'finance_risk_orange' ||
+        notif.type === 'finance_risk_red'
+      ) {
+        const targetAlertId = notif.entity_id;
+        const targetUrl = targetAlertId
+          ? `/workspace/${notif.workspace_id}/finance/alerts?alert=${targetAlertId}`
+          : `/workspace/${notif.workspace_id}/finance/alerts`;
+        navigate(targetUrl);
+        return;
+      }
 
       // Navigate to project if available
       if (notif.project_id && notif.workspace_id) {
@@ -202,13 +217,21 @@ export default function NotificationBell({ workspaceId }) {
                           <p className={styles.itemMessage}>{notif.message}</p>
                         )}
 
-                        {notif.project_id && (
+                        {notif.entity_type === 'finance_alert' ||
+                        notif.type === 'finance_risk_orange' ||
+                        notif.type === 'finance_risk_red' ? (
+                          <span className={styles.itemProjectLink}>
+                            <ShieldAlert size={11} color="var(--orange)" />
+                            <span>View in Alert Center</span>
+                            <ExternalLink size={10} />
+                          </span>
+                        ) : notif.project_id ? (
                           <span className={styles.itemProjectLink}>
                             <Layers size={11} />
                             <span>View in Project</span>
                             <ExternalLink size={10} />
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       {isUnread && (
