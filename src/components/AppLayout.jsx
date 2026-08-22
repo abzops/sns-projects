@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Layers,
   Workflow,
+  WalletCards,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import RoleBadge from './RoleBadge';
@@ -21,6 +22,7 @@ import BrandLogo from './BrandLogo';
 import NotificationBell from './NotificationBell';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserContext } from '../hooks/useUserContext';
+import { useFinanceAccess } from '../hooks/useFinanceAccess';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { useDepartments } from '../hooks/useDepartments';
 import styles from './AppLayout.module.css';
@@ -50,6 +52,12 @@ export default function AppLayout() {
     isSystemAdmin,
     canAdministerWorkspace,
   } = useUserContext(activeWorkspaceId);
+
+  // Derive Finance Overview access for navigation
+  const {
+    canViewWorkspaceFinance,
+    financeAccessLoading,
+  } = useFinanceAccess(activeWorkspaceId);
 
   // Fetch departments for navigation
   const { departments = [] } = useDepartments(activeWorkspaceId);
@@ -227,6 +235,19 @@ export default function AppLayout() {
                   <Building2 size={18} />
                   <span>Departments</span>
                 </NavLink>
+
+                {canViewWorkspaceFinance && !financeAccessLoading && (
+                  <NavLink
+                    to={`/workspace/${activeWorkspaceId}/finance`}
+                    className={({ isActive }) =>
+                      `${styles.navLink} ${isActive ? styles.active : ''}`
+                    }
+                    onClick={closeSidebar}
+                  >
+                    <WalletCards size={18} />
+                    <span>Finance</span>
+                  </NavLink>
+                )}
               </div>
 
               {/* My Organization - Dynamic Department Links */}

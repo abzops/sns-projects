@@ -1,0 +1,112 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.xs {
+  font-size: 0.62rem;
+  padding: 2px 7px;
+}
+
+.sm {
+  font-size: 0.7rem;
+  padding: 4px 10px;
+}
+
+.md {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+}
+
+.lg {
+  font-size: 0.95rem;
+  padding: 8px 18px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.labelText {
+  font-weight: 700;
+}
+
+.subtext {
+  font-size: 0.85em;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-left: 2px;
+}
+
+/* GREEN: Within Base Budget (< 80%) */
+.green {
+  background: rgba(74, 207, 130, 0.12);
+  color: var(--green);
+  border: 1px solid rgba(74, 207, 130, 0.32);
+}
+.green .dot {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(74, 207, 130, 0.5);
+}
+
+/* YELLOW: Approaching Ceiling (80% - 100% Base) */
+.yellow {
+  background: rgba(253, 226, 21, 0.14);
+  color: var(--yellow);
+  border: 1px solid rgba(253, 226, 21, 0.35);
+}
+.yellow .dot {
+  background: var(--yellow);
+  box-shadow: 0 0 6px rgba(253, 226, 21, 0.5);
+}
+
+/* ORANGE: Buffer Consumed (> Base, <= Base + Buffer) */
+.orange {
+  background: rgba(232, 160, 58, 0.14);
+  color: var(--orange);
+  border: 1px solid rgba(232, 160, 58, 0.35);
+}
+.orange .dot {
+  background: var(--orange);
+  box-shadow: 0 0 6px rgba(232, 160, 58, 0.5);
+}
+
+/* RED: Ceiling Breached (> Base + Buffer) */
+.red {
+  background: rgba(232, 97, 74, 0.16);
+  color: var(--red);
+  border: 1px solid rgba(232, 97, 74, 0.38);
+}
+.red .dot {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(232, 97, 74, 0.6);
+}
+
+/* UNBUDGETED: Neutral */
+.unbudgeted {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.unbudgeted .dot {
+  background: var(--muted-2);
+}
+
+.default {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.default .dot {
+  background: var(--text);
+}

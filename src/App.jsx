@@ -20,6 +20,7 @@ import ProcessesPage from './pages/ProcessesPage';
 import ProcessInstancePage from './pages/ProcessInstancePage';
 import ProcessBuilderPage from './pages/ProcessBuilderPage';
 import ProcessDefinitionPage from './pages/ProcessDefinitionPage';
+import FinanceOverviewPage from './pages/FinanceOverviewPage';
 import Spinner from './components/Spinner';
 import { useWorkspaces } from './hooks/useWorkspaces';
 
@@ -92,6 +93,7 @@ function App() {
                 <Route path="/workspace/:workspaceId/project/:projectId/process/:taskListId" element={<ProcessInstancePage />} />
                 <Route path="/workspace/:workspaceId/departments" element={<DepartmentsPage />} />
                 <Route path="/workspace/:workspaceId/department/:departmentId" element={<DepartmentWorkspacePage />} />
+                <Route path="/workspace/:workspaceId/finance" element={<FinanceOverviewPage />} />
 
                 {/* Administration Routes */}
                 <Route path="/workspace/:workspaceId/admin/users" element={<UsersAdminPage />} />

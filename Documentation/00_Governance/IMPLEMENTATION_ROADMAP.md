@@ -101,7 +101,7 @@ graph TD
 
 ### Package 6: Finance Frontend
 
-- **P6-01 (`NEXT`)**: Finance Overview / Dashboard — high-level financial summary, budget utilization, risk metrics, and project portfolio burn rates. Starts after P4-01B active-tenancy prerequisite is certified.
+- **P6-01 (`IMPLEMENTED / MANUAL ACCEPTANCE PENDING`)**: Finance Overview / Dashboard — command-center financial visibility, approved Base Budget, Safety Buffer, Net Spend, Utilization %, Overrun alerting, Spend Composition (Project vs Standalone), Portfolio Health distribution, and Project Portfolio burn rates. Fail-closed access matrix, zero client-side calculation risks, and responsive layout across desktop and mobile. [P6-01 Spec](../06_Implementation_Packages/Package_06_Finance_Frontend/P6-01_Finance_Overview_Dashboard.md).
 - **Financial Explorer**: Multi-dimensional search, custom grouping, and export filters.
 - **Alert Center**: Persistent risk notifications and resolution workflows ($\text{Open} \to \text{Acknowledged} \to \text{Resolved}$).
 
