@@ -86,10 +86,12 @@ Every `INSERT` and `UPDATE` on `public.budgets` triggers an automatic immutable 
 
 ## 4. Verification & Test Suite
 
-The automated test suite in [scripts/test-p6-02-budget-management.mjs](../../../scripts/test-p6-02-budget-management.mjs) runs 34 end-to-end assertions:
+The automated test suite in [scripts/test-p6-02-budget-management.mjs](../../../scripts/test-p6-02-budget-management.mjs) runs 46 end-to-end assertions:
 
 - **Suite 1: Frontend Authorization & Active-Tenancy Matrix** (11 assertions)
-- **Suite 2: Source Code Contracts & UI Architecture** (9 assertions)
-- **Suite 3: PostgreSQL Live Hierarchy & Database Integration** (14 assertions)
+- **Suite 2: Inherited Budget Semantics & Presentation Contracts** (5 assertions)
+- **Suite 3: Source Code Contracts, Fail-Safe Loading & Token Parity** (14 assertions)
+- **Suite 4: PostgreSQL Live Hierarchy, Inherited RPCs & Database Integration** (16 assertions)
 
-All 34 assertions pass alongside the full regression gate (P6-01, P4-01, P5-01, P5-03, doc link verification, oxlint, and vite build).
+All 46 assertions pass alongside the full regression gate (P6-01, P4-01, P5-01, P5-03, doc link verification, oxlint, and vite build).
+

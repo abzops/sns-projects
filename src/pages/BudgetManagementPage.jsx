@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ChevronRight,
@@ -18,7 +18,7 @@ import { supabase } from '../lib/supabase.js';
 import { useFinanceAccess } from '../hooks/useFinanceAccess.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useBudgets } from '../hooks/useBudgets.js';
-import { normalizeFinancialSummary } from '../lib/finance.js';
+import { normalizeFinancialSummary, hasEffectiveBudget } from '../lib/finance.js';
 import { formatCurrency } from '../lib/expenseExecution.js';
 import PageHeader from '../components/PageHeader.jsx';
 import RoleBadge from '../components/RoleBadge.jsx';
@@ -35,12 +35,14 @@ import styles from './BudgetManagementPage.module.css';
  * Authoritative entry point for Workspace Owners, Workspace Admins, CEOs, and CTOs
  * with active workspace tenancy to set and edit Project, Phase, and Task List budgets.
  *
- * Enforces fail-closed authorization, canonical backend contracts, and zero client-side
- * business calculation duplication.
+ * Enforces fail-closed authorization, canonical backend contracts, fail-safe loading,
+ * and zero client-side business calculation duplication.
  */
 export default function BudgetManagementPage() {
   const { workspaceId } = useParams();
   const { showToast } = useToast();
+
+  const activeWorkspaceRef = useRef(workspaceId);
 
   const {
     canManageBudgets,
@@ -51,6 +53,7 @@ export default function BudgetManagementPage() {
   const {
     projects = [],
     loading: projectsLoading,
+    error: projectsError,
     refetch: refetchProjects,
   } = useProjects(workspaceId);
 
@@ -58,6 +61,7 @@ export default function BudgetManagementPage() {
     budgets = [],
     loading: budgetsLoading,
     refreshing: budgetsRefreshing,
+    error: budgetsError,
     refetch: refetchBudgets,
     saveBudget,
   } = useBudgets(workspaceId, { enabled: canManageBudgets });
@@ -70,8 +74,10 @@ export default function BudgetManagementPage() {
   const [phasesByProject, setPhasesByProject] = useState(() => new Map());
   const [taskListsByPhase, setTaskListsByPhase] = useState(() => new Map());
 
-  // Financial Summaries Cache: key -> normalized summary
+  // Financial Summaries State: key -> normalized summary
   const [summaries, setSummaries] = useState(() => new Map());
+  // Summary Status State: key -> { loading: boolean, error: string | null }
+  const [summaryStatus, setSummaryStatus] = useState(() => new Map());
 
   // Search filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,37 +85,77 @@ export default function BudgetManagementPage() {
   // Modal State
   const [editingEntity, setEditingEntity] = useState(null);
 
+  // ── Workspace Context Switch Reset ─────────────────────────────────────────
+  useEffect(() => {
+    activeWorkspaceRef.current = workspaceId;
+    setExpandedProjects(new Set());
+    setExpandedPhases(new Set());
+    setPhasesByProject(new Map());
+    setTaskListsByPhase(new Map());
+    setSummaries(new Map());
+    setSummaryStatus(new Map());
+    setEditingEntity(null);
+    setSearchQuery('');
+  }, [workspaceId]);
+
   // ── Fetch Summaries Helper ──────────────────────────────────────────────────
-  const fetchSummary = useCallback(async (type, id) => {
-    try {
-      let rpcName = 'get_project_financial_summary';
-      let paramKey = 'p_project_id';
+  const fetchSummary = useCallback(
+    async (type, id) => {
+      const key = `${type}:${id}`;
+      const currentWs = workspaceId;
 
-      if (type === 'phase') {
-        rpcName = 'get_phase_financial_summary';
-        paramKey = 'p_phase_id';
-      } else if (type === 'task_list') {
-        rpcName = 'get_task_list_financial_summary';
-        paramKey = 'p_task_list_id';
+      setSummaryStatus((prev) => new Map(prev).set(key, { loading: true, error: null }));
+
+      try {
+        let rpcName = 'get_project_financial_summary';
+        let paramKey = 'p_project_id';
+
+        if (type === 'phase') {
+          rpcName = 'get_phase_financial_summary';
+          paramKey = 'p_phase_id';
+        } else if (type === 'task_list') {
+          rpcName = 'get_task_list_financial_summary';
+          paramKey = 'p_task_list_id';
+        }
+
+        const { data, error } = await supabase.rpc(rpcName, { [paramKey]: id });
+
+        if (activeWorkspaceRef.current !== currentWs) return null;
+
+        if (error) throw error;
+
+        const normalized = normalizeFinancialSummary(data);
+
+        setSummaries((prev) => {
+          const next = new Map(prev);
+          next.set(key, normalized);
+          return next;
+        });
+
+        setSummaryStatus((prev) => {
+          const next = new Map(prev);
+          next.set(key, { loading: false, error: null });
+          return next;
+        });
+
+        return normalized;
+      } catch (err) {
+        if (activeWorkspaceRef.current !== currentWs) return null;
+        console.error(`[BudgetManagementPage] fetchSummary error for ${type}:${id}:`, err);
+
+        setSummaryStatus((prev) => {
+          const next = new Map(prev);
+          next.set(key, { loading: false, error: err.message || 'Summary unavailable' });
+          return next;
+        });
+
+        return null;
       }
+    },
+    [workspaceId]
+  );
 
-      const { data, error } = await supabase.rpc(rpcName, { [paramKey]: id });
-      if (error) throw error;
-
-      const normalized = normalizeFinancialSummary(data);
-      setSummaries((prev) => {
-        const next = new Map(prev);
-        next.set(`${type}:${id}`, normalized);
-        return next;
-      });
-      return normalized;
-    } catch (err) {
-      console.error(`[BudgetManagementPage] fetchSummary error for ${type}:${id}:`, err);
-      return null;
-    }
-  }, []);
-
-  // Fetch summaries for all visible projects
+  // Fetch summaries for all visible projects when projects list changes
   useEffect(() => {
     if (!projects || projects.length === 0 || !canManageBudgets) return;
 
@@ -121,6 +167,7 @@ export default function BudgetManagementPage() {
   // ── Project Expansion & Phase Fetching ──────────────────────────────────────
   const toggleProjectExpand = useCallback(
     async (projectId) => {
+      const currentWs = workspaceId;
       setExpandedProjects((prev) => {
         const next = new Set(prev);
         if (next.has(projectId)) {
@@ -135,6 +182,7 @@ export default function BudgetManagementPage() {
               .eq('project_id', projectId)
               .order('position', { ascending: true })
               .then(({ data, error }) => {
+                if (activeWorkspaceRef.current !== currentWs) return;
                 if (!error && data) {
                   setPhasesByProject((pMap) => new Map(pMap).set(projectId, data));
                   data.forEach((phase) => fetchSummary('phase', phase.id));
@@ -145,12 +193,13 @@ export default function BudgetManagementPage() {
         return next;
       });
     },
-    [phasesByProject, fetchSummary]
+    [workspaceId, phasesByProject, fetchSummary]
   );
 
   // ── Phase Expansion & Task List Fetching ────────────────────────────────────
   const togglePhaseExpand = useCallback(
     async (phaseId) => {
+      const currentWs = workspaceId;
       setExpandedPhases((prev) => {
         const next = new Set(prev);
         if (next.has(phaseId)) {
@@ -165,6 +214,7 @@ export default function BudgetManagementPage() {
               .eq('phase_id', phaseId)
               .order('position', { ascending: true })
               .then(({ data, error }) => {
+                if (activeWorkspaceRef.current !== currentWs) return;
                 if (!error && data) {
                   setTaskListsByPhase((tMap) => new Map(tMap).set(phaseId, data));
                   data.forEach((taskList) => fetchSummary('task_list', taskList.id));
@@ -175,7 +225,7 @@ export default function BudgetManagementPage() {
         return next;
       });
     },
-    [taskListsByPhase, fetchSummary]
+    [workspaceId, taskListsByPhase, fetchSummary]
   );
 
   // ── Global Refresh ─────────────────────────────────────────────────────────
@@ -307,8 +357,11 @@ export default function BudgetManagementPage() {
     return res;
   };
 
-  // ── 1. Loading State ───────────────────────────────────────────────────────
-  if (financeAccessLoading || (canManageBudgets && projectsLoading && budgetsLoading)) {
+  // ── 1. Fail-Safe Initial Loading State ─────────────────────────────────────
+  const initialLoading =
+    financeAccessLoading || (canManageBudgets && (projectsLoading || budgetsLoading));
+
+  if (initialLoading) {
     return (
       <div className={styles.page}>
         <div className={styles.breadcrumbNav}>
@@ -353,7 +406,42 @@ export default function BudgetManagementPage() {
     );
   }
 
-  // ── 3. Main Budget Management View ────────────────────────────────────────
+  // ── 3. Budget / Projects Fetch Error State ─────────────────────────────────
+  if (budgetsError || projectsError) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.breadcrumbNav}>
+          <Link to={`/workspace/${workspaceId}/finance`} className={styles.breadcrumbLink}>
+            <ArrowLeft size={14} /> Back to Finance Overview
+          </Link>
+        </div>
+        <PageHeader
+          title="Budget Configuration"
+          subtitle="Error loading workspace budget hierarchy"
+        />
+        <div className={styles.errorContainer} role="alert">
+          <ShieldAlert size={48} className={styles.errorIcon} />
+          <h2 className={styles.errorTitle}>Failed to Load Budgets</h2>
+          <p className={styles.errorDesc}>
+            {budgetsError || projectsError || 'Unable to retrieve workspace financial budgets.'}
+          </p>
+          <button
+            type="button"
+            className={styles.retryBtn}
+            onClick={() => {
+              refetchBudgets();
+              refetchProjects();
+            }}
+          >
+            <RefreshCw size={14} />
+            <span>Retry</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 4. Main Budget Management View ────────────────────────────────────────
   return (
     <div className={styles.page}>
       {/* Breadcrumb Navigation */}
@@ -463,7 +551,9 @@ export default function BudgetManagementPage() {
             const projectBudget = budgets.find(
               (b) => b.entity_type === 'project' && b.project_id === project.id
             );
-            const summary = summaries.get(`project:${project.id}`);
+            const summaryKey = `project:${project.id}`;
+            const summary = summaries.get(summaryKey);
+            const status = summaryStatus.get(summaryKey);
             const isOwnBudget = Boolean(projectBudget);
             const phases = phasesByProject.get(project.id) || [];
 
@@ -508,43 +598,73 @@ export default function BudgetManagementPage() {
                     <div className={styles.metricCell}>
                       <span className={styles.metricCellLabel}>Base Budget</span>
                       <span className={styles.metricCellValue}>
-                        {formatCurrency(summary?.base_budget || projectBudget?.base_budget || 0)}
+                        {isOwnBudget
+                          ? formatCurrency(projectBudget.base_budget)
+                          : '—'}
                       </span>
                     </div>
 
                     <div className={styles.metricCell}>
                       <span className={styles.metricCellLabel}>Safety Buffer</span>
                       <span className={styles.metricCellValue}>
-                        {formatCurrency(
-                          summary?.safety_buffer || projectBudget?.safety_buffer || 0
-                        )}
+                        {isOwnBudget
+                          ? formatCurrency(projectBudget.safety_buffer)
+                          : '—'}
                       </span>
                     </div>
 
                     <div className={styles.metricCell}>
                       <span className={styles.metricCellLabel}>Spend</span>
                       <span className={styles.metricCellValue}>
-                        {formatCurrency(summary?.actual_spend || 0)}
+                        {status?.loading ? (
+                          <span className={styles.metricCellPending}>—</span>
+                        ) : status?.error ? (
+                          <span className={styles.metricCellError}>—</span>
+                        ) : summary ? (
+                          formatCurrency(summary.actual_spend)
+                        ) : (
+                          '—'
+                        )}
                       </span>
                     </div>
 
                     <div className={styles.metricCell}>
                       <span className={styles.metricCellLabel}>Phases Alloc.</span>
-                      <span className={styles.metricCellValue}>
-                        {formatCurrency(summary?.allocated_to_children || 0)}
-                      </span>
-                      <span className={styles.metricCellSub}>
-                        {formatCurrency(summary?.unallocated_base || 0)} free
-                      </span>
+                      {status?.loading ? (
+                        <span className={styles.metricCellPending}>—</span>
+                      ) : status?.error ? (
+                        <span className={styles.metricCellError}>—</span>
+                      ) : summary ? (
+                        <>
+                          <span className={styles.metricCellValue}>
+                            {formatCurrency(summary.allocated_to_children)}
+                          </span>
+                          <span className={styles.metricCellSub}>
+                            {formatCurrency(summary.unallocated_base)} free
+                          </span>
+                        </>
+                      ) : (
+                        <span className={styles.metricCellValue}>—</span>
+                      )}
                     </div>
 
                     <div className={styles.metricCell}>
                       <span className={styles.metricCellLabel}>Risk</span>
-                      <FinanceRiskBadge
-                        riskBand={summary?.risk_band || 'GREEN'}
-                        isBudgeted={summary?.is_budgeted ?? isOwnBudget}
-                        size="sm"
-                      />
+                      {status?.loading ? (
+                        <span className={styles.metricCellPending}>—</span>
+                      ) : status?.error ? (
+                        <span className={styles.metricCellError} title={status.error}>
+                          Unavailable
+                        </span>
+                      ) : summary ? (
+                        <FinanceRiskBadge
+                          riskBand={summary.risk_band || 'GREEN'}
+                          isBudgeted={hasEffectiveBudget(summary)}
+                          size="sm"
+                        />
+                      ) : (
+                        <span className={styles.metricCellPending}>—</span>
+                      )}
                     </div>
                   </div>
 
@@ -584,7 +704,9 @@ export default function BudgetManagementPage() {
                         const phaseBudget = budgets.find(
                           (b) => b.entity_type === 'phase' && b.phase_id === phase.id
                         );
-                        const phaseSummary = summaries.get(`phase:${phase.id}`);
+                        const phaseSummaryKey = `phase:${phase.id}`;
+                        const phaseSummary = summaries.get(phaseSummaryKey);
+                        const phaseStatus = summaryStatus.get(phaseSummaryKey);
                         const isPhaseOwnBudget = Boolean(phaseBudget);
                         const taskLists = taskListsByPhase.get(phase.id) || [];
 
@@ -635,49 +757,76 @@ export default function BudgetManagementPage() {
                                 <div className={styles.metricCell}>
                                   <span className={styles.metricCellLabel}>Base Budget</span>
                                   <span className={styles.metricCellValue}>
-                                    {formatCurrency(
-                                      isPhaseOwnBudget
-                                        ? phaseSummary?.base_budget || phaseBudget?.base_budget || 0
-                                        : 0
-                                    )}
+                                    {isPhaseOwnBudget
+                                      ? formatCurrency(phaseBudget.base_budget)
+                                      : '—'}
                                   </span>
                                 </div>
 
                                 <div className={styles.metricCell}>
                                   <span className={styles.metricCellLabel}>Safety Buffer</span>
                                   <span className={styles.metricCellValue}>
-                                    {formatCurrency(
-                                      isPhaseOwnBudget
-                                        ? phaseSummary?.safety_buffer || phaseBudget?.safety_buffer || 0
-                                        : 0
-                                    )}
+                                    {isPhaseOwnBudget
+                                      ? formatCurrency(phaseBudget.safety_buffer)
+                                      : '—'}
                                   </span>
                                 </div>
 
                                 <div className={styles.metricCell}>
                                   <span className={styles.metricCellLabel}>Spend</span>
                                   <span className={styles.metricCellValue}>
-                                    {formatCurrency(phaseSummary?.actual_spend || 0)}
+                                    {phaseStatus?.loading ? (
+                                      <span className={styles.metricCellPending}>—</span>
+                                    ) : phaseStatus?.error ? (
+                                      <span className={styles.metricCellError}>—</span>
+                                    ) : phaseSummary ? (
+                                      formatCurrency(phaseSummary.actual_spend)
+                                    ) : (
+                                      '—'
+                                    )}
                                   </span>
                                 </div>
 
                                 <div className={styles.metricCell}>
                                   <span className={styles.metricCellLabel}>Task Lists Alloc.</span>
-                                  <span className={styles.metricCellValue}>
-                                    {formatCurrency(phaseSummary?.allocated_to_children || 0)}
-                                  </span>
-                                  <span className={styles.metricCellSub}>
-                                    {formatCurrency(phaseSummary?.unallocated_base || 0)} free
-                                  </span>
+                                  {phaseStatus?.loading ? (
+                                    <span className={styles.metricCellPending}>—</span>
+                                  ) : phaseStatus?.error ? (
+                                    <span className={styles.metricCellError}>—</span>
+                                  ) : phaseSummary ? (
+                                    <>
+                                      <span className={styles.metricCellValue}>
+                                        {formatCurrency(phaseSummary.allocated_to_children)}
+                                      </span>
+                                      <span className={styles.metricCellSub}>
+                                        {formatCurrency(phaseSummary.unallocated_base)} free
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className={styles.metricCellValue}>—</span>
+                                  )}
                                 </div>
 
                                 <div className={styles.metricCell}>
                                   <span className={styles.metricCellLabel}>Risk</span>
-                                  <FinanceRiskBadge
-                                    riskBand={phaseSummary?.risk_band || 'GREEN'}
-                                    isBudgeted={phaseSummary?.is_budgeted ?? (isPhaseOwnBudget || isOwnBudget)}
-                                    size="sm"
-                                  />
+                                  {phaseStatus?.loading ? (
+                                    <span className={styles.metricCellPending}>—</span>
+                                  ) : phaseStatus?.error ? (
+                                    <span
+                                      className={styles.metricCellError}
+                                      title={phaseStatus.error}
+                                    >
+                                      Unavailable
+                                    </span>
+                                  ) : phaseSummary ? (
+                                    <FinanceRiskBadge
+                                      riskBand={phaseSummary.risk_band || 'GREEN'}
+                                      isBudgeted={hasEffectiveBudget(phaseSummary)}
+                                      size="sm"
+                                    />
+                                  ) : (
+                                    <span className={styles.metricCellPending}>—</span>
+                                  )}
                                 </div>
                               </div>
 
@@ -718,9 +867,9 @@ export default function BudgetManagementPage() {
                                         b.entity_type === 'task_list' &&
                                         b.task_list_id === taskList.id
                                     );
-                                    const tlSummary = summaries.get(
-                                      `task_list:${taskList.id}`
-                                    );
+                                    const tlSummaryKey = `task_list:${taskList.id}`;
+                                    const tlSummary = summaries.get(tlSummaryKey);
+                                    const tlStatus = summaryStatus.get(tlSummaryKey);
                                     const isTlOwnBudget = Boolean(taskListBudget);
 
                                     // Determine Task List budget origin badge
@@ -762,13 +911,9 @@ export default function BudgetManagementPage() {
                                               Base Budget
                                             </span>
                                             <span className={styles.metricCellValue}>
-                                              {formatCurrency(
-                                                isTlOwnBudget
-                                                  ? tlSummary?.base_budget ||
-                                                      taskListBudget?.base_budget ||
-                                                      0
-                                                  : 0
-                                              )}
+                                              {isTlOwnBudget
+                                                ? formatCurrency(taskListBudget.base_budget)
+                                                : '—'}
                                             </span>
                                           </div>
 
@@ -777,13 +922,9 @@ export default function BudgetManagementPage() {
                                               Safety Buffer
                                             </span>
                                             <span className={styles.metricCellValue}>
-                                              {formatCurrency(
-                                                isTlOwnBudget
-                                                  ? tlSummary?.safety_buffer ||
-                                                      taskListBudget?.safety_buffer ||
-                                                      0
-                                                  : 0
-                                              )}
+                                              {isTlOwnBudget
+                                                ? formatCurrency(taskListBudget.safety_buffer)
+                                                : '—'}
                                             </span>
                                           </div>
 
@@ -792,7 +933,15 @@ export default function BudgetManagementPage() {
                                               Spend
                                             </span>
                                             <span className={styles.metricCellValue}>
-                                              {formatCurrency(tlSummary?.actual_spend || 0)}
+                                              {tlStatus?.loading ? (
+                                                <span className={styles.metricCellPending}>—</span>
+                                              ) : tlStatus?.error ? (
+                                                <span className={styles.metricCellError}>—</span>
+                                              ) : tlSummary ? (
+                                                formatCurrency(tlSummary.actual_spend)
+                                              ) : (
+                                                '—'
+                                              )}
                                             </span>
                                           </div>
 
@@ -800,16 +949,24 @@ export default function BudgetManagementPage() {
                                             <span className={styles.metricCellLabel}>
                                               Risk
                                             </span>
-                                            <FinanceRiskBadge
-                                              riskBand={tlSummary?.risk_band || 'GREEN'}
-                                              isBudgeted={
-                                                tlSummary?.is_budgeted ??
-                                                (isTlOwnBudget ||
-                                                  isPhaseOwnBudget ||
-                                                  isOwnBudget)
-                                              }
-                                              size="sm"
-                                            />
+                                            {tlStatus?.loading ? (
+                                              <span className={styles.metricCellPending}>—</span>
+                                            ) : tlStatus?.error ? (
+                                              <span
+                                                className={styles.metricCellError}
+                                                title={tlStatus.error}
+                                              >
+                                                Unavailable
+                                              </span>
+                                            ) : tlSummary ? (
+                                              <FinanceRiskBadge
+                                                riskBand={tlSummary.risk_band || 'GREEN'}
+                                                isBudgeted={hasEffectiveBudget(tlSummary)}
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <span className={styles.metricCellPending}>—</span>
+                                            )}
                                           </div>
                                         </div>
 

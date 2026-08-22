@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Coins, AlertTriangle, Layers, FolderKanban, CheckSquare, Loader2 } from 'lucide-react';
+import { AlertTriangle, Layers, FolderKanban, CheckSquare, Loader2 } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { formatCurrency } from '../../lib/expenseExecution.js';
 import styles from './BudgetEditModal.module.css';

@@ -36,3 +36,15 @@ export function normalizeFinancialSummary(raw) {
     standalone_spend: Number(raw.standalone_spend) || 0,
   };
 }
+
+/**
+ * Determines whether a financial summary has an active effective budget
+ * (either owning its own budget row or inheriting an ancestor budget).
+ * @param {Object|null} summary
+ * @returns {boolean}
+ */
+export function hasEffectiveBudget(summary) {
+  if (!summary || typeof summary !== 'object') return false;
+  return summary.is_budgeted === true || Boolean(summary.budget_source_id);
+}
+

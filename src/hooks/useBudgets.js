@@ -129,6 +129,7 @@ export function useBudgets(workspaceId, { enabled = true } = {}) {
               safety_buffer: parsedBuffer,
             })
             .eq('id', existingBudgetId)
+            .eq('workspace_id', workspaceId)
             .select()
             .single();
 
