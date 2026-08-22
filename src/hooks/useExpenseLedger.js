@@ -12,22 +12,43 @@ export function clearExpenseLedgerCache() {
 /**
  * Hook to manage workspace expense ledger data and administration RPC operations.
  *
- * Enforces fail-closed RLS:
- * - Read access governed by private.can_view_expense_transaction
- * - Mutations governed strictly by public RPCs (correct_expense_transaction, void_expense_transaction, hard_delete_expense_transaction)
+ * Scoped by userId + workspaceId + authorizationScopeKey.
+ * Enforces fail-closed RLS and authoritative RPC execution.
  */
-export function useExpenseLedger(workspaceId, { enabled = true } = {}) {
+export function useExpenseLedger(workspaceId, authorizationScopeKey = 'default', { enabled = true } = {}) {
   const { user } = useAuth();
   const userId = user?.id || null;
-  const cacheKey = `${userId || 'anon'}:${workspaceId || 'none'}`;
+  const cacheKey = `${userId || 'anonymous'}:${workspaceId || 'none'}:${authorizationScopeKey || 'loading'}`;
+  const cached = userId && workspaceId ? expenseLedgerCache.get(cacheKey) || null : null;
 
-  const [transactions, setTransactions] = useState(() => (workspaceId ? expenseLedgerCache.get(cacheKey)?.transactions || [] : []));
-  const [tombstones, setTombstones] = useState(() => (workspaceId ? expenseLedgerCache.get(cacheKey)?.tombstones || [] : []));
-  const [loading, setLoading] = useState(() => (enabled && workspaceId ? !expenseLedgerCache.has(cacheKey) : false));
+  const [activeCacheKey, setActiveCacheKey] = useState(cacheKey);
+  const [transactions, setTransactions] = useState(() => cached?.transactions || []);
+  const [tombstones, setTombstones] = useState(() => cached?.tombstones || []);
+  const [loading, setLoading] = useState(() => !cached && enabled && Boolean(workspaceId && userId));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const activeFetchIdRef = useRef(0);
+
+  // Synchronously isolate state when scope key shifts (workspace, user, or authorization change)
+  useEffect(() => {
+    if (cacheKey !== activeCacheKey) {
+      activeFetchIdRef.current++;
+      setActiveCacheKey(cacheKey);
+      const nextCached = expenseLedgerCache.get(cacheKey) || null;
+      if (nextCached) {
+        setTransactions(nextCached.transactions);
+        setTombstones(nextCached.tombstones);
+        setLoading(false);
+      } else {
+        setTransactions([]);
+        setTombstones([]);
+        setLoading(enabled && Boolean(workspaceId && userId));
+      }
+      setError(null);
+      setRefreshing(false);
+    }
+  }, [cacheKey, activeCacheKey, enabled, workspaceId, userId]);
 
   const fetchLedger = useCallback(
     async (options = {}) => {
@@ -139,8 +160,12 @@ export function useExpenseLedger(workspaceId, { enabled = true } = {}) {
 
         if (fetchId !== activeFetchIdRef.current) return;
 
+        // Fail-safe error validation: both queries must succeed
         if (txRes.error) {
           throw txRes.error;
+        }
+        if (tombstoneRes.error) {
+          throw tombstoneRes.error;
         }
 
         const txList = txRes.data || [];
@@ -152,7 +177,14 @@ export function useExpenseLedger(workspaceId, { enabled = true } = {}) {
       } catch (err) {
         if (fetchId !== activeFetchIdRef.current) return;
         console.error('[useExpenseLedger] fetchLedger error:', err);
-        setError(err.message || 'Failed to load expense ledger.');
+        const errMsg = err.message || 'Failed to load expense ledger.';
+        setError(errMsg);
+
+        // If no prior cached data, ensure empty state isn't falsely treated as loaded
+        if (!expenseLedgerCache.has(cacheKey)) {
+          setTransactions([]);
+          setTombstones([]);
+        }
       } finally {
         if (fetchId === activeFetchIdRef.current) {
           setLoading(false);
@@ -168,45 +200,45 @@ export function useExpenseLedger(workspaceId, { enabled = true } = {}) {
   }, [fetchLedger]);
 
   /**
-   * Fetch immutable audit logs for a specific transaction
+   * Fetch immutable audit logs for a specific transaction.
+   * Throws on Supabase error so callers can render an explicit error/retry state.
    */
   const fetchTransactionAudit = useCallback(
     async (transactionId) => {
       if (!transactionId || !workspaceId) return [];
 
-      try {
-        const { data, error: auditErr } = await supabase
-          .from('expense_audit_logs')
-          .select(`
+      const { data, error: auditErr } = await supabase
+        .from('expense_audit_logs')
+        .select(`
+          id,
+          workspace_id,
+          transaction_id,
+          original_transaction_id,
+          subtask_id,
+          action,
+          previous_status,
+          new_status,
+          previous_total_amount,
+          new_total_amount,
+          reason,
+          actor_id,
+          metadata,
+          created_at,
+          actor:profiles!expense_audit_logs_actor_id_fkey (
             id,
-            workspace_id,
-            transaction_id,
-            original_transaction_id,
-            subtask_id,
-            action,
-            previous_status,
-            new_status,
-            previous_total_amount,
-            new_total_amount,
-            reason,
-            actor_id,
-            metadata,
-            created_at,
-            actor:profiles!expense_audit_logs_actor_id_fkey (
-              id,
-              full_name
-            )
-          `)
-          .eq('workspace_id', workspaceId)
-          .or(`original_transaction_id.eq.${transactionId},transaction_id.eq.${transactionId}`)
-          .order('created_at', { ascending: false });
+            full_name
+          )
+        `)
+        .eq('workspace_id', workspaceId)
+        .or(`original_transaction_id.eq.${transactionId},transaction_id.eq.${transactionId}`)
+        .order('created_at', { ascending: false });
 
-        if (auditErr) throw auditErr;
-        return data || [];
-      } catch (err) {
-        console.error('[useExpenseLedger] fetchTransactionAudit error:', err);
-        return [];
+      if (auditErr) {
+        console.error('[useExpenseLedger] fetchTransactionAudit error:', auditErr);
+        throw new Error(auditErr.message || 'Failed to load audit history.');
       }
+
+      return data || [];
     },
     [workspaceId]
   );
@@ -224,7 +256,7 @@ export function useExpenseLedger(workspaceId, { enabled = true } = {}) {
         p_transaction_id: transactionId,
         p_items: items,
         p_reason: reason.trim(),
-        p_description: description ? description.trim() : null,
+        p_description: description !== null ? description.trim() : null,
         p_expense_date: expenseDate || null,
       });
 

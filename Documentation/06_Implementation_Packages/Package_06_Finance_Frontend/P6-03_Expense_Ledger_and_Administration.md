@@ -13,7 +13,7 @@
 
 ## 1. Executive Summary
 
-P6-03 delivers the centralized **Finance Expense Ledger UI** and administrative controls for SNS Projects ERP. It provides real-time transaction oversight, multi-attribute filtering, complete line item inspection, and controlled modification workflows (Correction, Void, and Hard Delete).
+P6-03 & P6-03A deliver the centralized **Finance Expense Ledger UI** and administrative controls for SNS Projects ERP. It provides real-time transaction oversight, multi-attribute filtering, complete line item inspection, and controlled modification workflows (Correction, Void, and Hard Delete).
 
 ---
 
@@ -32,7 +32,7 @@ Access and mutation authorities strictly conform to the Package 4 active tenancy
 
 ### Key Invariants:
 1. **Zero Client Direct DML**: The frontend never issues direct `UPDATE` or `DELETE` SQL queries against `expense_transactions`, `expense_items`, or `expense_audit_logs`. All state changes flow through PostgreSQL RPCs.
-2. **Fail-Closed Routing**: Access to `/workspace/:workspaceId/finance/expenses` is gated via `useFinanceAccess(workspaceId)`. Unauthorized users receive an immutable access restriction screen.
+2. **Fail-Closed Routing & Scope Isolation**: Access to `/workspace/:workspaceId/finance/expenses` is gated via `useFinanceAccess(workspaceId)`. Authorization context errors and unauthorized accesses fail closed immediately. `useExpenseLedger` keys cache by `userId:workspaceId:authorizationScopeKey` and synchronously flushes state on scope shifts.
 3. **Hard-Delete Segregation**: Finance Operators alone are denied hard-delete authority at both frontend UI level (`canManageBudgets` check) and backend database level (`private.can_manage_budgets` authorization check).
 
 ---
@@ -55,11 +55,13 @@ Access and mutation authorities strictly conform to the Package 4 active tenancy
 - **Metadata**: Expense UUID, expense date, status, creation timestamp, creator name, updater name.
 - **Attribution**: Project, parent task, subtask / process step, cycle number.
 - **Line Items Table**: Category, description, line number, amount.
-- **Immutable Audit History**: Real-time chronological audit trail from `expense_audit_logs` showing actor name, action (`created`, `corrected`, `voided`, `hard_deleted`), previous total, new total, and mandatory reason.
+- **Immutable Audit History**: Real-time chronological audit trail from `expense_audit_logs` showing actor name, action (`created`, `corrected`, `voided`, `hard_deleted`), status transitions (`previous_status` $\to$ `new_status`), previous total, new total, and mandatory reason.
+- **Fail-Safe Loading**: Network or query failures in audit logs render an explicit `Audit History Unavailable` state with a `Retry` action rather than a misleading empty list.
 
 ### 3.4 Expense Correction (`correct_expense_transaction`)
 - Modal pre-populated with current line items.
-- Supports editing amounts, categories, and descriptions, adding new line items, removing items, and modifying the overall transaction description and expense date.
+- Preserves optional `NULL` categories and arbitrary historical custom categories (using datalist suggestions rather than restrictive fixed dropdowns).
+- Supports editing amounts, categories, and descriptions, adding new line items, removing items, and modifying/clearing the overall transaction description and expense date.
 - Enforces at least 1 line item, positive amounts only (> ₹0.00), and a mandatory audit reason.
 - Automatically transitions status to `corrected` and creates an immutable audit record.
 
@@ -73,14 +75,14 @@ Access and mutation authorities strictly conform to the Package 4 active tenancy
 - Danger modal strictly restricted to Workspace Owners, Admins, and Executive Budget Managers.
 - Physically deletes the transaction row and line items from operational tables.
 - Preserves a permanent, immutable tombstone in `expense_audit_logs` with `original_transaction_id`, `actor_id`, mandatory reason, and full JSON snapshot.
-- Accessible via the **Audit Tombstones** tab in the Ledger UI.
+- Accessible via the **Audit Tombstones** tab in the Ledger UI, with a read-only **View Snapshot Evidence** modal (`TombstoneDetailModal`).
 
 ---
 
 ## 4. Verification Suite
 
-Automated verification is covered by `scripts/test-p6-03-expense-ledger.mjs` (36 assertions) and passes the complete regression gate:
-- `test-p6-03-expense-ledger.mjs` (36/36 passed)
+Automated verification is covered by `scripts/test-p6-03-expense-ledger.mjs` (42 assertions) and passes the complete regression gate:
+- `test-p6-03-expense-ledger.mjs` (42/42 passed)
 - `test-p6-02-budget-management.mjs` (46/46 passed)
 - `test-p6-01-finance-overview.mjs` (34/34 passed)
 - `test-p5-01-expense-execution.mjs` (39/39 passed)

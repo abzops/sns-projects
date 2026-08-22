@@ -1,11 +1,11 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-03 EXPENSE LEDGER & ADMINISTRATION TEST SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-03 & P6-03A EXPENSE LEDGER & ADMINISTRATION TEST SUITE
  *
  * Automated verification for:
- * 1. Frontend Authorization Matrix (Active Tenancy & Role Isolation)
+ * 1. Frontend Authorization Matrix (Active Tenancy, Inactive Member Rejection & Role Isolation)
  * 2. Database RPC Security, Privileges & Invariant Attributes
- * 3. Source Code Contracts, Fail-Closed Security, Fail-Safe Loading, Stale State & Token Parity
- * 4. PostgreSQL Live RLS, Correction, Void, Hard-Delete, Audit Logs & Tombstone Invariants
+ * 3. Source Code Contracts, Scope Isolation, Fail-Closed Security, Fail-Safe Loading & Token Parity
+ * 4. PostgreSQL Live RLS, Correction (Null/Custom Categories & Cleared Description), Void, Hard-Delete & Tombstones
  *
  * Usage:
  *   node scripts/test-p6-03-expense-ledger.mjs
@@ -85,7 +85,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function run() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — PACKAGE 6 / P6-03 EXPENSE LEDGER TEST SUITE               ');
+  console.log('  SNS PROJECTS — PACKAGE 6 / P6-03 & P6-03A EXPENSE LEDGER TEST SUITE       ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -107,9 +107,10 @@ async function run() {
 
     const canManageBudgets = isOwnerOrAdmin || isExecutiveWithTenancy;
     const isFinanceOperator =
-      departmentCode === 'FIN' ||
-      (systemRole === 'head' && departmentCode === 'FIN') ||
-      activeWorkspaceRole === 'finance_operator';
+      Boolean(activeWorkspaceRole) &&
+      (departmentCode === 'FIN' ||
+        (systemRole === 'head' && departmentCode === 'FIN') ||
+        activeWorkspaceRole === 'finance_operator');
 
     const canViewWorkspaceFinance = canManageBudgets || isFinanceOperator;
 
@@ -140,37 +141,43 @@ async function run() {
   assert.equal(ctoAccess.canManageBudgets, true);
   pass('04. Active CTO with active tenancy has canViewWorkspaceFinance=true and canManageBudgets=true');
 
-  // 5. Finance Operator
+  // 5. Finance Operator (Active)
   const finOpAccess = evaluateFinanceAccess({ workspaceMembershipRole: 'member', isMemberActive: true, departmentCode: 'FIN' });
   assert.equal(finOpAccess.canViewWorkspaceFinance, true);
   assert.equal(finOpAccess.canManageBudgets, false);
   assert.equal(finOpAccess.isFinanceOperator, true);
   pass('05. Active Finance Operator has canViewWorkspaceFinance=true, canManageBudgets=false, isFinanceOperator=true');
 
-  // 6. Project Admin only
+  // 6. Finance Operator WITHOUT active tenancy (P6-03A Requirement N)
+  const inactiveFinOpAccess = evaluateFinanceAccess({ workspaceMembershipRole: 'member', isMemberActive: false, departmentCode: 'FIN' });
+  assert.equal(inactiveFinOpAccess.canViewWorkspaceFinance, false);
+  assert.equal(inactiveFinOpAccess.isFinanceOperator, false);
+  pass('06. Finance Operator without active workspace membership is strictly DENIED workspace ledger access');
+
+  // 7. Project Admin only
   const projAdminAccess = evaluateFinanceAccess({ systemRole: 'project_admin' });
   assert.equal(projAdminAccess.canViewWorkspaceFinance, false);
-  pass('06. Project Admin only is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
+  pass('07. Project Admin only is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
 
-  // 7. System Admin only
+  // 8. System Admin only
   const sysAdminAccess = evaluateFinanceAccess({ systemRole: 'system_admin' });
   assert.equal(sysAdminAccess.canViewWorkspaceFinance, false);
-  pass('07. System Admin only is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
+  pass('08. System Admin only is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
 
-  // 8. Normal Member
+  // 9. Normal Member
   const memberAccess = evaluateFinanceAccess({ workspaceMembershipRole: 'member', isMemberActive: true });
   assert.equal(memberAccess.canViewWorkspaceFinance, false);
-  pass('08. Normal Member is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
+  pass('09. Normal Member is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
 
-  // 9. Viewer
+  // 10. Viewer
   const viewerAccess = evaluateFinanceAccess({ workspaceMembershipRole: 'viewer', isMemberActive: true });
   assert.equal(viewerAccess.canViewWorkspaceFinance, false);
-  pass('09. Viewer is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
+  pass('10. Viewer is DENIED workspace ledger access (canViewWorkspaceFinance=false)');
 
-  // 10. CEO without active tenancy
+  // 11. CEO without active tenancy
   const inactiveCeoAccess = evaluateFinanceAccess({ systemRole: 'ceo', isMemberActive: false });
   assert.equal(inactiveCeoAccess.canViewWorkspaceFinance, false);
-  pass('10. CEO without active workspace membership is strictly DENIED workspace ledger access\n');
+  pass('11. CEO without active workspace membership is strictly DENIED workspace ledger access\n');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SUITE 2: Source Code & Presentation Contracts
@@ -180,40 +187,76 @@ async function run() {
   const appJsx = await readFile(path.join(repoRoot, 'src', 'App.jsx'), 'utf8');
   assert.ok(appJsx.includes('/workspace/:workspaceId/finance/expenses'), 'App.jsx must register /finance/expenses route');
   assert.ok(appJsx.includes('ExpenseLedgerPage'), 'App.jsx must import ExpenseLedgerPage');
-  pass('11. App.jsx correctly registers /workspace/:workspaceId/finance/expenses route');
+  pass('12. App.jsx correctly registers /workspace/:workspaceId/finance/expenses route');
 
   const overviewJsx = await readFile(path.join(repoRoot, 'src', 'pages', 'FinanceOverviewPage.jsx'), 'utf8');
   assert.ok(overviewJsx.includes('/finance/expenses'), 'FinanceOverviewPage must link to /finance/expenses');
   assert.ok(overviewJsx.includes('canViewWorkspaceFinance'), 'Expense Ledger link must be guarded by canViewWorkspaceFinance');
-  pass('12. FinanceOverviewPage renders Expense Ledger entry link strictly guarded by canViewWorkspaceFinance');
+  pass('13. FinanceOverviewPage renders Expense Ledger entry link strictly guarded by canViewWorkspaceFinance');
 
   const ledgerJsx = await readFile(path.join(repoRoot, 'src', 'pages', 'ExpenseLedgerPage.jsx'), 'utf8');
   assert.ok(ledgerJsx.includes('canViewWorkspaceFinance'), 'ExpenseLedgerPage must check canViewWorkspaceFinance');
-  assert.ok(ledgerJsx.includes('Access Restricted') || ledgerJsx.includes('ShieldAlert'), 'ExpenseLedgerPage must render fail-closed restricted view');
-  pass('13. ExpenseLedgerPage fails closed to access denied view on unauthorized direct URL');
+  assert.ok(ledgerJsx.includes('financeAccessError'), 'ExpenseLedgerPage must check financeAccessError');
+  pass('14. ExpenseLedgerPage checks financeAccessError and fails closed on unauthorized / error context');
+
+  // Verify useProjects and useExpenseLedger calls in ExpenseLedgerPage (P6-03A Requirements E & F)
+  assert.ok(!ledgerJsx.includes('useProjects(workspaceId, { enabled:'), 'useProjects must NOT be called with options object');
+  assert.ok(ledgerJsx.includes('useProjects(workspaceId, authorizationScopeKey)'), 'useProjects must receive real authorizationScopeKey');
+  assert.ok(ledgerJsx.includes('useExpenseLedger(workspaceId, authorizationScopeKey'), 'useExpenseLedger must receive real authorizationScopeKey');
+  pass('15. ExpenseLedgerPage passes real authorizationScopeKey to useProjects and useExpenseLedger');
 
   const useExpenseHook = await readFile(path.join(repoRoot, 'src', 'hooks', 'useExpenseLedger.js'), 'utf8');
   assert.ok(useExpenseHook.includes("supabase.rpc('correct_expense_transaction'"), 'useExpenseLedger must invoke correct_expense_transaction RPC');
   assert.ok(useExpenseHook.includes("supabase.rpc('void_expense_transaction'"), 'useExpenseLedger must invoke void_expense_transaction RPC');
   assert.ok(useExpenseHook.includes("supabase.rpc('hard_delete_expense_transaction'"), 'useExpenseLedger must invoke hard_delete_expense_transaction RPC');
-  pass('14. useExpenseLedger hook exclusively delegates mutations to authoritative public RPCs');
+  pass('16. useExpenseLedger hook exclusively delegates mutations to authoritative public RPCs');
 
   // Verify Zero direct client table DML in ledger code
   assert.ok(!useExpenseHook.includes(".from('expense_transactions').update("), 'Strict boundary: Zero client UPDATE on expense_transactions');
   assert.ok(!useExpenseHook.includes(".from('expense_transactions').delete("), 'Strict boundary: Zero client DELETE on expense_transactions');
   assert.ok(!ledgerJsx.includes(".from('expense_transactions').update("), 'Strict boundary: Zero client UPDATE on expense_transactions in page');
   assert.ok(!ledgerJsx.includes(".from('expense_transactions').delete("), 'Strict boundary: Zero client DELETE on expense_transactions in page');
-  pass('15. Strict boundary: Zero direct client UPDATE or DELETE DML on expense tables in frontend');
+  pass('17. Strict boundary: Zero direct client UPDATE or DELETE DML on expense tables in frontend');
 
-  // Verify detail modal hard delete guard
+  // Verify cache key structure and scope isolation (P6-03A Requirements A, B, C)
+  assert.ok(useExpenseHook.includes('authorizationScopeKey'), 'useExpenseLedger cache key must include authorizationScopeKey');
+  assert.ok(useExpenseHook.includes('setTransactions([])') && useExpenseHook.includes('setTombstones([])'), 'useExpenseLedger must reset state immediately on cache key shift');
+  assert.ok(useExpenseHook.includes('activeFetchIdRef.current++'), 'useExpenseLedger must invalidate in-flight queries on scope shift');
+  pass('18. useExpenseLedger keys cache by userId:workspaceId:authorizationScopeKey and synchronously resets state on scope change');
+
+  // Verify tombstoneRes.error handling (P6-03A Requirement G)
+  assert.ok(useExpenseHook.includes('if (tombstoneRes.error)'), 'useExpenseLedger must validate tombstoneRes.error and throw');
+  pass('19. useExpenseLedger fails safe when tombstone query fails (never converts to false 0 empty state)');
+
+  // Verify fetchTransactionAudit error propagation (P6-03A Requirement H)
+  assert.ok(!useExpenseHook.includes('return [];\n    },') && useExpenseHook.includes('throw new Error(auditErr.message'), 'fetchTransactionAudit must throw on error');
+  pass('20. fetchTransactionAudit propagates Supabase error instead of masking as empty array');
+
+  // Verify ExpenseDetailModal audit error & retry state + status transition (P6-03A Requirements I, O)
   const detailModalJsx = await readFile(path.join(repoRoot, 'src', 'components', 'finance', 'ExpenseDetailModal.jsx'), 'utf8');
+  assert.ok(detailModalJsx.includes('auditError') && detailModalJsx.includes('Audit History Unavailable'), 'ExpenseDetailModal must render explicit audit error state');
+  assert.ok(detailModalJsx.includes('loadAudit') && detailModalJsx.includes('Retry'), 'ExpenseDetailModal must provide Retry action for audit failure');
+  assert.ok(detailModalJsx.includes('previous_status') && detailModalJsx.includes('new_status'), 'ExpenseDetailModal must render previous_status -> new_status transition');
   assert.ok(detailModalJsx.includes('canManageBudgets'), 'Hard Delete button must be gated by canManageBudgets in detail modal');
-  pass('16. Hard Delete action is restricted to canManageBudgets and hidden from Finance Operator');
+  pass('21. ExpenseDetailModal renders audit error+Retry state, status transition diff, and canManageBudgets gate');
+
+  // Verify ExpenseCorrectionModal optional category & description clearing (P6-03A Requirements J, K, L, M)
+  const correctionModalJsx = await readFile(path.join(repoRoot, 'src', 'components', 'finance', 'ExpenseCorrectionModal.jsx'), 'utf8');
+  assert.ok(!correctionModalJsx.includes("category: item.category || 'Materials'"), 'Correction modal must NOT force Materials fallback on null/empty category');
+  assert.ok(correctionModalJsx.includes('list="correction-expense-categories"') || correctionModalJsx.includes('datalist'), 'Correction modal must use category datalist / free text input');
+  assert.ok(correctionModalJsx.includes('description !== undefined ? description.trim() : null'), 'Correction modal must preserve intentional empty string description clearing');
+  pass('22. ExpenseCorrectionModal supports optional/custom categories, datalist suggestions, and intentional description clearing');
+
+  // Verify Tombstone inspection modal (P6-03A Requirement P)
+  const tombstoneModalJsx = await readFile(path.join(repoRoot, 'src', 'components', 'finance', 'TombstoneDetailModal.jsx'), 'utf8');
+  assert.ok(tombstoneModalJsx.includes('snapshot.transaction') && tombstoneModalJsx.includes('snapshot.items'), 'TombstoneDetailModal must render snapshot evidence');
+  assert.ok(ledgerJsx.includes('TombstoneDetailModal'), 'ExpenseLedgerPage must mount TombstoneDetailModal');
+  pass('23. TombstoneDetailModal exists and provides read-only immutable snapshot evidence inspection');
 
   // Verify formatCurrency preservation
   assert.equal(formatCurrency(1234.56), '₹1,234.56');
   assert.equal(formatCurrency(1000, true), '₹1,000.00');
-  pass('17. formatCurrency outputs canonical INR currency format preserving paise');
+  pass('24. formatCurrency outputs canonical INR currency format preserving paise');
 
   // Verify CSS Token Parity
   const ledgerCss = await readFile(path.join(repoRoot, 'src', 'pages', 'ExpenseLedgerPage.module.css'), 'utf8');
@@ -235,12 +278,7 @@ async function run() {
   for (const token of nonCanonicalTokens) {
     assert.ok(!combinedCss.includes(token), `CSS files must not contain noncanonical token: ${token}`);
   }
-  pass('18. 100% CSS token parity: Zero noncanonical fallback tokens in Ledger CSS modules');
-
-  // Verify Workspace switch isolation in hook
-  assert.ok(useExpenseHook.includes('clearFinanceOverviewCache()'), 'useExpenseLedger automatically clears Finance Overview cache on mutation');
-  assert.ok(ledgerJsx.includes('setSearchQuery'), 'ExpenseLedgerPage purges local filter state on workspace change');
-  pass('19. Workspace switch immediately purges local filter, selection, and transaction state\n');
+  pass('25. 100% CSS token parity: Zero noncanonical fallback tokens in Ledger CSS modules\n');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SUITE 3 & 4: PostgreSQL Live DB Integration & Security Attributes
@@ -260,7 +298,7 @@ async function run() {
   await client.query('BEGIN'); // Isolated test transaction
 
   try {
-    // 20. Check RPC Security Attributes
+    // 26. Check RPC Security Attributes
     const rpcAttributes = await client.query(`
       SELECT routine_name, security_type, external_language
       FROM information_schema.routines
@@ -272,9 +310,9 @@ async function run() {
     for (const rpc of rpcAttributes.rows) {
       assert.equal(rpc.security_type, 'INVOKER', `${rpc.routine_name} must be SECURITY INVOKER`);
     }
-    pass('20. Live DB: public.correct, void, and hard_delete RPCs are SECURITY INVOKER');
+    pass('26. Live DB: public.correct, void, and hard_delete RPCs are SECURITY INVOKER');
 
-    // 21. Check RPC Permissions (authenticated EXECUTE = true, anon = false)
+    // 27. Check RPC Permissions (authenticated EXECUTE = true, anon = false)
     const aclRes = await client.query(`
       SELECT routine_name, grantee, privilege_type
       FROM information_schema.routine_privileges
@@ -286,14 +324,16 @@ async function run() {
     const authCanExecute = aclRes.rows.some((r) => r.grantee === 'authenticated' && r.privilege_type === 'EXECUTE');
     assert.equal(anonCanExecute, false, 'anon must not have EXECUTE grant on expense RPCs');
     assert.equal(authCanExecute, true, 'authenticated must have EXECUTE grant on expense RPCs');
-    pass('21. Live DB: authenticated role has EXECUTE grant; anon role is revoked (fails closed)');
+    pass('27. Live DB: authenticated role has EXECUTE grant; anon role is revoked (fails closed)');
 
-    // 22. Setup Test Fixtures: Workspace, Users, Project, Task, Statuses
+    // 28. Setup Test Fixtures: Workspace, Users, Project, Task, Statuses
     const workspaceId = randomUUID();
     const ownerId = randomUUID();
     const finOpId = randomUUID();
     const memberId = randomUUID();
     const projectId = randomUUID();
+    const phaseId = randomUUID();
+    const taskListId = randomUUID();
     const taskId = randomUUID();
     const statusTodoId = randomUUID();
     const statusDoneId = randomUUID();
@@ -346,10 +386,7 @@ async function run() {
         ($1::uuid, $4::uuid, 'member', 'active')
     `, [workspaceId, ownerId, finOpId, memberId]);
 
-    const phaseId = randomUUID();
-    const taskListId = randomUUID();
-
-    // Project, Phase, Task List, Task Statuses
+    // Project, Phase, Task List, Task Statuses, Tasks
     await client.query(`
       INSERT INTO public.projects (id, workspace_id, name, created_by, owner_id)
       VALUES ($1::uuid, $2::uuid, 'Ledger Test Project', $3::uuid, $3::uuid)
@@ -379,7 +416,7 @@ async function run() {
 
     await client.query('SET LOCAL session_replication_role = DEFAULT');
 
-    // Complete task with expense (1,000 INR) as authorized member
+    // Complete task with expense (1,000 INR) with null category and initial description
     const completeRes = await asUser(client, ownerId, `
       SELECT public.complete_task_with_expense(
         $1::uuid,
@@ -387,11 +424,11 @@ async function run() {
           'hasExpense', true,
           'mode', 'itemized',
           'items', jsonb_build_array(
-            jsonb_build_object('line_number', 1, 'amount', 600.00, 'category', 'Hardware', 'description', 'Test item 1'),
-            jsonb_build_object('line_number', 2, 'amount', 400.00, 'category', 'Software', 'description', 'Test item 2')
+            jsonb_build_object('line_number', 1, 'amount', 600.00, 'category', null, 'description', 'Uncategorized item 1'),
+            jsonb_build_object('line_number', 2, 'amount', 400.00, 'category', 'Logistics', 'description', 'Custom category item 2')
           ),
           'expenseDate', '2026-08-22',
-          'description', 'Initial test expense'
+          'description', 'Initial test note'
         ),
         'Completed initial task'
       ) as result
@@ -399,18 +436,18 @@ async function run() {
 
     const txId = completeRes.rows[0].result.transaction_id;
     assert.ok(txId, 'Expense transaction must be created');
-    pass('22. Live DB: Test fixtures and initial expense transaction (₹1,000.00) created successfully');
+    pass('28. Live DB: Test fixtures and initial expense transaction (₹1,000.00) created with null & custom categories');
 
-    // 23. Live DB: Finance Operator executes correct_expense_transaction
+    // 29. Live DB: Finance Operator executes correct_expense_transaction preserving null/custom category & clearing description
     const correctRes = await asUser(client, finOpId, `
       SELECT public.correct_expense_transaction(
         $1::uuid,
         jsonb_build_array(
-          jsonb_build_object('line_number', 1, 'amount', 800.00, 'category', 'Hardware', 'description', 'Corrected item 1'),
-          jsonb_build_object('line_number', 2, 'amount', 700.00, 'category', 'Software', 'description', 'Corrected item 2')
+          jsonb_build_object('line_number', 1, 'amount', 800.00, 'category', null, 'description', 'Corrected item 1 (null category)'),
+          jsonb_build_object('line_number', 2, 'amount', 700.00, 'category', 'SpecialVendorFee', 'description', 'Corrected item 2 (custom category)')
         ),
         'Audit Reason: Revised vendor invoice adjustments'::text,
-        'Updated description after audit'::text,
+        ''::text,
         '2026-08-22'::date
       ) as result
     `, [txId]);
@@ -418,20 +455,22 @@ async function run() {
     assert.equal(correctRes.rows[0].result.success, true);
     assert.equal(Number(correctRes.rows[0].result.previous_total_amount), 1000.00);
     assert.equal(Number(correctRes.rows[0].result.new_total_amount), 1500.00);
-    pass('23. Live DB: Finance Operator executes correct_expense_transaction successfully (₹1,000 -> ₹1,500)');
+    pass('29. Live DB: Finance Operator executes correct_expense_transaction (₹1,000 -> ₹1,500) with null & custom categories');
 
-    // 24. Live DB: Verify Corrected items and status in DB
+    // 30. Live DB: Verify Corrected items, null/custom category preservation, and cleared description in DB
     const txRow = await client.query('SELECT status, description FROM public.expense_transactions WHERE id = $1::uuid', [txId]);
     assert.equal(txRow.rows[0].status, 'corrected');
-    assert.equal(txRow.rows[0].description, 'Updated description after audit');
+    assert.equal(txRow.rows[0].description, '', 'Cleared description stored as empty string');
 
     const itemsRows = await client.query('SELECT line_number, amount, category FROM public.expense_items WHERE transaction_id = $1::uuid ORDER BY line_number', [txId]);
     assert.equal(itemsRows.rows.length, 2);
     assert.equal(Number(itemsRows.rows[0].amount), 800.00);
+    assert.equal(itemsRows.rows[0].category, null, 'Null category preserved');
     assert.equal(Number(itemsRows.rows[1].amount), 700.00);
-    pass('24. Live DB: Corrected items replaced old items and transaction status transitioned to corrected');
+    assert.equal(itemsRows.rows[1].category, 'SpecialVendorFee', 'Custom category preserved');
+    pass('30. Live DB: Null category and custom category preserved; description cleared in database');
 
-    // 25. Live DB: Immutable audit log for correction
+    // 31. Live DB: Immutable audit log for correction with status diff
     const correctAudit = await client.query(`
       SELECT action, previous_status, new_status, previous_total_amount, new_total_amount, reason, actor_id
       FROM public.expense_audit_logs
@@ -439,12 +478,14 @@ async function run() {
     `, [txId]);
     assert.equal(correctAudit.rows.length, 1);
     assert.equal(correctAudit.rows[0].actor_id, finOpId);
+    assert.equal(correctAudit.rows[0].previous_status, 'active');
+    assert.equal(correctAudit.rows[0].new_status, 'corrected');
     assert.equal(Number(correctAudit.rows[0].previous_total_amount), 1000.00);
     assert.equal(Number(correctAudit.rows[0].new_total_amount), 1500.00);
     assert.equal(correctAudit.rows[0].reason, 'Audit Reason: Revised vendor invoice adjustments');
-    pass('25. Live DB: Immutable audit log accurately preserved previous total, new total, and actor ID');
+    pass('31. Live DB: Immutable audit log accurately captured active->corrected status transition and amounts');
 
-    // 26. Live DB: Empty correction reason is strictly REJECTED
+    // 32. Live DB: Empty correction reason is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, finOpId, `
         SELECT public.correct_expense_transaction(
@@ -454,9 +495,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('26. Live DB: Empty correction reason is strictly REJECTED (fails closed)');
+    pass('32. Live DB: Empty correction reason is strictly REJECTED (fails closed)');
 
-    // 27. Live DB: Zero / Negative amount is strictly REJECTED
+    // 33. Live DB: Zero / Negative amount is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, finOpId, `
         SELECT public.correct_expense_transaction(
@@ -466,9 +507,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('27. Live DB: Zero/Negative line item correction is strictly REJECTED');
+    pass('33. Live DB: Zero/Negative line item correction is strictly REJECTED');
 
-    // 28. Live DB: Workspace Owner executes correct_expense_transaction
+    // 34. Live DB: Workspace Owner executes correct_expense_transaction
     const ownerCorrectRes = await asUser(client, ownerId, `
       SELECT public.correct_expense_transaction(
         $1::uuid,
@@ -479,9 +520,9 @@ async function run() {
       ) as result
     `, [txId]);
     assert.equal(Number(ownerCorrectRes.rows[0].result.new_total_amount), 2000.00);
-    pass('28. Live DB: Workspace Owner executes correct_expense_transaction successfully (₹2,000.00)');
+    pass('34. Live DB: Workspace Owner executes correct_expense_transaction successfully (₹2,000.00)');
 
-    // 29. Live DB: Finance Operator executes void_expense_transaction
+    // 35. Live DB: Finance Operator executes void_expense_transaction
     const voidRes = await asUser(client, finOpId, `
       SELECT public.void_expense_transaction(
         $1::uuid,
@@ -492,9 +533,9 @@ async function run() {
     assert.equal(voidRes.rows[0].result.status, 'voided');
     assert.equal(Number(voidRes.rows[0].result.previous_total), 2000.00);
     assert.equal(Number(voidRes.rows[0].result.effective_total), 0.00);
-    pass('29. Live DB: Finance Operator executes void_expense_transaction successfully (status = voided, spend = ₹0.00)');
+    pass('35. Live DB: Finance Operator executes void_expense_transaction successfully (status = voided, spend = ₹0.00)');
 
-    // 30. Live DB: Voided transaction status confirmed and audit record verified
+    // 36. Live DB: Voided transaction status confirmed and audit record verified
     const voidedTx = await client.query('SELECT status FROM public.expense_transactions WHERE id = $1::uuid', [txId]);
     assert.equal(voidedTx.rows[0].status, 'voided');
 
@@ -504,12 +545,14 @@ async function run() {
       WHERE transaction_id = $1::uuid AND action = 'voided'
     `, [txId]);
     assert.equal(voidAudit.rows.length, 1);
+    assert.equal(voidAudit.rows[0].previous_status, 'corrected');
+    assert.equal(voidAudit.rows[0].new_status, 'voided');
     assert.equal(Number(voidAudit.rows[0].previous_total_amount), 2000.00);
     assert.equal(Number(voidAudit.rows[0].new_total_amount), 0.00);
     assert.equal(voidAudit.rows[0].reason, 'Voiding duplicate entry after reconciliation');
-    pass('30. Live DB: Void audit log captured previous total and effective ₹0.00 total');
+    pass('36. Live DB: Void audit log captured corrected->voided status transition and effective ₹0.00 total');
 
-    // 31. Live DB: Correcting a voided transaction is strictly REJECTED
+    // 37. Live DB: Correcting a voided transaction is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, ownerId, `
         SELECT public.correct_expense_transaction(
@@ -519,9 +562,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('31. Live DB: Correcting an already voided transaction is strictly REJECTED');
+    pass('37. Live DB: Correcting an already voided transaction is strictly REJECTED');
 
-    // 32. Live DB: Repeat void is strictly REJECTED
+    // 38. Live DB: Repeat void is strictly REJECTED
     await expectError(client, async () => {
       await asUser(client, finOpId, `
         SELECT public.void_expense_transaction(
@@ -530,9 +573,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('32. Live DB: Repeat void on an already voided transaction is strictly REJECTED');
+    pass('38. Live DB: Repeat void on an already voided transaction is strictly REJECTED');
 
-    // 33. Live DB: Finance Operator is strictly DENIED hard_delete_expense_transaction
+    // 39. Live DB: Finance Operator is strictly DENIED hard_delete_expense_transaction
     await expectError(client, async () => {
       await asUser(client, finOpId, `
         SELECT public.hard_delete_expense_transaction(
@@ -541,9 +584,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('33. Live DB: Finance Operator alone is strictly DENIED hard-delete authority (fails closed)');
+    pass('39. Live DB: Finance Operator alone is strictly DENIED hard-delete authority (fails closed)');
 
-    // 34. Live DB: Normal Member is strictly DENIED hard_delete_expense_transaction
+    // 40. Live DB: Normal Member is strictly DENIED hard_delete_expense_transaction
     await expectError(client, async () => {
       await asUser(client, memberId, `
         SELECT public.hard_delete_expense_transaction(
@@ -552,9 +595,9 @@ async function run() {
         )
       `, [txId]);
     });
-    pass('34. Live DB: Normal Member is strictly DENIED hard-delete authority');
+    pass('40. Live DB: Normal Member is strictly DENIED hard-delete authority');
 
-    // 35. Live DB: Workspace Owner executes hard_delete_expense_transaction
+    // 41. Live DB: Workspace Owner executes hard_delete_expense_transaction
     const hardDelRes = await asUser(client, ownerId, `
       SELECT public.hard_delete_expense_transaction(
         $1::uuid,
@@ -563,9 +606,9 @@ async function run() {
     `, [txId]);
     assert.equal(hardDelRes.rows[0].result.success, true);
     assert.equal(hardDelRes.rows[0].result.deleted_transaction_id, txId);
-    pass('35. Live DB: Workspace Owner executes hard_delete_expense_transaction successfully');
+    pass('41. Live DB: Workspace Owner executes hard_delete_expense_transaction successfully');
 
-    // 36. Live DB: Transaction row and items are deleted, tombstone survives
+    // 42. Live DB: Transaction row and items are deleted, tombstone survives with snapshot
     const txAfterDel = await client.query('SELECT 1 FROM public.expense_transactions WHERE id = $1::uuid', [txId]);
     assert.equal(txAfterDel.rows.length, 0, 'Transaction row must be deleted from active table');
 
@@ -581,8 +624,9 @@ async function run() {
     assert.equal(tombstone.rows[0].original_transaction_id, txId);
     assert.equal(tombstone.rows[0].transaction_id, null, 'transaction_id becomes NULL on cascade');
     assert.equal(tombstone.rows[0].actor_id, ownerId);
-    assert.ok(tombstone.rows[0].metadata?.snapshot, 'Tombstone metadata must contain full JSON snapshot');
-    pass('36. Live DB: Hard-delete physically deleted transaction while preserving permanent immutable audit tombstone');
+    assert.ok(tombstone.rows[0].metadata?.snapshot?.transaction, 'Tombstone metadata must contain transaction snapshot');
+    assert.ok(tombstone.rows[0].metadata?.snapshot?.items, 'Tombstone metadata must contain items snapshot');
+    pass('42. Live DB: Hard-delete physically deleted transaction while preserving permanent immutable audit tombstone & snapshot');
 
     console.log('\nRolling back test transaction (database untouched)...');
   } finally {
@@ -591,7 +635,7 @@ async function run() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log('  ALL 36 P6-03 EXPENSE LEDGER ASSERTIONS PASSED WITH ZERO ERRORS!          ');
+  console.log('  ALL 42 P6-03 & P6-03A EXPENSE LEDGER ASSERTIONS PASSED WITH ZERO ERRORS! ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 

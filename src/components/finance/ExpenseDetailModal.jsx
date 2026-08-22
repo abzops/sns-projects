@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Copy,
@@ -13,6 +13,8 @@ import {
   Ban,
   Edit3,
   Loader2,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import { formatCurrency } from '../../lib/expenseExecution.js';
@@ -21,8 +23,8 @@ import styles from './ExpenseDetailModal.module.css';
 /**
  * ExpenseDetailModal
  *
- * Detailed inspection drawer/modal for a single expense transaction.
- * Surfaces line items, attribution, full immutable audit timeline, and action dispatchers.
+ * Detailed transaction inspection drawer / modal showing metadata, line items,
+ * and immutable audit history.
  */
 export default function ExpenseDetailModal({
   isOpen,
@@ -38,33 +40,37 @@ export default function ExpenseDetailModal({
 }) {
   const [activeTab, setActiveTab] = useState('items'); // 'items' | 'audit'
   const [auditLogs, setAuditLogs] = useState([]);
-  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState(null);
   const [copiedId, setCopiedId] = useState(false);
 
+  const loadAudit = useCallback(async () => {
+    if (!transaction?.id || !fetchTransactionAudit) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const logs = await fetchTransactionAudit(transaction.id);
+      setAuditLogs(logs);
+    } catch (err) {
+      console.error('[ExpenseDetailModal] loadAudit error:', err);
+      setAuditError(err.message || 'Failed to load transaction audit history.');
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [transaction?.id, fetchTransactionAudit]);
+
+  // Load audit history when modal opens or transaction shifts
   useEffect(() => {
     if (!isOpen || !transaction?.id) {
       setAuditLogs([]);
+      setAuditLoading(false);
+      setAuditError(null);
       setActiveTab('items');
       return;
     }
 
-    let isMounted = true;
-    setLoadingAudit(true);
-    fetchTransactionAudit(transaction.id)
-      .then((logs) => {
-        if (isMounted) setAuditLogs(logs);
-      })
-      .catch((err) => {
-        console.error('Failed to load transaction audit:', err);
-      })
-      .finally(() => {
-        if (isMounted) setLoadingAudit(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, transaction?.id, fetchTransactionAudit]);
+    loadAudit();
+  }, [isOpen, transaction?.id, loadAudit]);
 
   const handleCopyId = () => {
     if (!transaction?.id) return;
@@ -180,18 +186,25 @@ export default function ExpenseDetailModal({
           </div>
 
           <div className={styles.metaItem}>
-            <span className={styles.metaLabel}>Task / Subtask</span>
+            <span className={styles.metaLabel}>Operational Task</span>
             <span className={styles.metaValue}>
               <CheckSquare size={14} color="var(--muted)" />
-              <span>
-                {transaction.subtasks?.title
-                  ? `${transaction.subtasks.title} (${transaction.tasks?.title || 'Parent Task'})`
-                  : transaction.tasks?.title || 'Unknown Task'}
+              <span title={transaction.tasks?.title || ''}>
+                {transaction.tasks?.title || 'Unknown Task'}
               </span>
             </span>
           </div>
 
-          {transaction.tasks?.phases?.name && (
+          {transaction.subtasks && (
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Subtask Context</span>
+              <span className={styles.metaValue}>
+                <span>{transaction.subtasks.title}</span>
+              </span>
+            </div>
+          )}
+
+          {transaction.tasks?.phases && (
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Phase</span>
               <span className={styles.metaValue}>
@@ -202,23 +215,41 @@ export default function ExpenseDetailModal({
           )}
 
           <div className={styles.metaItem}>
-            <span className={styles.metaLabel}>Recorded By</span>
+            <span className={styles.metaLabel}>Created By</span>
             <span className={styles.metaValue}>
               <User size={14} color="var(--muted)" />
               <span>{transaction.profiles_created_by?.full_name || 'System / Member'}</span>
             </span>
           </div>
+
+          <div className={styles.metaItem}>
+            <span className={styles.metaLabel}>Created At</span>
+            <span className={styles.metaValue} style={{ fontSize: '0.75rem' }}>
+              {new Date(transaction.created_at).toLocaleString()}
+            </span>
+          </div>
+
+          {transaction.updated_at && transaction.updated_at !== transaction.created_at && (
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Last Modified</span>
+              <span className={styles.metaValue} style={{ fontSize: '0.75rem' }}>
+                {new Date(transaction.updated_at).toLocaleString()}
+                {transaction.profiles_updated_by && ` (${transaction.profiles_updated_by.full_name})`}
+              </span>
+            </div>
+          )}
         </div>
 
+        {/* Transaction Description */}
         {transaction.description && (
-          <div className={styles.metaItem} style={{ background: 'var(--panel-soft)', padding: '0.75rem', borderRadius: 'var(--radius-xs)', border: '1px solid var(--line-soft)' }}>
-            <span className={styles.metaLabel}>Transaction Description</span>
-            <span style={{ color: 'var(--text)', marginTop: '0.25rem' }}>{transaction.description}</span>
+          <div className={styles.descriptionBox}>
+            <span className={styles.descriptionLabel}>Transaction Description</span>
+            <p className={styles.descriptionText}>{transaction.description}</p>
           </div>
         )}
 
-        {/* Tab Navigation: Line Items vs Audit History */}
-        <div className={styles.tabsContainer}>
+        {/* Navigation Tabs */}
+        <div className={styles.tabNav}>
           <button
             type="button"
             className={`${styles.tabBtn} ${activeTab === 'items' ? styles.tabBtnActive : ''}`}
@@ -233,7 +264,7 @@ export default function ExpenseDetailModal({
             onClick={() => setActiveTab('audit')}
           >
             <History size={14} />
-            <span>Audit History ({auditLogs.length})</span>
+            <span>Audit History {auditLogs.length > 0 && `(${auditLogs.length})`}</span>
           </button>
         </div>
 
@@ -280,10 +311,37 @@ export default function ExpenseDetailModal({
         {/* Tab 2: Audit History Timeline */}
         {activeTab === 'audit' && (
           <div className={styles.auditContainer}>
-            {loadingAudit ? (
+            {auditLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', gap: '0.5rem', color: 'var(--muted)' }}>
                 <Loader2 size={16} className="spinning" />
                 <span>Loading immutable audit ledger...</span>
+              </div>
+            ) : auditError ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', gap: '0.75rem', textAlign: 'center' }}>
+                <AlertTriangle size={24} color="var(--red)" />
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text)' }}>Audit History Unavailable</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginTop: '0.25rem' }}>{auditError}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadAudit}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                    padding: '0.375rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    background: 'var(--panel-strong)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-xs)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <RefreshCw size={13} />
+                  <span>Retry</span>
+                </button>
               </div>
             ) : auditLogs.length > 0 ? (
               auditLogs.map((log) => {
@@ -311,6 +369,22 @@ export default function ExpenseDetailModal({
                         {new Date(log.created_at).toLocaleString()}
                       </span>
                     </div>
+
+                    {/* Previous Status -> New Status */}
+                    {(log.previous_status || log.new_status) && (
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--muted)', marginTop: '0.375rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                        <span>Status:</span>
+                        {log.previous_status && (
+                          <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{log.previous_status}</span>
+                        )}
+                        {log.previous_status && log.new_status && <span>→</span>}
+                        {log.new_status && (
+                          <span style={{ textTransform: 'capitalize', fontWeight: 600, color: 'var(--text)' }}>
+                            {log.new_status}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {log.reason && (
                       <div className={styles.auditReason}>
@@ -365,12 +439,12 @@ export default function ExpenseDetailModal({
             {canViewWorkspaceFinance && !isVoided && (
               <button
                 type="button"
-                className={styles.btnSecondary}
+                className={styles.btnVoid}
                 onClick={() => {
                   onClose();
                   onOpenVoid(transaction);
                 }}
-                title="Mark transaction voided (₹0 spend contribution)"
+                title="Void this transaction (sets effective contribution to ₹0.00)"
               >
                 <Ban size={14} />
                 <span>Void Expense</span>
@@ -380,25 +454,17 @@ export default function ExpenseDetailModal({
             {canViewWorkspaceFinance && !isVoided && (
               <button
                 type="button"
-                className={styles.btnPrimary}
+                className={styles.btnCorrect}
                 onClick={() => {
                   onClose();
                   onOpenCorrect(transaction);
                 }}
-                title="Revise line items and amounts with mandatory audit reason"
+                title="Correct line items, date, or description"
               >
                 <Edit3 size={14} />
                 <span>Correct Expense</span>
               </button>
             )}
-
-            <button
-              type="button"
-              className={styles.btnSecondary}
-              onClick={onClose}
-            >
-              Close
-            </button>
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ import {
   Ban,
   Eye,
   History,
+  FileText,
 } from 'lucide-react';
 import { useFinanceAccess } from '../hooks/useFinanceAccess.js';
 import { useExpenseLedger } from '../hooks/useExpenseLedger.js';
@@ -25,6 +26,7 @@ import ExpenseDetailModal from '../components/finance/ExpenseDetailModal.jsx';
 import ExpenseCorrectionModal from '../components/finance/ExpenseCorrectionModal.jsx';
 import ExpenseVoidModal from '../components/finance/ExpenseVoidModal.jsx';
 import ExpenseHardDeleteModal from '../components/finance/ExpenseHardDeleteModal.jsx';
+import TombstoneDetailModal from '../components/finance/TombstoneDetailModal.jsx';
 import styles from './ExpenseLedgerPage.module.css';
 
 function ExpenseLedgerSkeleton() {
@@ -47,9 +49,11 @@ export default function ExpenseLedgerPage() {
     canManageBudgets,
     isFinanceOperator,
     financeAccessLoading,
+    financeAccessError,
+    authorizationScopeKey,
   } = financeAccess;
 
-  const { projects = [] } = useProjects(workspaceId, { enabled: canViewWorkspaceFinance });
+  const { projects = [] } = useProjects(workspaceId, authorizationScopeKey);
 
   const {
     transactions,
@@ -62,7 +66,9 @@ export default function ExpenseLedgerPage() {
     correctExpense,
     voidExpense,
     hardDeleteExpense,
-  } = useExpenseLedger(workspaceId, { enabled: canViewWorkspaceFinance });
+  } = useExpenseLedger(workspaceId, authorizationScopeKey, {
+    enabled: canViewWorkspaceFinance && !financeAccessError,
+  });
 
   // Local Filter & UI State
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,6 +83,7 @@ export default function ExpenseLedgerPage() {
   const [selectedTxForCorrect, setSelectedTxForCorrect] = useState(null);
   const [selectedTxForVoid, setSelectedTxForVoid] = useState(null);
   const [selectedTxForHardDelete, setSelectedTxForHardDelete] = useState(null);
+  const [selectedTombstoneForDetail, setSelectedTombstoneForDetail] = useState(null);
 
   // Clear local state on workspace switch
   useEffect(() => {
@@ -90,6 +97,7 @@ export default function ExpenseLedgerPage() {
     setSelectedTxForCorrect(null);
     setSelectedTxForVoid(null);
     setSelectedTxForHardDelete(null);
+    setSelectedTombstoneForDetail(null);
   }, [workspaceId]);
 
   // Keep detail modal transaction in sync when transactions update
@@ -259,7 +267,24 @@ export default function ExpenseLedgerPage() {
     );
   }
 
-  // 2. Unauthorized / Access Restricted (Fail-Closed)
+  // 2. Authorization Error (Fail-Closed)
+  if (financeAccessError) {
+    return (
+      <div className={styles.page}>
+        <PageHeader
+          title="Expense Ledger"
+          subtitle="Detailed financial transactions & audit ledger"
+        />
+        <EmptyState
+          icon={ShieldAlert}
+          title="Authorization Context Error"
+          description="Failed to resolve your workspace financial authorization. Access is restricted."
+        />
+      </div>
+    );
+  }
+
+  // 3. Unauthorized / Access Restricted (Fail-Closed)
   if (!canViewWorkspaceFinance) {
     return (
       <div className={styles.page}>
@@ -276,7 +301,7 @@ export default function ExpenseLedgerPage() {
     );
   }
 
-  // 3. Error State with Retry
+  // 4. Error State with Retry
   if (ledgerError && transactions.length === 0) {
     return (
       <div className={styles.page}>
@@ -721,11 +746,12 @@ export default function ExpenseLedgerPage() {
                     <th>Previous Total</th>
                     <th>Deleted By</th>
                     <th>Mandatory Reason</th>
+                    <th style={{ textAlign: 'right' }}>Evidence</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTombstones.map((tb) => (
-                    <tr key={tb.id}>
+                    <tr key={tb.id} className={styles.ledgerRow} onClick={() => setSelectedTombstoneForDetail(tb)}>
                       <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         {new Date(tb.created_at).toLocaleString()}
                       </td>
@@ -739,6 +765,16 @@ export default function ExpenseLedgerPage() {
                       </td>
                       <td>{tb.actor?.full_name || 'Admin / Executive'}</td>
                       <td style={{ color: 'var(--text)' }}>{tb.reason || '—'}</td>
+                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className={styles.actionIconBtn}
+                          onClick={() => setSelectedTombstoneForDetail(tb)}
+                          title="Inspect Hard-Delete Snapshot Evidence"
+                        >
+                          <FileText size={13} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -797,6 +833,15 @@ export default function ExpenseLedgerPage() {
           onClose={() => setSelectedTxForHardDelete(null)}
           transaction={selectedTxForHardDelete}
           onHardDelete={handleHardDeleteExpense}
+        />
+      )}
+
+      {/* Tombstone Snapshot Evidence Modal */}
+      {selectedTombstoneForDetail && (
+        <TombstoneDetailModal
+          isOpen={Boolean(selectedTombstoneForDetail)}
+          onClose={() => setSelectedTombstoneForDetail(null)}
+          tombstone={selectedTombstoneForDetail}
         />
       )}
     </div>

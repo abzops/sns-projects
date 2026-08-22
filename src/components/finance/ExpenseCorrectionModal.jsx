@@ -9,6 +9,7 @@ import styles from './ExpenseCorrectionModal.module.css';
  *
  * Dedicated modal for correcting an existing expense transaction.
  * Calls public.correct_expense_transaction and enforces mandatory reason and positive amounts.
+ * Preserves optional / historical custom categories and allows clearing description.
  */
 export default function ExpenseCorrectionModal({
   isOpen,
@@ -35,7 +36,7 @@ export default function ExpenseCorrectionModal({
     }
 
     setExpenseDate(transaction.expense_date || '');
-    setDescription(transaction.description || '');
+    setDescription(transaction.description ?? '');
     setReason('');
     setClientError(null);
     setSubmitting(false);
@@ -45,7 +46,7 @@ export default function ExpenseCorrectionModal({
         transaction.expense_items.map((item, idx) => ({
           id: item.id || `temp-${idx}`,
           line_number: item.line_number || idx + 1,
-          category: item.category || 'Materials',
+          category: item.category || '', // Preserve null / empty category without forcing 'Materials'
           description: item.description || '',
           amount: String(item.amount ?? ''),
         }))
@@ -55,7 +56,7 @@ export default function ExpenseCorrectionModal({
         {
           id: 'item-1',
           line_number: 1,
-          category: 'Materials',
+          category: '', // Newly created item defaults to optional/empty category
           description: '',
           amount: '',
         },
@@ -69,7 +70,7 @@ export default function ExpenseCorrectionModal({
       {
         id: `item-${Date.now()}-${prev.length + 1}`,
         line_number: prev.length + 1,
-        category: 'Materials',
+        category: '', // Optional/empty by default
         description: '',
         amount: '',
       },
@@ -136,7 +137,7 @@ export default function ExpenseCorrectionModal({
       normalizedItems.push({
         line_number: i + 1,
         amount: parsedAmt,
-        category: it.category?.trim() || null,
+        category: it.category?.trim() || null, // Optional: trimmed category or null
         description: it.description?.trim() || null,
       });
     }
@@ -147,7 +148,7 @@ export default function ExpenseCorrectionModal({
         transactionId: transaction.id,
         items: normalizedItems,
         reason: reason.trim(),
-        description: description ? description.trim() : null,
+        description: description !== undefined ? description.trim() : null, // Preserves intentional "" clearing
         expenseDate,
       });
       onClose();
@@ -208,13 +209,20 @@ export default function ExpenseCorrectionModal({
             <input
               type="text"
               className={styles.input}
-              placeholder="Optional summary note"
+              placeholder="Optional summary note (clear to empty)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}
             />
           </div>
         </div>
+
+        {/* Datalist for suggested categories */}
+        <datalist id="correction-expense-categories">
+          {EXPENSE_CATEGORIES.map((cat) => (
+            <option key={cat} value={cat} />
+          ))}
+        </datalist>
 
         {/* Items Section */}
         <div className={styles.itemsSection}>
@@ -234,18 +242,15 @@ export default function ExpenseCorrectionModal({
           <div className={styles.itemsList}>
             {items.map((item, idx) => (
               <div key={item.id} className={styles.itemRow}>
-                <select
+                <input
+                  type="text"
+                  list="correction-expense-categories"
                   className={styles.itemSelect}
+                  placeholder="Category (optional)"
                   value={item.category}
                   onChange={(e) => handleItemChange(idx, 'category', e.target.value)}
                   disabled={submitting}
-                >
-                  {EXPENSE_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                />
 
                 <input
                   type="text"
@@ -282,25 +287,42 @@ export default function ExpenseCorrectionModal({
           </div>
         </div>
 
-        {/* Summary Bar */}
-        <div className={styles.totalSummaryBar}>
-          <span className={styles.totalChangeLabel}>
-            Previous Total: <strong>{formatCurrency(previousTotal)}</strong>
-          </span>
-          <div>
-            <span className={styles.totalChangeLabel}>Corrected Total: </span>
-            <span className={styles.totalAmountNew}>{formatCurrency(calculatedNewTotal)}</span>
+        {/* Financial Delta Impact Summary */}
+        <div className={styles.deltaBox}>
+          <div className={styles.deltaItem}>
+            <span className={styles.deltaLabel}>Previous Total:</span>
+            <span className={styles.deltaValue}>{formatCurrency(previousTotal)}</span>
+          </div>
+          <div className={styles.deltaItem}>
+            <span className={styles.deltaLabel}>Corrected Total:</span>
+            <span
+              className={styles.deltaValue}
+              style={{
+                color: calculatedNewTotal > previousTotal ? 'var(--red)' : 'var(--green)',
+                fontWeight: 700,
+              }}
+            >
+              {formatCurrency(calculatedNewTotal)}
+            </span>
+          </div>
+          <div className={styles.deltaItem}>
+            <span className={styles.deltaLabel}>Net Variance:</span>
+            <span className={styles.deltaValue}>
+              {calculatedNewTotal - previousTotal >= 0 ? '+' : ''}
+              {formatCurrency(calculatedNewTotal - previousTotal)}
+            </span>
           </div>
         </div>
 
-        {/* Mandatory Correction Reason */}
-        <div className={styles.formGroup}>
+        {/* Mandatory Reason */}
+        <div className={styles.formGroup} style={{ marginTop: '0.25rem' }}>
           <label className={styles.formLabel}>
             Mandatory Correction Reason <span className={styles.required}>*</span>
           </label>
           <textarea
             className={styles.textarea}
-            placeholder="Explain why this expense transaction is being corrected (stored permanently in immutable audit ledger)..."
+            rows={3}
+            placeholder="Explain why this expense is being corrected (required for immutable audit ledger)..."
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             required
@@ -308,8 +330,8 @@ export default function ExpenseCorrectionModal({
           />
         </div>
 
-        {/* Modal Footer */}
-        <div className={styles.modalFooter}>
+        {/* Modal Actions */}
+        <div className={styles.modalActions}>
           <button
             type="button"
             className={styles.cancelBtn}
@@ -329,7 +351,7 @@ export default function ExpenseCorrectionModal({
                 <span>Applying Correction...</span>
               </>
             ) : (
-              <span>Save Correction</span>
+              <span>Save & Record Audit</span>
             )}
           </button>
         </div>
