@@ -2,7 +2,7 @@
 
 **Package**: Package 6 — Finance Frontend  
 **Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING`  
-**Frontend Baseline**: `TBD (P6-04 Implementation)`  
+**Frontend Baseline**: `0092695404acec404b935de3611b5c80cd2632e4` (P6-04 base) — P6-04A hotfix applied on top  
 **Database Tip**: `20260820174313_p4_01b_finance_active_tenancy_authorization_closure`  
 **Route**: `/workspace/:workspaceId/finance/explorer`  
 **Authoritative Backend Contracts**:

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Compass,
@@ -266,20 +266,22 @@ export default function FinancialExplorerPage() {
         if (r.departmentName !== selectedDepartment) return false;
       }
 
-      // 8. Status (Tasks, Projects, Task Lists, Expenses)
+      // 8. Status (Normalized across Projects, Tasks, Task Lists, Expenses)
       if (selectedStatus !== 'all') {
-        if (r.rowType === 'phase') return false; // Phases excluded from status filtering
-        if (r.status !== selectedStatus) return false;
+        if (r.rowType === 'phase') return false; // Phases excluded from status filtering per Req 17
+        const matchStatus = r.normalizedStatus === selectedStatus || r.status === selectedStatus;
+        if (!matchStatus) return false;
       }
 
-      // 9. Risk Band
+      // 9. Risk Band (summary-error rows should NOT match GREEN or UNBUDGETED)
       if (selectedRisk !== 'all') {
+        if (r.hasSummaryError) return false;
         if (r.riskBand !== selectedRisk) return false;
       }
 
       // 10. Over-Budget Only
       if (overBudgetOnly) {
-        if (!r.isOverBudget) return false;
+        if (r.hasSummaryError || !r.isOverBudget) return false;
       }
 
       // 11. Creator
@@ -287,42 +289,46 @@ export default function FinancialExplorerPage() {
         if (r.createdBy !== selectedCreator) return false;
       }
 
-      // 12. Date Range (Financial activity date)
-      if (dateFrom && r.date !== '—' && r.date < dateFrom) return false;
-      if (dateTo && r.date !== '—' && r.date > dateTo) return false;
+      // 12. Date Range (Financial activity semantics)
+      if (dateFrom || dateTo) {
+        if (r.rowType === 'expense') {
+          if (dateFrom && (r.date === '—' || r.date < dateFrom)) return false;
+          if (dateTo && (r.date === '—' || r.date > dateTo)) return false;
+        } else if (r.rowType === 'task') {
+          const selfMatch = (!dateFrom || r.date >= dateFrom) && (!dateTo || r.date <= dateTo) && r.date !== '—';
+          const childExpenseMatch = (r.descendantExpenseDates || []).some(
+            (d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)
+          );
+          if (!selfMatch && !childExpenseMatch) return false;
+        } else {
+          // Project / Phase / Task List: retain if descendant expense matches, or if 0 expenses exist and container created_at matches
+          const hasDescendantExpenses = (r.descendantExpenseDates || []).length > 0;
+          if (hasDescendantExpenses) {
+            const childExpenseMatch = r.descendantExpenseDates.some(
+              (d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)
+            );
+            if (!childExpenseMatch) return false;
+          } else {
+            const selfMatch = (!dateFrom || r.date >= dateFrom) && (!dateTo || r.date <= dateTo) && r.date !== '—';
+            if (!selfMatch) return false;
+          }
+        }
+      }
 
       // 13. Amount Min / Max
       const minNum = parseFloat(amountMin);
       if (!isNaN(minNum)) {
-        if (r.actualSpend < minNum) return false;
+        if (r.actualSpend === null || r.actualSpend < minNum) return false;
       }
       const maxNum = parseFloat(amountMax);
       if (!isNaN(maxNum)) {
-        if (r.actualSpend > maxNum) return false;
+        if (r.actualSpend === null || r.actualSpend > maxNum) return false;
       }
 
-      // 14. Text Search
+      // 14. Text Search (Matches all expense items and normalized entity fields)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const nameMatch = (r.name || '').toLowerCase().includes(q);
-        const descMatch = (r.description || '').toLowerCase().includes(q);
-        const projMatch = (r.projectName || '').toLowerCase().includes(q);
-        const phaseMatch = (r.phaseName || '').toLowerCase().includes(q);
-        const listMatch = (r.taskListName || '').toLowerCase().includes(q);
-        const taskMatch = (r.taskTitle || '').toLowerCase().includes(q);
-        const ownerMatch = (r.ownerName || '').toLowerCase().includes(q);
-        const creatorMatch = (r.creatorName || '').toLowerCase().includes(q);
-
-        if (
-          !nameMatch &&
-          !descMatch &&
-          !projMatch &&
-          !phaseMatch &&
-          !listMatch &&
-          !taskMatch &&
-          !ownerMatch &&
-          !creatorMatch
-        ) {
+        if (r.searchableText && !r.searchableText.includes(q)) {
           return false;
         }
       }
@@ -349,19 +355,28 @@ export default function FinancialExplorerPage() {
     searchQuery,
   ]);
 
-  // Sorting
+  // Sorting: Unavailable/null values sort last
   const sortedRows = useMemo(() => {
     const list = [...filteredRows];
     const riskPriority = { RED: 5, ORANGE: 4, YELLOW: 3, GREEN: 2, UNBUDGETED: 1 };
 
     list.sort((a, b) => {
+      // If one has summary error and sorting by financial metric, push error to bottom
+      if (sortBy === 'actualSpend' || sortBy === 'utilizationPct' || sortBy === 'riskBand') {
+        const aNull = a.hasSummaryError || a[sortBy] === null;
+        const bNull = b.hasSummaryError || b[sortBy] === null;
+        if (aNull && !bNull) return 1;
+        if (!aNull && bNull) return -1;
+        if (aNull && bNull) return 0;
+      }
+
       let cmp = 0;
       if (sortBy === 'name') {
         cmp = (a.name || '').localeCompare(b.name || '');
       } else if (sortBy === 'actualSpend') {
-        cmp = (a.actualSpend || 0) - (b.actualSpend || 0);
+        cmp = (a.actualSpend ?? 0) - (b.actualSpend ?? 0);
       } else if (sortBy === 'utilizationPct') {
-        cmp = (a.utilizationPct || 0) - (b.utilizationPct || 0);
+        cmp = (a.utilizationPct ?? 0) - (b.utilizationPct ?? 0);
       } else if (sortBy === 'riskBand') {
         cmp = (riskPriority[a.riskBand] || 0) - (riskPriority[b.riskBand] || 0);
       } else if (sortBy === 'date') {
@@ -406,11 +421,11 @@ export default function FinancialExplorerPage() {
         key = r.rowType;
         title = r.rowType.toUpperCase();
       } else if (groupBy === 'status') {
-        key = r.status;
-        title = r.status;
+        key = r.normalizedStatus || r.status;
+        title = r.normalizedStatus || r.status;
       } else if (groupBy === 'riskBand') {
-        key = r.riskBand;
-        title = `Risk: ${r.riskBand}`;
+        key = r.hasSummaryError ? 'Unavailable' : (r.riskBand || 'UNBUDGETED');
+        title = r.hasSummaryError ? 'Risk: Unavailable' : `Risk: ${r.riskBand || 'UNBUDGETED'}`;
       }
 
       if (!groupsMap.has(key)) {
@@ -422,31 +437,34 @@ export default function FinancialExplorerPage() {
     return Array.from(groupsMap.values());
   }, [sortedRows, groupBy]);
 
-  // Zero Double-Counting Summary Strip Metrics
+  // Zero Double-Counting Summary Strip Metrics & Canonical High Risk Unit Deduplication
   const summaryStrip = useMemo(() => {
-    // 1. Matched rows count
     const totalMatchedRows = filteredRows.length;
 
-    // 2. Effective spend: sum solely from matching physical expense rows (or leaf spend)
+    // Effective spend: sum solely from matching physical leaf expense transactions
     const matchingExpenses = filteredRows.filter((r) => r.rowType === 'expense');
     let effectiveLeafSpend = 0;
     for (const exp of matchingExpenses) {
       effectiveLeafSpend += exp.actualSpend || 0;
     }
 
-    // 3. Unique projects count
+    // Unique projects count
     const uniqueProjectIds = new Set(
       filteredRows.filter((r) => r.projectId).map((r) => r.projectId)
     );
 
-    // 4. High Risk Count: Unique budget-owning entities in ORANGE or RED
-    const highRiskBudgetEntities = new Set();
+    // High Risk Count: Deduplicate by canonical budget source ID and type
+    const highRiskBudgetSources = new Set();
     for (const r of filteredRows) {
       if (
         (r.rowType === 'project' || r.rowType === 'phase' || r.rowType === 'task_list') &&
+        !r.hasSummaryError &&
         (r.riskBand === 'ORANGE' || r.riskBand === 'RED')
       ) {
-        highRiskBudgetEntities.add(`${r.rowType}:${r.entityId}`);
+        const sourceKey = r.budgetSourceId
+          ? `${r.budgetSourceType || r.rowType}:${r.budgetSourceId}`
+          : `${r.rowType}:${r.entityId}`;
+        highRiskBudgetSources.add(sourceKey);
       }
     }
 
@@ -455,7 +473,7 @@ export default function FinancialExplorerPage() {
       effectiveLeafSpend,
       expenseEntriesCount: matchingExpenses.length,
       projectsCount: uniqueProjectIds.size,
-      highRiskCount: highRiskBudgetEntities.size,
+      highRiskCount: highRiskBudgetSources.size,
     };
   }, [filteredRows]);
 
@@ -504,13 +522,13 @@ export default function FinancialExplorerPage() {
         `"${(r.taskTitle || '').replace(/"/g, '""')}"`,
         `"${r.status || '—'}"`,
         `"${r.budgetSource || 'Unbudgeted'}"`,
-        r.baseBudget !== null ? r.baseBudget.toFixed(2) : '""',
-        r.safetyBuffer !== null ? r.safetyBuffer.toFixed(2) : '""',
-        r.actualSpend.toFixed(2),
-        r.remainingBase !== null ? r.remainingBase.toFixed(2) : '""',
-        r.overrun !== null ? r.overrun.toFixed(2) : '""',
-        r.utilizationPct !== null ? r.utilizationPct.toFixed(2) : '""',
-        `"${r.riskBand || 'GREEN'}"`,
+        r.baseBudget !== null && !r.hasSummaryError ? r.baseBudget.toFixed(2) : '""',
+        r.safetyBuffer !== null && !r.hasSummaryError ? r.safetyBuffer.toFixed(2) : '""',
+        r.actualSpend !== null && !r.hasSummaryError ? r.actualSpend.toFixed(2) : '""',
+        r.remainingBase !== null && !r.hasSummaryError ? r.remainingBase.toFixed(2) : '""',
+        r.overrun !== null && !r.hasSummaryError ? r.overrun.toFixed(2) : '""',
+        r.utilizationPct !== null && !r.hasSummaryError ? r.utilizationPct.toFixed(2) : '""',
+        `"${r.hasSummaryError ? 'Unavailable' : (r.riskBand || 'GREEN')}"`,
         `"${r.date || '—'}"`,
         `"${(r.ownerName || 'Unassigned').replace(/"/g, '""')}"`,
         `"${(r.departmentName || 'Unassigned').replace(/"/g, '""')}"`,
@@ -576,7 +594,7 @@ export default function FinancialExplorerPage() {
     );
   }
 
-  // 4. Error State with Retry
+  // 4. Initial Error State with Retry
   if (explorerError && rows.length === 0) {
     return (
       <div className={styles.page}>
@@ -651,50 +669,77 @@ export default function FinancialExplorerPage() {
         }
       />
 
-      {/* Summary Strip (Zero Double Counting) */}
+      {/* Non-blocking refresh error notice if cached data exists */}
+      {explorerError && rows.length > 0 && (
+        <div className={styles.refreshNotice} role="alert">
+          <AlertTriangle size={14} />
+          <span>Notice: Failed to update latest data ({explorerError}). Displaying cached state.</span>
+        </div>
+      )}
+
+      {/* Summary Metrics Strip (Strictly Derived from Leaf Expenses, Zero Double-Counting) */}
       <div className={styles.summaryStrip}>
-        <div className={styles.summaryItem}>
-          <span className={styles.summaryLabel}>Matched Records</span>
-          <span className={styles.summaryValue}>{summaryStrip.totalMatchedRows}</span>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardLabel}>Matched Records</div>
+          <div className={styles.summaryCardValue}>{summaryStrip.totalMatchedRows}</div>
+          <div className={styles.summaryCardSub}>Filtered entities</div>
         </div>
-        <div className={styles.summaryItem}>
-          <span className={styles.summaryLabel}>Effective Spend</span>
-          <span className={styles.summaryValue} style={{ color: 'var(--yellow)' }}>
+
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardLabel}>Effective Leaf Spend</div>
+          <div className={styles.summaryCardValue} style={{ color: 'var(--yellow)' }}>
             {formatCurrency(summaryStrip.effectiveLeafSpend)}
-          </span>
+          </div>
+          <div className={styles.summaryCardSub}>Zero double-counting</div>
         </div>
-        <div className={styles.summaryItem}>
-          <span className={styles.summaryLabel}>Expense Entries</span>
-          <span className={styles.summaryValue}>{summaryStrip.expenseEntriesCount}</span>
+
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardLabel}>Expense Entries</div>
+          <div className={styles.summaryCardValue}>{summaryStrip.expenseEntriesCount}</div>
+          <div className={styles.summaryCardSub}>Physical transactions</div>
         </div>
-        <div className={styles.summaryItem}>
-          <span className={styles.summaryLabel}>Projects Scope</span>
-          <span className={styles.summaryValue}>{summaryStrip.projectsCount}</span>
+
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardLabel}>Projects In Scope</div>
+          <div className={styles.summaryCardValue}>{summaryStrip.projectsCount}</div>
+          <div className={styles.summaryCardSub}>Containers</div>
         </div>
-        <div className={styles.summaryItem}>
-          <span className={styles.summaryLabel}>High Risk Units</span>
-          <span
-            className={styles.summaryValue}
-            style={{ color: summaryStrip.highRiskCount > 0 ? 'var(--red)' : 'var(--green)' }}
+
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardLabel}>High Risk Units</div>
+          <div
+            className={styles.summaryCardValue}
+            style={{ color: summaryStrip.highRiskCount > 0 ? 'var(--red)' : 'inherit' }}
           >
             {summaryStrip.highRiskCount}
-          </span>
+          </div>
+          <div className={styles.summaryCardSub}>Unique Orange / Red sources</div>
         </div>
       </div>
 
-      {/* Filter & Grouping Toolbar */}
-      <div className={styles.toolbarCard}>
-        <div className={styles.topFilterRow}>
-          {/* Text Search */}
-          <div className={styles.searchBox}>
-            <Search size={16} color="var(--muted)" />
+      {/* Control Toolbar: Search, Grouping, Sorting, Multi-Dimensional Filters */}
+      <div className={styles.controlsPanel}>
+        <div className={styles.searchAndControls}>
+          {/* Text Search Input */}
+          <div className={styles.searchContainer}>
+            <Search size={16} className={styles.searchIcon} />
             <input
               type="text"
-              className={styles.searchInput}
-              placeholder="Search by name, project, phase, task, owner, creator..."
+              placeholder="Search by title, description, category, project, phase, task, owner..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className={styles.searchInput}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className={styles.clearSearchBtn}
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
           </div>
 
           {/* Grouping & Sorting Controls */}
@@ -719,28 +764,27 @@ export default function FinancialExplorerPage() {
             </div>
 
             <div className={styles.controlGroup}>
-              <span className={styles.controlLabel}>Sort:</span>
+              <span className={styles.controlLabel}>Sort By:</span>
               <select
                 className={styles.controlSelect}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
-                <option value="name">Name</option>
+                <option value="name">Name / Title</option>
                 <option value="actualSpend">Actual Spend</option>
                 <option value="utilizationPct">Utilization %</option>
                 <option value="riskBand">Risk Band</option>
-                <option value="date">Date</option>
+                <option value="date">Financial Date</option>
                 <option value="ownerName">Owner</option>
               </select>
-              <select
-                className={styles.controlSelect}
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                style={{ width: '70px' }}
+              <button
+                type="button"
+                className={styles.sortOrderBtn}
+                onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+                title={`Sorting ${sortOrder.toUpperCase()}`}
               >
-                <option value="asc">Asc</option>
-                <option value="desc">Desc</option>
-              </select>
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
             </div>
           </div>
         </div>
@@ -756,16 +800,16 @@ export default function FinancialExplorerPage() {
               onChange={(e) => setEntityType(e.target.value)}
             >
               <option value="all">All Types</option>
-              <option value="project">Projects Only</option>
-              <option value="phase">Phases Only</option>
-              <option value="task_list">Task Lists Only</option>
-              <option value="task">Tasks Only</option>
-              <option value="expense">Expenses Only</option>
-              <option value="standalone">Standalone Work Only</option>
+              <option value="project">Project</option>
+              <option value="phase">Phase</option>
+              <option value="task_list">Task List</option>
+              <option value="task">Task</option>
+              <option value="expense">Expense</option>
+              <option value="standalone">Standalone Work</option>
             </select>
           </div>
 
-          {/* 2. Cascading Project */}
+          {/* 2. Project (Cascading Root) */}
           <div className={styles.filterField}>
             <span className={styles.filterFieldLabel}>Project:</span>
             <select
@@ -782,14 +826,13 @@ export default function FinancialExplorerPage() {
             </select>
           </div>
 
-          {/* 3. Cascading Phase */}
+          {/* 3. Phase (Cascading Child) */}
           <div className={styles.filterField}>
             <span className={styles.filterFieldLabel}>Phase:</span>
             <select
               className={styles.filterSelect}
               value={selectedPhase}
               onChange={(e) => handlePhaseChange(e.target.value)}
-              disabled={availablePhases.length === 0}
             >
               <option value="all">All Phases</option>
               {availablePhases.map((ph) => (
@@ -800,14 +843,13 @@ export default function FinancialExplorerPage() {
             </select>
           </div>
 
-          {/* 4. Cascading Task List */}
+          {/* 4. Task List (Cascading Child) */}
           <div className={styles.filterField}>
             <span className={styles.filterFieldLabel}>Task List:</span>
             <select
               className={styles.filterSelect}
               value={selectedTaskList}
               onChange={(e) => handleTaskListChange(e.target.value)}
-              disabled={availableTaskLists.length === 0}
             >
               <option value="all">All Task Lists</option>
               {availableTaskLists.map((tl) => (
@@ -818,14 +860,13 @@ export default function FinancialExplorerPage() {
             </select>
           </div>
 
-          {/* 5. Cascading Task */}
+          {/* 5. Task (Cascading Child) */}
           <div className={styles.filterField}>
             <span className={styles.filterFieldLabel}>Task:</span>
             <select
               className={styles.filterSelect}
               value={selectedTask}
               onChange={(e) => setSelectedTask(e.target.value)}
-              disabled={availableTasks.length === 0}
             >
               <option value="all">All Tasks</option>
               {availableTasks.map((t) => (
@@ -853,7 +894,7 @@ export default function FinancialExplorerPage() {
             </select>
           </div>
 
-          {/* 7. Department (Owner primary active department) */}
+          {/* 7. Department */}
           <div className={styles.filterField}>
             <span className={styles.filterFieldLabel}>Department:</span>
             <select
@@ -863,10 +904,11 @@ export default function FinancialExplorerPage() {
             >
               <option value="all">All Departments</option>
               {(hierarchyData.departments || []).map((d) => (
-                <option key={d.id || d.name} value={d.name}>
+                <option key={d.name} value={d.name}>
                   {d.name} ({d.code})
                 </option>
               ))}
+              <option value="Unassigned">Unassigned</option>
             </select>
           </div>
 
@@ -882,8 +924,8 @@ export default function FinancialExplorerPage() {
               <option value="Active">Active</option>
               <option value="Completed">Completed</option>
               <option value="Cancelled">Cancelled</option>
-              <option value="corrected">Corrected (Expense)</option>
-              <option value="voided">Voided (Expense)</option>
+              <option value="Corrected">Corrected (Expense)</option>
+              <option value="Voided">Voided (Expense)</option>
             </select>
           </div>
 
@@ -953,7 +995,7 @@ export default function FinancialExplorerPage() {
             <span>Over-Budget Only</span>
           </label>
 
-          {/* Reset Filters */}
+          {/* 14. Clear All Filters */}
           {hasActiveFilters && (
             <button
               type="button"
@@ -966,15 +1008,37 @@ export default function FinancialExplorerPage() {
         </div>
       </div>
 
-      {/* Main Results Table & Groups */}
-      {sortedRows.length > 0 ? (
+      {/* Main Results Table & Mobile Cards */}
+      {filteredRows.length === 0 ? (
+        <EmptyState
+          icon={Compass}
+          title="No Financial Records Found"
+          description={
+            hasActiveFilters
+              ? 'No entities or transactions matched your active filter criteria. Try adjusting or clearing filters.'
+              : 'No project, phase, task list, task, or expense records found in this workspace.'
+          }
+          action={
+            hasActiveFilters ? (
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={handleResetFilters}
+              >
+                Clear Filters
+              </button>
+            ) : null
+          }
+        />
+      ) : (
         <>
+          {/* Desktop High-Density Table (Single <tbody>, Zero Nested <tbody>) */}
           <div className={styles.tableContainer}>
             <table className={styles.explorerTable}>
               <thead>
                 <tr>
-                  <th style={{ width: '90px' }}>Type</th>
-                  <th style={{ minWidth: '220px' }}>Name / Description</th>
+                  <th>Type</th>
+                  <th>Name / Description</th>
                   <th>Project</th>
                   <th>Phase</th>
                   <th>Task List</th>
@@ -993,12 +1057,12 @@ export default function FinancialExplorerPage() {
                   <th style={{ textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={styles.tableBody}>
                 {groupedData.map((group) => {
                   const groupLeafSpend = computeGroupLeafSpend(group.rows);
 
                   return (
-                    <tbody key={group.groupKey}>
+                    <React.Fragment key={group.groupKey}>
                       {groupBy !== 'none' && (
                         <tr className={styles.groupHeaderRow}>
                           <td colSpan={18} className={styles.groupHeaderCell}>
@@ -1035,15 +1099,18 @@ export default function FinancialExplorerPage() {
                             ? styles.typeExpense
                             : styles.typeStandalone;
 
-                        const riskClass = styles[`risk${r.riskBand}`] || styles.riskGREEN;
+                        const riskClass = r.hasSummaryError
+                          ? styles.riskUNAVAILABLE
+                          : styles[`risk${r.riskBand}`] || styles.riskGREEN;
+
                         const statusClass =
-                          r.status === 'Active'
+                          r.normalizedStatus === 'Active'
                             ? styles.statusActive
-                            : r.status === 'Completed'
+                            : r.normalizedStatus === 'Completed'
                             ? styles.statusCompleted
-                            : r.status === 'voided'
+                            : r.normalizedStatus === 'Voided'
                             ? styles.statusVoided
-                            : r.status === 'corrected'
+                            : r.normalizedStatus === 'Corrected'
                             ? styles.statusCorrected
                             : '';
 
@@ -1118,35 +1185,47 @@ export default function FinancialExplorerPage() {
 
                             {/* Budget Source */}
                             <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                              <span className={r.budgetSource.includes('Unbudgeted') ? styles.dimText : ''}>
+                              <span className={r.budgetSource.includes('Unbudgeted') || r.hasSummaryError ? styles.dimText : ''}>
                                 {r.budgetSource}
                               </span>
                             </td>
 
                             {/* Base Budget */}
                             <td className={styles.amountCol}>
-                              {r.baseBudget !== null ? formatCurrency(r.baseBudget) : <span className={styles.dimText}>—</span>}
+                              {r.baseBudget !== null && !r.hasSummaryError ? (
+                                formatCurrency(r.baseBudget)
+                              ) : (
+                                <span className={styles.dimText}>—</span>
+                              )}
                             </td>
 
                             {/* Safety Buffer */}
                             <td className={styles.amountCol}>
-                              {r.safetyBuffer !== null ? formatCurrency(r.safetyBuffer) : <span className={styles.dimText}>—</span>}
+                              {r.safetyBuffer !== null && !r.hasSummaryError ? (
+                                formatCurrency(r.safetyBuffer)
+                              ) : (
+                                <span className={styles.dimText}>—</span>
+                              )}
                             </td>
 
                             {/* Actual Spend */}
                             <td
                               className={styles.amountCol}
                               style={{
-                                color: r.status === 'voided' ? 'var(--muted)' : 'var(--yellow)',
-                                textDecoration: r.status === 'voided' ? 'line-through' : 'none',
+                                color: r.status === 'voided' || r.normalizedStatus === 'Voided' ? 'var(--muted)' : 'var(--yellow)',
+                                textDecoration: r.status === 'voided' || r.normalizedStatus === 'Voided' ? 'line-through' : 'none',
                               }}
                             >
-                              {formatCurrency(r.actualSpend)}
+                              {r.hasSummaryError && r.actualSpend === null ? (
+                                <span className={styles.dimText}>Summary unavailable</span>
+                              ) : (
+                                formatCurrency(r.actualSpend ?? 0)
+                              )}
                             </td>
 
                             {/* Remaining Base */}
                             <td className={styles.amountCol}>
-                              {r.remainingBase !== null ? (
+                              {r.remainingBase !== null && !r.hasSummaryError ? (
                                 <span style={{ color: r.remainingBase < 0 ? 'var(--red)' : 'inherit' }}>
                                   {formatCurrency(r.remainingBase)}
                                 </span>
@@ -1157,7 +1236,7 @@ export default function FinancialExplorerPage() {
 
                             {/* Overrun */}
                             <td className={styles.amountCol}>
-                              {r.overrun !== null ? (
+                              {r.overrun !== null && !r.hasSummaryError ? (
                                 <span className={r.overrun > 0 ? styles.overrunText : styles.dimText}>
                                   {formatCurrency(r.overrun)}
                                 </span>
@@ -1168,7 +1247,7 @@ export default function FinancialExplorerPage() {
 
                             {/* Utilization % */}
                             <td className={styles.amountCol}>
-                              {r.utilizationPct !== null ? (
+                              {r.utilizationPct !== null && !r.hasSummaryError ? (
                                 <span>{r.utilizationPct.toFixed(1)}%</span>
                               ) : (
                                 <span className={styles.dimText}>—</span>
@@ -1178,7 +1257,9 @@ export default function FinancialExplorerPage() {
                             {/* Risk Band */}
                             <td>
                               <span className={`${styles.riskBadge} ${riskClass}`}>
-                                {r.riskBand}
+                                {r.hasSummaryError
+                                  ? (r.rowType === 'task' || r.rowType === 'expense' ? 'Budget context unavailable' : 'Summary unavailable')
+                                  : r.riskBand}
                               </span>
                             </td>
 
@@ -1228,7 +1309,7 @@ export default function FinancialExplorerPage() {
                           </tr>
                         );
                       })}
-                    </tbody>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1238,7 +1319,10 @@ export default function FinancialExplorerPage() {
           {/* Mobile Stacked Cards */}
           <div className={styles.mobileCardsContainer}>
             {sortedRows.map((r) => {
-              const riskClass = styles[`risk${r.riskBand}`] || styles.riskGREEN;
+              const riskClass = r.hasSummaryError
+                ? styles.riskUNAVAILABLE
+                : styles[`risk${r.riskBand}`] || styles.riskGREEN;
+
               const typeClass =
                 r.rowType === 'project'
                   ? styles.typeProject
@@ -1252,88 +1336,85 @@ export default function FinancialExplorerPage() {
                   ? styles.typeExpense
                   : styles.typeStandalone;
 
+              const statusClass =
+                r.normalizedStatus === 'Active'
+                  ? styles.statusActive
+                  : r.normalizedStatus === 'Completed'
+                  ? styles.statusCompleted
+                  : r.normalizedStatus === 'Voided'
+                  ? styles.statusVoided
+                  : r.normalizedStatus === 'Corrected'
+                  ? styles.statusCorrected
+                  : '';
+
               return (
                 <div
                   key={r.id}
                   className={styles.mobileCard}
                   onClick={() => {
-                    if (r.rowType === 'expense') setSelectedExpenseForDetail(r.rawEntity);
+                    if (r.rowType === 'expense') {
+                      setSelectedExpenseForDetail(r.rawEntity);
+                    }
                   }}
                 >
                   <div className={styles.mobileCardHeader}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
-                        <span className={`${styles.typeBadge} ${typeClass}`}>
-                          {r.rowType}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                          {r.projectName || 'Standalone'}
-                        </span>
-                      </div>
-                      <div style={{ fontWeight: 600, color: 'var(--text)' }}>
-                        {r.name}
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                      <span className={`${styles.typeBadge} ${typeClass}`}>
+                        {r.rowType === 'task' && r.taskVariant ? r.taskVariant : r.rowType}
+                      </span>
+                      <span className={styles.mobileCardTitle}>{r.name}</span>
                     </div>
                     <span className={`${styles.riskBadge} ${riskClass}`}>
-                      {r.riskBand}
+                      {r.hasSummaryError ? 'Unavailable' : r.riskBand}
                     </span>
                   </div>
 
+                  <div className={styles.mobileCardDesc}>{r.description}</div>
+
                   <div className={styles.mobileCardGrid}>
-                    <div>
-                      <span style={{ color: 'var(--muted)' }}>Spend: </span>
-                      <strong style={{ color: 'var(--yellow)' }}>{formatCurrency(r.actualSpend)}</strong>
+                    <div className={styles.mobileField}>
+                      <span className={styles.mobileFieldLabel}>Project</span>
+                      <span className={styles.mobileFieldValue}>{r.projectName || '—'}</span>
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--muted)' }}>Budget: </span>
-                      <span>{r.baseBudget !== null ? formatCurrency(r.baseBudget) : '—'}</span>
+                    <div className={styles.mobileField}>
+                      <span className={styles.mobileFieldLabel}>Phase / List</span>
+                      <span className={styles.mobileFieldValue}>
+                        {r.phaseName !== '—' ? r.phaseName : r.taskListName !== '—' ? r.taskListName : '—'}
+                      </span>
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--muted)' }}>Owner: </span>
-                      <span>{r.ownerName}</span>
+                    <div className={styles.mobileField}>
+                      <span className={styles.mobileFieldLabel}>Actual Spend</span>
+                      <span className={styles.mobileFieldValue} style={{ color: 'var(--yellow)', fontWeight: 600 }}>
+                        {r.hasSummaryError && r.actualSpend === null ? 'Unavailable' : formatCurrency(r.actualSpend ?? 0)}
+                      </span>
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--muted)' }}>Dept: </span>
-                      <span>{r.departmentName}</span>
+                    <div className={styles.mobileField}>
+                      <span className={styles.mobileFieldLabel}>Status</span>
+                      <span className={`${styles.statusBadge} ${statusClass}`}>
+                        {r.status || '—'}
+                      </span>
                     </div>
                   </div>
 
                   <div className={styles.mobileCardFooter}>
                     <span>{r.date}</span>
-                    <span>Source: {r.budgetSource}</span>
+                    <span>{r.ownerName}</span>
+                    <span>{r.departmentName}</span>
                   </div>
                 </div>
               );
             })}
           </div>
         </>
-      ) : (
-        <EmptyState
-          icon={Compass}
-          title={hasActiveFilters ? 'No Matching Financial Records' : 'No Financial Data Available'}
-          description={
-            hasActiveFilters
-              ? 'No projects, tasks, or expenses match your current multi-dimensional filter criteria.'
-              : 'No financial entities or transactions were found in this workspace.'
-          }
-          actionLabel={hasActiveFilters ? 'Reset Filters' : undefined}
-          onAction={hasActiveFilters ? handleResetFilters : undefined}
-        />
       )}
 
-      {/* Reusable Expense Detail Modal */}
+      {/* Reusable Expense Detail & Audit Inspection Modal */}
       {selectedExpenseForDetail && (
         <ExpenseDetailModal
-          isOpen={Boolean(selectedExpenseForDetail)}
+          expense={selectedExpenseForDetail}
           onClose={() => setSelectedExpenseForDetail(null)}
-          transaction={selectedExpenseForDetail}
-          workspaceId={workspaceId}
-          canManageBudgets={false} // Explorer is read-only
-          canViewWorkspaceFinance={canViewWorkspaceFinance}
-          fetchTransactionAudit={fetchTransactionAudit}
-          onOpenCorrect={() => {}}
-          onOpenVoid={() => {}}
-          onOpenHardDelete={() => {}}
+          onFetchAudit={fetchTransactionAudit}
+          canManageBudgets={canManageBudgets}
         />
       )}
     </div>

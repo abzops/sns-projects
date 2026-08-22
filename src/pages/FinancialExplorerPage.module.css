@@ -470,6 +470,14 @@
   border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
+.riskUNAVAILABLE {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--muted);
+  border: 1px dashed rgba(107, 114, 128, 0.3);
+  font-style: italic;
+  font-weight: 500;
+}
+
 /* Status Badges */
 .statusBadge {
   display: inline-flex;

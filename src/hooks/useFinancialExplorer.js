@@ -38,6 +38,11 @@ async function pMap(items, mapper, concurrency = 5) {
  * - Bounded concurrency for summary RPCs
  * - Zero double counting: spend metrics strictly derive from leaf expense transactions
  * - Stale request invalidation and synchronous cache-flush on scope changes
+ * - Full validation of all core database queries (fails safe, never silently coerces failure to empty data)
+ * - Summary RPC error handling: never fakes ₹0/GREEN/UNBUDGETED on RPC failure
+ * - Primary department only (dm.is_active = true AND dm.is_primary = true)
+ * - Canonical owner resolution for Phase (phase.owner_id) and Task List (task_list.owner_id)
+ * - Mixed-row financial activity date filter semantics
  */
 export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'default', { enabled = true } = {}) {
   const { user } = useAuth();
@@ -166,9 +171,14 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
 
         if (fetchId !== activeFetchIdRef.current) return;
 
+        // Explicitly check errors from all initial parallel queries
         if (wsSummaryRes.error) throw wsSummaryRes.error;
         if (projectsRes.error) throw projectsRes.error;
+        if (budgetsRes.error) throw budgetsRes.error;
         if (expensesRes.error) throw expensesRes.error;
+        if (profilesRes.error) throw profilesRes.error;
+        if (departmentsRes.error) throw departmentsRes.error;
+        if (deptMembersRes.error) throw deptMembersRes.error;
 
         const rawProjects = projectsRes.data || [];
         const rawBudgets = budgetsRes.data || [];
@@ -181,8 +191,8 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         const expenseTaskIds = Array.from(new Set(rawExpenses.map((e) => e.task_id).filter(Boolean)));
 
         // 2. Fetch Phases, Task Lists, Tasks scoped to this workspace's projects and expenses
-        let phasesQuery = supabase.from('phases').select('id, project_id, name, created_by, created_at, position').order('position');
-        let taskListsQuery = supabase.from('task_lists').select('id, project_id, phase_id, name, position, created_by, created_at, completed_at').order('position');
+        let phasesQuery = supabase.from('phases').select('id, project_id, name, created_by, created_at, position, owner_id').order('position');
+        let taskListsQuery = supabase.from('task_lists').select('id, project_id, phase_id, name, position, created_by, created_at, completed_at, owner_id').order('position');
         
         if (projectIds.length > 0) {
           phasesQuery = phasesQuery.in('project_id', projectIds);
@@ -190,6 +200,9 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         }
 
         const [phasesRes, taskListsRes] = await Promise.all([phasesQuery, taskListsQuery]);
+        if (phasesRes.error) throw phasesRes.error;
+        if (taskListsRes.error) throw taskListsRes.error;
+
         const rawPhases = phasesRes.data || [];
         const rawTaskLists = taskListsRes.data || [];
 
@@ -237,6 +250,7 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
           }
 
           const tasksRes = await tasksQuery;
+          if (tasksRes.error) throw tasksRes.error;
           if (tasksRes.data) {
             rawTasks = tasksRes.data;
           }
@@ -245,17 +259,22 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         if (fetchId !== activeFetchIdRef.current) return;
 
         // 3. Fetch canonical financial summaries via bounded concurrency pool
-        const summariesMap = new Map(); // `${type}:${id}` -> normalizedSummary
+        // Track summary state per entity: { state: 'loaded' | 'error', data: summary | null, error: err | null }
+        const summariesMap = new Map(); // `${type}:${id}` -> { state, data, error }
 
         // Project summaries
         await pMap(rawProjects, async (p) => {
           try {
             const { data, error } = await supabase.rpc('get_project_financial_summary', { p_project_id: p.id });
-            if (!error && data) {
-              summariesMap.set(`project:${p.id}`, normalizeFinancialSummary(data));
+            if (error) {
+              summariesMap.set(`project:${p.id}`, { state: 'error', data: null, error: error.message || 'RPC error' });
+            } else if (data) {
+              summariesMap.set(`project:${p.id}`, { state: 'loaded', data: normalizeFinancialSummary(data), error: null });
+            } else {
+              summariesMap.set(`project:${p.id}`, { state: 'error', data: null, error: 'Empty summary' });
             }
-          } catch {
-            // Fail safe per entity
+          } catch (err) {
+            summariesMap.set(`project:${p.id}`, { state: 'error', data: null, error: err.message || 'RPC error' });
           }
         }, 5);
 
@@ -263,11 +282,15 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         await pMap(rawPhases, async (ph) => {
           try {
             const { data, error } = await supabase.rpc('get_phase_financial_summary', { p_phase_id: ph.id });
-            if (!error && data) {
-              summariesMap.set(`phase:${ph.id}`, normalizeFinancialSummary(data));
+            if (error) {
+              summariesMap.set(`phase:${ph.id}`, { state: 'error', data: null, error: error.message || 'RPC error' });
+            } else if (data) {
+              summariesMap.set(`phase:${ph.id}`, { state: 'loaded', data: normalizeFinancialSummary(data), error: null });
+            } else {
+              summariesMap.set(`phase:${ph.id}`, { state: 'error', data: null, error: 'Empty summary' });
             }
-          } catch {
-            // Fail safe per entity
+          } catch (err) {
+            summariesMap.set(`phase:${ph.id}`, { state: 'error', data: null, error: err.message || 'RPC error' });
           }
         }, 5);
 
@@ -275,11 +298,15 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         await pMap(rawTaskLists, async (tl) => {
           try {
             const { data, error } = await supabase.rpc('get_task_list_financial_summary', { p_task_list_id: tl.id });
-            if (!error && data) {
-              summariesMap.set(`task_list:${tl.id}`, normalizeFinancialSummary(data));
+            if (error) {
+              summariesMap.set(`task_list:${tl.id}`, { state: 'error', data: null, error: error.message || 'RPC error' });
+            } else if (data) {
+              summariesMap.set(`task_list:${tl.id}`, { state: 'loaded', data: normalizeFinancialSummary(data), error: null });
+            } else {
+              summariesMap.set(`task_list:${tl.id}`, { state: 'error', data: null, error: 'Empty summary' });
             }
-          } catch {
-            // Fail safe per entity
+          } catch (err) {
+            summariesMap.set(`task_list:${tl.id}`, { state: 'error', data: null, error: err.message || 'RPC error' });
           }
         }, 5);
 
@@ -289,13 +316,13 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         const profilesMap = new Map(rawProfiles.map((pr) => [pr.id, pr.full_name]));
         const departmentsMap = new Map(rawDepartments.map((d) => [d.id, d]));
         
-        // Resolve primary department per user in current workspace
-        const userDeptMap = new Map(); // userId -> { id, name, code }
+        // Resolve PRIMARY active department per user in current workspace (dm.is_active = true AND dm.is_primary = true)
+        const userPrimaryDeptMap = new Map(); // userId -> { id, name, code }
         for (const dm of rawDeptMembers) {
-          const dept = departmentsMap.get(dm.department_id);
-          if (dept) {
-            if (dm.is_primary || !userDeptMap.has(dm.user_id)) {
-              userDeptMap.set(dm.user_id, dept);
+          if (dm.is_active && dm.is_primary) {
+            const dept = departmentsMap.get(dm.department_id);
+            if (dept) {
+              userPrimaryDeptMap.set(dm.user_id, dept);
             }
           }
         }
@@ -312,9 +339,19 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
           else if (b.entity_type === 'task_list') budgetsMap.set(`task_list:${b.task_list_id}`, b);
         }
 
-        // Calculate direct leaf expenses per task (excluding voided)
+        // Calculate direct leaf expenses per task (excluding voided) and map expense dates for descendants
         const taskLeafSpendMap = new Map(); // taskId -> total effective spend
         const taskExpensesListMap = new Map(); // taskId -> expense_transactions[]
+        const descendantExpenseDatesMap = new Map(); // entityKey -> Set of expense_date strings
+
+        function recordDescendantExpenseDate(key, dateStr) {
+          if (!key || !dateStr) return;
+          if (!descendantExpenseDatesMap.has(key)) {
+            descendantExpenseDatesMap.set(key, new Set());
+          }
+          descendantExpenseDatesMap.get(key).add(dateStr);
+        }
+
         for (const tx of rawExpenses) {
           if (!taskExpensesListMap.has(tx.task_id)) {
             taskExpensesListMap.set(tx.task_id, []);
@@ -325,6 +362,17 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             const itemsSum = (tx.expense_items || []).reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
             taskLeafSpendMap.set(tx.task_id, (taskLeafSpendMap.get(tx.task_id) || 0) + itemsSum);
           }
+
+          const expDate = tx.expense_date;
+          if (expDate) {
+            recordDescendantExpenseDate(`task:${tx.task_id}`, expDate);
+            const parentT = tasksMap.get(tx.task_id);
+            if (parentT) {
+              if (parentT.task_list_id) recordDescendantExpenseDate(`task_list:${parentT.task_list_id}`, expDate);
+              if (parentT.phase_id) recordDescendantExpenseDate(`phase:${parentT.phase_id}`, expDate);
+              if (parentT.project_id) recordDescendantExpenseDate(`project:${parentT.project_id}`, expDate);
+            }
+          }
         }
 
         // 5. Generate Normalized Explorer Rows
@@ -332,9 +380,14 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
 
         // 5.1 Project Rows
         for (const p of rawProjects) {
-          const summary = summariesMap.get(`project:${p.id}`) || null;
+          const summaryEntry = summariesMap.get(`project:${p.id}`) || null;
+          const summary = summaryEntry?.state === 'loaded' ? summaryEntry.data : null;
+          const hasSummaryError = summaryEntry?.state === 'error';
           const ownBudget = budgetsMap.get(`project:${p.id}`) || null;
-          const ownerDept = userDeptMap.get(p.owner_id);
+          const ownerDept = userPrimaryDeptMap.get(p.owner_id);
+
+          const baseBudgetVal = summary ? summary.base_budget : (ownBudget?.base_budget ?? null);
+          const safetyBufferVal = summary ? summary.safety_buffer : (ownBudget?.safety_buffer ?? null);
 
           normalizedRows.push({
             id: `project-${p.id}`,
@@ -353,7 +406,7 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             taskTitle: '—',
             subtaskId: null,
             isStandalone: false,
-            ownerId: p.owner_id,
+            ownerId: p.owner_id || null,
             ownerName: profilesMap.get(p.owner_id) || 'Unassigned',
             departmentId: ownerDept?.id || null,
             departmentName: ownerDept?.name || 'Unassigned',
@@ -361,29 +414,42 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             createdBy: p.created_by,
             creatorName: profilesMap.get(p.created_by) || 'System',
             status: p.project_status || 'Active',
+            normalizedStatus: (p.project_status || 'Active').toLowerCase() === 'active' ? 'Active' : (p.project_status || 'Active'),
             date: p.created_at ? p.created_at.slice(0, 10) : '—',
+            descendantExpenseDates: Array.from(descendantExpenseDatesMap.get(`project:${p.id}`) || []),
             budgetSource: ownBudget ? 'Project Budget' : 'Unbudgeted',
-            budgetSourceType: ownBudget ? 'project' : null,
+            budgetSourceId: summary?.budget_source_id || ownBudget?.id || null,
+            budgetSourceType: summary?.budget_source_type || (ownBudget ? 'project' : null),
             isOwnBudget: Boolean(ownBudget),
-            baseBudget: summary ? summary.base_budget : (ownBudget?.base_budget || null),
-            safetyBuffer: summary ? summary.safety_buffer : (ownBudget?.safety_buffer || null),
-            actualSpend: summary ? summary.actual_spend : 0,
-            remainingBase: summary ? summary.remaining_base : 0,
-            overrun: summary ? summary.overrun : 0,
-            utilizationPct: summary ? summary.utilization_pct : 0,
-            riskBand: summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED'),
-            isOverBudget: summary ? summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED' : false,
+            baseBudget: hasSummaryError ? (ownBudget?.base_budget ?? null) : baseBudgetVal,
+            safetyBuffer: hasSummaryError ? (ownBudget?.safety_buffer ?? null) : safetyBufferVal,
+            actualSpend: hasSummaryError ? null : (summary ? summary.actual_spend : 0),
+            remainingBase: hasSummaryError ? null : (summary ? summary.remaining_base : (baseBudgetVal ?? 0)),
+            overrun: hasSummaryError ? null : (summary ? summary.overrun : 0),
+            utilizationPct: hasSummaryError ? null : (summary ? summary.utilization_pct : 0),
+            riskBand: hasSummaryError ? null : (summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED')),
+            isOverBudget: summary ? (summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED') : false,
             hasSummary: Boolean(summary),
+            hasSummaryError,
+            searchableText: `${p.name} Project ${p.project_status || 'Active'} ${profilesMap.get(p.owner_id) || ''} ${profilesMap.get(p.created_by) || ''} ${ownerDept?.name || ''}`.toLowerCase(),
             rawEntity: p,
           });
         }
 
         // 5.2 Phase Rows
         for (const ph of rawPhases) {
-          const summary = summariesMap.get(`phase:${ph.id}`) || null;
+          const summaryEntry = summariesMap.get(`phase:${ph.id}`) || null;
+          const summary = summaryEntry?.state === 'loaded' ? summaryEntry.data : null;
+          const hasSummaryError = summaryEntry?.state === 'error';
           const ownBudget = budgetsMap.get(`phase:${ph.id}`) || null;
           const parentProj = projectsMap.get(ph.project_id);
-          const ownerDept = userDeptMap.get(parentProj?.owner_id);
+          
+          // Phase canonical owner: ph.owner_id
+          const phaseOwnerId = ph.owner_id || null;
+          const ownerDept = userPrimaryDeptMap.get(phaseOwnerId);
+
+          const baseBudgetVal = summary ? summary.base_budget : (ownBudget?.base_budget ?? null);
+          const safetyBufferVal = summary ? summary.safety_buffer : (ownBudget?.safety_buffer ?? null);
 
           normalizedRows.push({
             id: `phase-${ph.id}`,
@@ -402,42 +468,55 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             taskTitle: '—',
             subtaskId: null,
             isStandalone: false,
-            ownerId: parentProj?.owner_id || null,
-            ownerName: profilesMap.get(parentProj?.owner_id) || 'Unassigned',
+            ownerId: phaseOwnerId,
+            ownerName: profilesMap.get(phaseOwnerId) || 'Unassigned',
             departmentId: ownerDept?.id || null,
             departmentName: ownerDept?.name || 'Unassigned',
             departmentCode: ownerDept?.code || '—',
             createdBy: ph.created_by,
             creatorName: profilesMap.get(ph.created_by) || 'System',
             status: '—', // Phases do not have active/completed status in P6
+            normalizedStatus: '—',
             date: ph.created_at ? ph.created_at.slice(0, 10) : '—',
+            descendantExpenseDates: Array.from(descendantExpenseDatesMap.get(`phase:${ph.id}`) || []),
             budgetSource: ownBudget
               ? 'Phase Budget'
               : summary?.budget_source_type === 'project'
               ? 'Inherited from Project'
               : 'Unbudgeted',
+            budgetSourceId: summary?.budget_source_id || ownBudget?.id || null,
             budgetSourceType: ownBudget ? 'phase' : summary?.budget_source_type || null,
             isOwnBudget: Boolean(ownBudget),
-            baseBudget: summary ? summary.base_budget : (ownBudget?.base_budget || null),
-            safetyBuffer: summary ? summary.safety_buffer : (ownBudget?.safety_buffer || null),
-            actualSpend: summary ? summary.actual_spend : 0,
-            remainingBase: summary ? summary.remaining_base : 0,
-            overrun: summary ? summary.overrun : 0,
-            utilizationPct: summary ? summary.utilization_pct : 0,
-            riskBand: summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED'),
-            isOverBudget: summary ? summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED' : false,
+            baseBudget: hasSummaryError ? (ownBudget?.base_budget ?? null) : baseBudgetVal,
+            safetyBuffer: hasSummaryError ? (ownBudget?.safety_buffer ?? null) : safetyBufferVal,
+            actualSpend: hasSummaryError ? null : (summary ? summary.actual_spend : 0),
+            remainingBase: hasSummaryError ? null : (summary ? summary.remaining_base : 0),
+            overrun: hasSummaryError ? null : (summary ? summary.overrun : 0),
+            utilizationPct: hasSummaryError ? null : (summary ? summary.utilization_pct : 0),
+            riskBand: hasSummaryError ? null : (summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED')),
+            isOverBudget: summary ? (summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED') : false,
             hasSummary: Boolean(summary),
+            hasSummaryError,
+            searchableText: `${ph.name} Phase ${parentProj?.name || ''} ${profilesMap.get(phaseOwnerId) || ''} ${profilesMap.get(ph.created_by) || ''} ${ownerDept?.name || ''}`.toLowerCase(),
             rawEntity: ph,
           });
         }
 
         // 5.3 Task List Rows
         for (const tl of rawTaskLists) {
-          const summary = summariesMap.get(`task_list:${tl.id}`) || null;
+          const summaryEntry = summariesMap.get(`task_list:${tl.id}`) || null;
+          const summary = summaryEntry?.state === 'loaded' ? summaryEntry.data : null;
+          const hasSummaryError = summaryEntry?.state === 'error';
           const ownBudget = budgetsMap.get(`task_list:${tl.id}`) || null;
           const parentProj = projectsMap.get(tl.project_id);
           const parentPhase = phasesMap.get(tl.phase_id);
-          const ownerDept = userDeptMap.get(parentProj?.owner_id);
+          
+          // Task list canonical owner: tl.owner_id
+          const taskListOwnerId = tl.owner_id || null;
+          const ownerDept = userPrimaryDeptMap.get(taskListOwnerId);
+
+          const baseBudgetVal = summary ? summary.base_budget : (ownBudget?.base_budget ?? null);
+          const safetyBufferVal = summary ? summary.safety_buffer : (ownBudget?.safety_buffer ?? null);
 
           normalizedRows.push({
             id: `task_list-${tl.id}`,
@@ -456,15 +535,17 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             taskTitle: '—',
             subtaskId: null,
             isStandalone: false,
-            ownerId: parentProj?.owner_id || null,
-            ownerName: profilesMap.get(parentProj?.owner_id) || 'Unassigned',
+            ownerId: taskListOwnerId,
+            ownerName: profilesMap.get(taskListOwnerId) || 'Unassigned',
             departmentId: ownerDept?.id || null,
             departmentName: ownerDept?.name || 'Unassigned',
             departmentCode: ownerDept?.code || '—',
             createdBy: tl.created_by,
             creatorName: profilesMap.get(tl.created_by) || 'System',
             status: tl.completed_at ? 'Completed' : 'Active',
+            normalizedStatus: tl.completed_at ? 'Completed' : 'Active',
             date: tl.created_at ? tl.created_at.slice(0, 10) : '—',
+            descendantExpenseDates: Array.from(descendantExpenseDatesMap.get(`task_list:${tl.id}`) || []),
             budgetSource: ownBudget
               ? 'Task List Budget'
               : summary?.budget_source_type === 'phase'
@@ -472,17 +553,20 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
               : summary?.budget_source_type === 'project'
               ? 'Inherited from Project'
               : 'Unbudgeted',
+            budgetSourceId: summary?.budget_source_id || ownBudget?.id || null,
             budgetSourceType: ownBudget ? 'task_list' : summary?.budget_source_type || null,
             isOwnBudget: Boolean(ownBudget),
-            baseBudget: summary ? summary.base_budget : (ownBudget?.base_budget || null),
-            safetyBuffer: summary ? summary.safety_buffer : (ownBudget?.safety_buffer || null),
-            actualSpend: summary ? summary.actual_spend : 0,
-            remainingBase: summary ? summary.remaining_base : 0,
-            overrun: summary ? summary.overrun : 0,
-            utilizationPct: summary ? summary.utilization_pct : 0,
-            riskBand: summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED'),
-            isOverBudget: summary ? summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED' : false,
+            baseBudget: hasSummaryError ? (ownBudget?.base_budget ?? null) : baseBudgetVal,
+            safetyBuffer: hasSummaryError ? (ownBudget?.safety_buffer ?? null) : safetyBufferVal,
+            actualSpend: hasSummaryError ? null : (summary ? summary.actual_spend : 0),
+            remainingBase: hasSummaryError ? null : (summary ? summary.remaining_base : 0),
+            overrun: hasSummaryError ? null : (summary ? summary.overrun : 0),
+            utilizationPct: hasSummaryError ? null : (summary ? summary.utilization_pct : 0),
+            riskBand: hasSummaryError ? null : (summary?.risk_band || (ownBudget ? 'GREEN' : 'UNBUDGETED')),
+            isOverBudget: summary ? (summary.overrun > 0 || summary.risk_band === 'ORANGE' || summary.risk_band === 'RED') : false,
             hasSummary: Boolean(summary),
+            hasSummaryError,
+            searchableText: `${tl.name} Task List ${parentPhase?.name || ''} ${parentProj?.name || ''} ${profilesMap.get(taskListOwnerId) || ''} ${profilesMap.get(tl.created_by) || ''} ${ownerDept?.name || ''}`.toLowerCase(),
             rawEntity: tl,
           });
         }
@@ -497,40 +581,59 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
           const parentPhase = phasesMap.get(t.phase_id);
           const parentTaskList = taskListsMap.get(t.task_list_id);
 
-          // Determine nearest budget-owning ancestor
+          // Determine nearest budget-owning ancestor and ancestor summary status
           let nearestBudgetSource = 'Unbudgeted';
           let ancestorSummary = null;
+          let ancestorSummaryError = false;
 
-          if (t.task_list_id && budgetsMap.has(`task_list:${t.task_list_id}`)) {
-            nearestBudgetSource = 'Inherited from Task List';
-            ancestorSummary = summariesMap.get(`task_list:${t.task_list_id}`);
-          } else if (t.phase_id && budgetsMap.has(`phase:${t.phase_id}`)) {
-            nearestBudgetSource = 'Inherited from Phase';
-            ancestorSummary = summariesMap.get(`phase:${t.phase_id}`);
-          } else if (t.project_id && budgetsMap.has(`project:${t.project_id}`)) {
-            nearestBudgetSource = 'Inherited from Project';
-            ancestorSummary = summariesMap.get(`project:${t.project_id}`);
-          } else if (t.task_list_id && summariesMap.get(`task_list:${t.task_list_id}`)?.budget_source_id) {
-            ancestorSummary = summariesMap.get(`task_list:${t.task_list_id}`);
-            nearestBudgetSource = ancestorSummary.budget_source_type === 'phase' ? 'Inherited from Phase' : 'Inherited from Project';
-          } else if (t.phase_id && summariesMap.get(`phase:${t.phase_id}`)?.budget_source_id) {
-            ancestorSummary = summariesMap.get(`phase:${t.phase_id}`);
-            nearestBudgetSource = 'Inherited from Project';
-          } else if (t.project_id) {
-            ancestorSummary = summariesMap.get(`project:${t.project_id}`);
-            nearestBudgetSource = 'Inherited from Project';
-          } else {
+          if (t.task_list_id) {
+            const tlEntry = summariesMap.get(`task_list:${t.task_list_id}`);
+            if (tlEntry?.state === 'error') {
+              ancestorSummaryError = true;
+            } else if (tlEntry?.state === 'loaded') {
+              ancestorSummary = tlEntry.data;
+              nearestBudgetSource = budgetsMap.has(`task_list:${t.task_list_id}`)
+                ? 'Inherited from Task List'
+                : ancestorSummary.budget_source_type === 'phase'
+                ? 'Inherited from Phase'
+                : 'Inherited from Project';
+            }
+          }
+
+          if (!ancestorSummary && !ancestorSummaryError && t.phase_id) {
+            const phEntry = summariesMap.get(`phase:${t.phase_id}`);
+            if (phEntry?.state === 'error') {
+              ancestorSummaryError = true;
+            } else if (phEntry?.state === 'loaded') {
+              ancestorSummary = phEntry.data;
+              nearestBudgetSource = 'Inherited from Phase';
+            }
+          }
+
+          if (!ancestorSummary && !ancestorSummaryError && t.project_id) {
+            const pEntry = summariesMap.get(`project:${t.project_id}`);
+            if (pEntry?.state === 'error') {
+              ancestorSummaryError = true;
+            } else if (pEntry?.state === 'loaded') {
+              ancestorSummary = pEntry.data;
+              nearestBudgetSource = 'Inherited from Project';
+            }
+          }
+
+          if (!ancestorSummary && !ancestorSummaryError && isStandalone) {
             nearestBudgetSource = 'Unbudgeted / Standalone';
           }
 
           const taskSpend = taskLeafSpendMap.get(t.id) || 0;
-          const taskOwnerId = t.owner_id || t.assignee_id;
-          const ownerDept = userDeptMap.get(taskOwnerId);
+          const taskOwnerId = t.owner_id || t.assignee_id || null;
+          const ownerDept = userPrimaryDeptMap.get(taskOwnerId);
 
-          const sysCode = t.task_statuses?.system_code || 'todo';
+          const sysCode = (t.task_statuses?.system_code || 'todo').toLowerCase();
           const taskStatus = sysCode === 'done' ? 'Completed' : sysCode === 'cancelled' ? 'Cancelled' : 'Active';
 
-          const taskRisk = isStandalone
+          const taskRisk = ancestorSummaryError
+            ? null
+            : isStandalone
             ? 'UNBUDGETED'
             : ancestorSummary?.risk_band || 'GREEN';
 
@@ -561,7 +664,7 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             taskTitle: t.title,
             subtaskId: null,
             isStandalone,
-            ownerId: taskOwnerId || null,
+            ownerId: taskOwnerId,
             ownerName: profilesMap.get(taskOwnerId) || 'Unassigned',
             departmentId: ownerDept?.id || null,
             departmentName: ownerDept?.name || 'Unassigned',
@@ -569,9 +672,12 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             createdBy: t.created_by,
             creatorName: profilesMap.get(t.created_by) || 'System',
             status: taskStatus,
+            normalizedStatus: taskStatus,
             date: t.created_at ? t.created_at.slice(0, 10) : '—',
-            budgetSource: nearestBudgetSource,
-            budgetSourceType: null,
+            descendantExpenseDates: Array.from(descendantExpenseDatesMap.get(`task:${t.id}`) || []),
+            budgetSource: ancestorSummaryError ? 'Budget context unavailable' : nearestBudgetSource,
+            budgetSourceId: ancestorSummary?.budget_source_id || null,
+            budgetSourceType: ancestorSummary?.budget_source_type || null,
             isOwnBudget: false,
             baseBudget: null, // Tasks do NOT own budgets
             safetyBuffer: null,
@@ -582,6 +688,8 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             riskBand: taskRisk,
             isOverBudget,
             hasSummary: Boolean(ancestorSummary),
+            hasSummaryError: ancestorSummaryError,
+            searchableText: `${t.title} ${taskVariantLabel} ${taskStatus} ${parentProj?.name || ''} ${parentPhase?.name || ''} ${parentTaskList?.name || ''} ${profilesMap.get(taskOwnerId) || ''} ${profilesMap.get(t.created_by) || ''} ${ownerDept?.name || ''}`.toLowerCase(),
             rawEntity: t,
           });
         }
@@ -595,7 +703,7 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
           const parentTaskList = parentTask?.task_list_id ? taskListsMap.get(parentTask.task_list_id) : null;
 
           const taskOwnerId = parentTask ? (parentTask.owner_id || parentTask.assignee_id) : null;
-          const ownerDept = userDeptMap.get(taskOwnerId);
+          const ownerDept = userPrimaryDeptMap.get(taskOwnerId);
 
           const itemsSum = (tx.expense_items || []).reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
           const effectiveSpend = tx.status === 'voided' ? 0 : itemsSum;
@@ -603,15 +711,39 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
           // Find task's budget context
           let taskRisk = 'GREEN';
           let budgetSource = 'Unbudgeted';
+          let budgetSourceId = null;
+          let budgetSourceType = null;
+          let hasSummaryError = false;
+
           if (parentTask) {
             const taskRow = normalizedRows.find((r) => r.id === `task-${parentTask.id}`);
             if (taskRow) {
               taskRisk = taskRow.riskBand;
               budgetSource = taskRow.budgetSource;
+              budgetSourceId = taskRow.budgetSourceId;
+              budgetSourceType = taskRow.budgetSourceType;
+              hasSummaryError = taskRow.hasSummaryError;
             }
           }
 
           const primaryDesc = tx.description || tx.expense_items?.[0]?.description || tx.expense_items?.[0]?.category || 'Expense Entry';
+
+          // Searchable text aggregating ALL expense items
+          const itemsSearchText = (tx.expense_items || [])
+            .map((it) => `${it.category || ''} ${it.description || ''}`)
+            .join(' ');
+
+          const expOwnerName = profilesMap.get(taskOwnerId) || 'Unassigned';
+          const expCreatorName = profilesMap.get(tx.created_by) || 'System';
+
+          const normalizedExpStatus =
+            tx.status === 'active'
+              ? 'Active'
+              : tx.status === 'corrected'
+              ? 'Corrected'
+              : tx.status === 'voided'
+              ? 'Voided'
+              : tx.status;
 
           normalizedRows.push({
             id: `expense-${tx.id}`,
@@ -630,17 +762,20 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             taskTitle: parentTask?.title || 'Unknown Task',
             subtaskId: tx.subtask_id,
             isStandalone,
-            ownerId: taskOwnerId || null,
-            ownerName: profilesMap.get(taskOwnerId) || 'Unassigned',
+            ownerId: taskOwnerId,
+            ownerName: expOwnerName,
             departmentId: ownerDept?.id || null,
             departmentName: ownerDept?.name || 'Unassigned',
             departmentCode: ownerDept?.code || '—',
             createdBy: tx.created_by,
-            creatorName: profilesMap.get(tx.created_by) || 'System',
+            creatorName: expCreatorName,
             status: tx.status,
+            normalizedStatus: normalizedExpStatus,
             date: tx.expense_date || (tx.created_at ? tx.created_at.slice(0, 10) : '—'),
-            budgetSource,
-            budgetSourceType: null,
+            descendantExpenseDates: [tx.expense_date].filter(Boolean),
+            budgetSource: hasSummaryError ? 'Budget context unavailable' : budgetSource,
+            budgetSourceId,
+            budgetSourceType,
             isOwnBudget: false,
             baseBudget: null,
             safetyBuffer: null,
@@ -651,7 +786,9 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             utilizationPct: null,
             riskBand: taskRisk,
             isOverBudget: taskRisk === 'ORANGE' || taskRisk === 'RED',
-            hasSummary: true,
+            hasSummary: !hasSummaryError,
+            hasSummaryError,
+            searchableText: `${primaryDesc} ${tx.description || ''} ${parentTask?.title || ''} ${parentProj?.name || ''} ${parentPhase?.name || ''} ${parentTaskList?.name || ''} ${expOwnerName} ${expCreatorName} ${ownerDept?.name || ''} ${itemsSearchText}`.toLowerCase(),
             rawEntity: tx,
           });
         }
@@ -708,6 +845,7 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         console.error('[useFinancialExplorer] fetchExplorerData error:', err);
         setError(err.message || 'Failed to load Financial Explorer data.');
 
+        // If cache exists, preserve last known good data and surface non-blocking error
         if (!financialExplorerCache.has(cacheKey)) {
           setRows([]);
           setWorkspaceSummary(null);

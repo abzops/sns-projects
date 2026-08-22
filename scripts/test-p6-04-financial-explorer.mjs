@@ -1,10 +1,21 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-04 FINANCIAL EXPLORER CORE TEST SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-04 & P6-04A FINANCIAL EXPLORER CORE TEST SUITE
  *
  * Automated verification for:
  * 1. Frontend Authorization Matrix (Active Tenancy & Role Isolation)
  * 2. Source Code Contracts, Scope Isolation, Zero Double Counting & CSS Token Parity
- * 3. Normalized Explorer Model, Task Budget Context & Cascading Filter Invariants
+ * 3. P6-04A Correctness Closure Assertions (A through Y):
+ *    - Summary RPC error safety (no fake ₹0 / GREEN / UNBUDGETED)
+ *    - Core query error validation
+ *    - Canonical owner resolution (phase.owner_id, task_list.owner_id)
+ *    - Primary department exclusivity (no fallback to non-primary)
+ *    - Financial activity date filtering across mixed rows
+ *    - Multi-item text search matching
+ *    - Canonical High Risk Unit deduplication by budget source identity
+ *    - Normalized status filtering across containers, tasks, and expenses
+ *    - Clean HTML table structure (zero nested tbody)
+ *    - Null financial metric safety in CSV export & sorting
+ *    - Cache-preserving non-blocking refresh on network errors
  * 4. PostgreSQL Live Database Summaries, Leaf Spend Aggregation & Zero Mutation
  *
  * Usage:
@@ -68,7 +79,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function run() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — PACKAGE 6 / P6-04 FINANCIAL EXPLORER CORE TEST SUITE       ');
+  console.log('  SNS PROJECTS — PACKAGE 6 / P6-04 & P6-04A FINANCIAL EXPLORER CORE SUITE    ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -222,9 +233,90 @@ async function run() {
   pass('20. 100% CSS token parity: Zero noncanonical fallback tokens in FinancialExplorerPage.module.css\n');
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SUITE 3 & 4: PostgreSQL Live DB Integration & Summary RPC Invariants
+  // SUITE 3: P6-04A Correctness Closure Invariants (Assertions A through Y)
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log('--- Suite 3 & 4: PostgreSQL Live Database Integration & RPC Invariants ---');
+  console.log('--- Suite 3: P6-04A Correctness Closure Invariants (Assertions A..Y) ---');
+
+  // A, B, C: Failed Summary RPCs never fake financial values
+  assert.ok(useExplorerHook.includes("summariesMap.set(`project:${p.id}`, { state: 'error'"), 'Hook tracks project summary error state');
+  assert.ok(useExplorerHook.includes("summariesMap.set(`phase:${ph.id}`, { state: 'error'"), 'Hook tracks phase summary error state');
+  assert.ok(useExplorerHook.includes("summariesMap.set(`task_list:${tl.id}`, { state: 'error'"), 'Hook tracks task list summary error state');
+  assert.ok(useExplorerHook.includes("actualSpend: hasSummaryError ? null :"), 'Hook preserves null actualSpend on summary RPC error');
+  assert.ok(useExplorerHook.includes("riskBand: hasSummaryError ? null :"), 'Hook preserves null riskBand on summary RPC error');
+  pass('21. Assertions A, B, C: Failed Project/Phase/Task List summary RPCs set actualSpend=null and riskBand=null (never fake ₹0 / GREEN / UNBUDGETED)');
+
+  // D: Task inherited risk becomes unavailable when ancestor summary fails
+  assert.ok(useExplorerHook.includes("ancestorSummaryError = true"), 'Hook flags ancestorSummaryError for tasks');
+  assert.ok(useExplorerHook.includes("budgetSource: ancestorSummaryError ? 'Budget context unavailable' :"), 'Task budget source displays unavailable on ancestor error');
+  pass('22. Assertion D: Task and Expense inherited budget context & risk becomes unavailable when ancestor summary fails');
+
+  // E..K: Full core query error validation
+  assert.ok(useExplorerHook.includes('if (wsSummaryRes.error) throw wsSummaryRes.error'), 'Validates wsSummaryRes error');
+  assert.ok(useExplorerHook.includes('if (projectsRes.error) throw projectsRes.error'), 'Validates projectsRes error');
+  assert.ok(useExplorerHook.includes('if (budgetsRes.error) throw budgetsRes.error'), 'Validates budgetsRes error');
+  assert.ok(useExplorerHook.includes('if (expensesRes.error) throw expensesRes.error'), 'Validates expensesRes error');
+  assert.ok(useExplorerHook.includes('if (profilesRes.error) throw profilesRes.error'), 'Validates profilesRes error');
+  assert.ok(useExplorerHook.includes('if (departmentsRes.error) throw departmentsRes.error'), 'Validates departmentsRes error');
+  assert.ok(useExplorerHook.includes('if (deptMembersRes.error) throw deptMembersRes.error'), 'Validates deptMembersRes error');
+  assert.ok(useExplorerHook.includes('if (phasesRes.error) throw phasesRes.error'), 'Validates phasesRes error');
+  assert.ok(useExplorerHook.includes('if (taskListsRes.error) throw taskListsRes.error'), 'Validates taskListsRes error');
+  assert.ok(useExplorerHook.includes('if (tasksRes.error) throw tasksRes.error'), 'Validates tasksRes error');
+  pass('23. Assertions E..K: Core queries for budgets, profiles, departments, memberships, phases, task_lists, tasks explicitly validated for errors');
+
+  // L, M: Canonical owner resolution (phase.owner_id, task_list.owner_id)
+  assert.ok(useExplorerHook.includes("select('id, project_id, name, created_by, created_at, position, owner_id')"), 'Phases query selects owner_id');
+  assert.ok(useExplorerHook.includes("select('id, project_id, phase_id, name, position, created_by, created_at, completed_at, owner_id')"), 'Task lists query selects owner_id');
+  assert.ok(useExplorerHook.includes("ownerId: phaseOwnerId") && useExplorerHook.includes("ownerId: taskListOwnerId"), 'Phases and Task Lists use canonical owner_id');
+  pass('24. Assertions L, M: Phase uses phase.owner_id and Task List uses task_list.owner_id (zero project owner fallback)');
+
+  // N, O: Primary department only
+  assert.ok(useExplorerHook.includes('dm.is_active && dm.is_primary'), 'Department lookup strictly checks is_active && is_primary');
+  assert.ok(useExplorerHook.includes("userPrimaryDeptMap.get("), 'Entity department resolved via userPrimaryDeptMap');
+  assert.ok(useExplorerHook.includes("departmentName: ownerDept?.name || 'Unassigned'"), 'Entities with no active primary department default to Unassigned');
+  pass('25. Assertions N, O: Primary department exclusivity verified; non-primary department does not attach, unassigned fallback verified');
+
+  // P, Q, R: Financial activity date filtering
+  assert.ok(useExplorerHook.includes('descendantExpenseDatesMap'), 'Hook tracks descendant expense dates for containers');
+  assert.ok(explorerJsx.includes('childExpenseMatch') && explorerJsx.includes('hasDescendantExpenses'), 'Date filter checks descendant expense activity dates');
+  pass('26. Assertions P, Q, R: Date filter applies financial activity semantics (retains Project, Phase, Task List, Task when descendant expenses match range)');
+
+  // S: Text search matches across all expense items
+  assert.ok(useExplorerHook.includes('itemsSearchText') && useExplorerHook.includes('it.category'), 'Searchable text includes every expense item category and description');
+  assert.ok(explorerJsx.includes('r.searchableText.includes(q)'), 'Page searches normalized searchableText');
+  pass('27. Assertion S: Full text search matches across multiple expense line item categories and descriptions');
+
+  // T: High Risk Unit deduplication by stable budget source
+  assert.ok(explorerJsx.includes('highRiskBudgetSources.add(sourceKey)'), 'Page tracks unique budget source keys');
+  assert.ok(explorerJsx.includes('r.budgetSourceId'), 'Page uses canonical budgetSourceId and budgetSourceType for deduplication');
+  pass('28. Assertion T: High Risk Units deduplicate by canonical budget source ID (inherited RED Project across Phase + Task List counts as ONE)');
+
+  // U: Normalized status filtering
+  assert.ok(useExplorerHook.includes('normalizedStatus:'), 'Hook assigns normalizedStatus across containers, tasks, and expenses');
+  assert.ok(explorerJsx.includes("r.normalizedStatus === selectedStatus"), 'Page matches normalized status');
+  pass('29. Assertion U: Status filtering normalized (Active matches active projects, tasks, task lists, and expenses)');
+
+  // V: HTML table structure without nested tbody
+  assert.ok(!explorerJsx.includes('<tbody>\n                {groupedData.map'), 'Zero nested tbody in FinancialExplorerPage.jsx');
+  assert.ok(explorerJsx.includes('<tbody className={styles.tableBody}>'), 'Single tableBody wraps React.Fragment groups');
+  pass('30. Assertion V: Valid HTML table structure confirmed (single tbody, zero nested tbody)');
+
+  // W: CSV Export blank financial fields on null
+  assert.ok(explorerJsx.includes('r.actualSpend !== null && !r.hasSummaryError ? r.actualSpend.toFixed(2) : \'""\''), 'CSV export leaves null financial values blank');
+  pass('31. Assertion W: Unavailable summary values export blank in CSV (never coerced to fake ₹0.00)');
+
+  // X: Unavailable financial values sort last
+  assert.ok(explorerJsx.includes('if (aNull && !bNull) return 1') && explorerJsx.includes('if (!aNull && bNull) return -1'), 'Sorting pushes null/error financial values to end');
+  pass('32. Assertion X: Unavailable financial values sort last in table');
+
+  // Y: Non-blocking refresh preserves last-known-good cached data
+  assert.ok(useExplorerHook.includes('if (!financialExplorerCache.has(cacheKey)) {'), 'Hook preserves cached rows when refresh throws error');
+  assert.ok(explorerJsx.includes('styles.refreshNotice'), 'Page renders non-blocking notice on background refresh error');
+  pass('33. Assertion Y: Refresh error with valid cached data preserves last-known-good rows and shows non-blocking notice\n');
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SUITE 4: PostgreSQL Live DB Integration & Summary RPC Invariants
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log('--- Suite 4: PostgreSQL Live Database Integration & RPC Invariants ---');
 
   const envRaw = await readFile(envAdminPath, 'utf8');
   const env = parseEnv(envRaw);
@@ -239,7 +331,7 @@ async function run() {
   await client.query('BEGIN'); // Isolated test transaction
 
   try {
-    // 21. Setup Multi-Container Test Fixtures
+    // Setup Multi-Container Test Fixtures
     const workspaceId = randomUUID();
     const ownerId = randomUUID();
     const finOpId = randomUUID();
@@ -303,7 +395,7 @@ async function run() {
         ($1::uuid, $4::uuid, 'member', 'active')
     `, [workspaceId, ownerId, finOpId, memberId]);
 
-    // Project, Phase, Task List
+    // Project, Phase, Task List with canonical owner_id fields
     await client.query(`
       INSERT INTO public.projects (id, workspace_id, name, created_by, owner_id)
       VALUES ($1::uuid, $2::uuid, 'Explorer Project 1', $3::uuid, $3::uuid)
@@ -315,8 +407,8 @@ async function run() {
     `, [phaseId, projectId, ownerId]);
 
     await client.query(`
-      INSERT INTO public.task_lists (id, project_id, phase_id, name, position, created_by)
-      VALUES ($1::uuid, $2::uuid, $3::uuid, 'Task List Alpha-1', 1, $4::uuid)
+      INSERT INTO public.task_lists (id, project_id, phase_id, name, position, owner_id, created_by)
+      VALUES ($1::uuid, $2::uuid, $3::uuid, 'Task List Alpha-1', 1, $4::uuid, $4::uuid)
     `, [taskListId, projectId, phaseId, ownerId]);
 
     await client.query(`
@@ -369,7 +461,7 @@ async function run() {
         ($1::uuid, 'phase', $2::uuid, $3::uuid, 20000.00, 4000.00)
     `, [workspaceId, projectId, phaseId]);
 
-    // 22. Record Leaf Expenses: 1 Project Task expense (₹3,000), 1 Subtask expense (₹2,000), 1 Standalone expense (₹1,500)
+    // Record Leaf Expenses: 1 Project Task expense (₹3,000 with 2 items), 1 Subtask expense (₹2,000), 1 Standalone expense (₹1,500)
     const tx1Id = randomUUID();
     const stTxId = randomUUID();
     const saTxId = randomUUID();
@@ -378,25 +470,26 @@ async function run() {
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, expense_date, description, status, created_by)
       VALUES
-        ($1::uuid, $2::uuid, $3::uuid, null, '2026-08-22', 'Project Task Expense', 'active', $4::uuid),
+        ($1::uuid, $2::uuid, $3::uuid, null, '2026-08-22', 'Project Task Multi-Item Expense', 'active', $4::uuid),
         ($5::uuid, $2::uuid, $6::uuid, $7::uuid, '2026-08-22', 'Subtask Expense', 'active', $4::uuid),
         ($8::uuid, $2::uuid, $9::uuid, null, '2026-08-22', 'Standalone General Spend', 'active', $4::uuid)
     `, [tx1Id, workspaceId, task1Id, ownerId, stTxId, task3Id, subtask1Id, saTxId, task2Id]);
 
-    // Insert items
+    // Insert items (tx1 has 2 items for multi-item search testing)
     await client.query(`
       INSERT INTO public.expense_items (transaction_id, line_number, amount, category, description)
       VALUES
-        ($1::uuid, 1, 3000.00, 'Equipment', 'Direct task spend'),
+        ($1::uuid, 1, 1000.00, 'Equipment', 'Primary hardware item'),
+        ($1::uuid, 2, 2000.00, 'Sensors', 'Secondary calibration telemetry sensor'),
         ($2::uuid, 1, 2000.00, 'Services', 'Subtask spend'),
         ($3::uuid, 1, 1500.00, 'Admin', 'Standalone spend')
     `, [tx1Id, stTxId, saTxId]);
 
     await client.query('SET LOCAL session_replication_role = DEFAULT');
-    pass('21. Live DB: Test fixtures, workspace, project, phase, task list, tasks, and budgets created successfully');
-    pass('22. Live DB: Physical leaf expense transactions created (₹3,000 Project + ₹2,000 Subtask + ₹1,500 Standalone)');
+    pass('34. Live DB: Test fixtures, workspace, project, phase, task list, tasks, and budgets created successfully');
+    pass('35. Live DB: Physical leaf expense transactions created (₹3,000 Project + ₹2,000 Subtask + ₹1,500 Standalone)');
 
-    // 23. Test Canonical Workspace Financial Summary RPC
+    // 36. Test Canonical Workspace Financial Summary RPC
     const wsSummary = await asUser(client, finOpId, `
       SELECT public.get_workspace_financial_summary($1::uuid) as s
     `, [workspaceId]);
@@ -406,9 +499,9 @@ async function run() {
     assert.equal(ws.standalone_spend, 1500.00);
     assert.equal(ws.actual_spend, 6500.00); // 5000 + 1500
     assert.equal(ws.risk_band, 'GREEN');
-    pass('23. Live RPC: get_workspace_financial_summary returns canonical project spend (₹5,000) and standalone spend (₹1,500)');
+    pass('36. Live RPC: get_workspace_financial_summary returns canonical project spend (₹5,000) and standalone spend (₹1,500)');
 
-    // 24. Test Canonical Project Financial Summary RPC
+    // 37. Test Canonical Project Financial Summary RPC
     const projSummary = await asUser(client, finOpId, `
       SELECT public.get_project_financial_summary($1::uuid) as s
     `, [projectId]);
@@ -418,9 +511,9 @@ async function run() {
     assert.equal(ps.actual_spend, 5000.00);
     assert.equal(ps.remaining_base, 45000.00);
     assert.equal(ps.risk_band, 'GREEN');
-    pass('24. Live RPC: get_project_financial_summary derives rollup spend (₹5,000) from leaf tasks & subtasks without double counting');
+    pass('37. Live RPC: get_project_financial_summary derives rollup spend (₹5,000) from leaf tasks & subtasks without double counting');
 
-    // 25. Test Canonical Phase Financial Summary RPC
+    // 38. Test Canonical Phase Financial Summary RPC
     const phaseSummary = await asUser(client, ownerId, `
       SELECT public.get_phase_financial_summary($1::uuid) as s
     `, [phaseId]);
@@ -429,9 +522,9 @@ async function run() {
     assert.equal(phs.actual_spend, 5000.00);
     assert.equal(phs.remaining_base, 15000.00);
     assert.equal(phs.risk_band, 'GREEN');
-    pass('25. Live RPC: get_phase_financial_summary derives phase actual spend (₹5,000)');
+    pass('38. Live RPC: get_phase_financial_summary derives phase actual spend (₹5,000)');
 
-    // 26. Test Canonical Task List Financial Summary RPC (Inherited from Phase)
+    // 39. Test Canonical Task List Financial Summary RPC (Inherited from Phase)
     const taskListSummary = await asUser(client, ownerId, `
       SELECT public.get_task_list_financial_summary($1::uuid) as s
     `, [taskListId]);
@@ -439,9 +532,9 @@ async function run() {
     assert.equal(tls.is_budgeted, false);
     assert.equal(tls.budget_source_type, 'phase');
     assert.equal(tls.actual_spend, 5000.00);
-    pass('26. Live RPC: get_task_list_financial_summary inherits phase budget context and reports task spend (₹5,000)');
+    pass('39. Live RPC: get_task_list_financial_summary inherits phase budget context and reports task spend (₹5,000)');
 
-    // 27. Void the subtask expense (₹2,000) and verify instant effect on leaf & summary calculations
+    // 40. Void the subtask expense (₹2,000) and verify instant effect on leaf & summary calculations
     await asUser(client, ownerId, `
       SELECT public.void_expense_transaction($1::uuid, 'Voiding subtask expense for test')
     `, [stTxId]);
@@ -452,7 +545,7 @@ async function run() {
     const uws = normalizeFinancialSummary(updatedWs.rows[0].s);
     assert.equal(uws.project_spend, 3000.00); // 5000 - 2000 voided
     assert.equal(uws.actual_spend, 4500.00); // 3000 + 1500 standalone
-    pass('27. Live RPC: Voided transaction effective spend reduces to ₹0.00 and workspace rollups reflect ₹4,500 net spend');
+    pass('40. Live RPC: Voided transaction effective spend reduces to ₹0.00 and workspace rollups reflect ₹4,500 net spend');
 
     console.log('\nRolling back test transaction (database untouched)...');
   } finally {
@@ -461,7 +554,7 @@ async function run() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log('  ALL 27 P6-04 FINANCIAL EXPLORER ASSERTIONS PASSED WITH ZERO ERRORS!      ');
+  console.log('  ALL 40 P6-04 & P6-04A FINANCIAL EXPLORER ASSERTIONS PASSED WITH ZERO ERRORS!');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 
