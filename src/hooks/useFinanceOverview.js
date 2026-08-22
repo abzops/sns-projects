@@ -1,40 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { normalizeFinancialSummary } from '../lib/finance.js';
 
 const financeOverviewCache = new Map();
 
 export function clearFinanceOverviewCache() {
   financeOverviewCache.clear();
-}
-
-/**
- * Normalizes backend financial summary JSON object into numeric presentation values
- * while preserving exact backend business fields and risk band.
- */
-export function normalizeFinancialSummary(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  return {
-    entity_type: raw.entity_type || null,
-    entity_id: raw.entity_id || null,
-    is_budgeted: Boolean(raw.is_budgeted),
-    budget_source_type: raw.budget_source_type || null,
-    budget_source_id: raw.budget_source_id || null,
-    base_budget: Number(raw.base_budget) || 0,
-    safety_buffer: Number(raw.safety_buffer) || 0,
-    total_ceiling: Number(raw.total_ceiling) || 0,
-    actual_spend: Number(raw.actual_spend) || 0,
-    remaining_base: Number(raw.remaining_base) || 0,
-    buffer_used: Number(raw.buffer_used) || 0,
-    buffer_remaining: Number(raw.buffer_remaining) || 0,
-    overrun: Number(raw.overrun) || 0,
-    utilization_pct: Number(raw.utilization_pct) || 0,
-    risk_band: raw.risk_band || 'GREEN',
-    allocated_to_children: Number(raw.allocated_to_children) || 0,
-    unallocated_base: Number(raw.unallocated_base) || 0,
-    project_spend: Number(raw.project_spend) || 0,
-    standalone_spend: Number(raw.standalone_spend) || 0,
-  };
 }
 
 /**

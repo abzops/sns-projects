@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  WalletCards,
   Coins,
   TrendingUp,
   PiggyBank,
@@ -156,7 +155,7 @@ export default function FinanceOverviewPage() {
   // Utilization progress bar visual clamping
   const isBudgeted = s.is_budgeted && s.base_budget > 0;
   const baseProgressWidth = isBudgeted
-    ? Math.min(100, Math.max(0, (s.actual_spend / s.base_budget) * 100))
+    ? Math.min(100, Math.max(0, s.utilization_pct))
     : 0;
   const bufferProgressWidth = isBudgeted && s.safety_buffer > 0 && s.buffer_used > 0
     ? Math.min(100, Math.max(0, (s.buffer_used / s.safety_buffer) * 100))

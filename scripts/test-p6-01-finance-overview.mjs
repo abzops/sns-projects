@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { normalizeFinancialSummary, formatCurrency } from '../src/lib/expenseExecution.js';
+import { normalizeFinancialSummary } from '../src/lib/finance.js';
+import { formatCurrency } from '../src/lib/expenseExecution.js';
 
 const { Client } = pg;
 const repoRoot = process.cwd();
@@ -333,6 +334,61 @@ async function runTests() {
   const formattedCur = formatCurrency(150000.75);
   assert.ok(formattedCur.includes('₹') && formattedCur.includes('1,50,000.75'));
   pass('23. formatCurrency formats canonical INR values (₹1,50,000.75)');
+
+  // 23a. Utilization % used for Base progress visual clamping (P6-01A)
+  assert.ok(
+    financeOverviewPage.includes('Math.min(100, Math.max(0, s.utilization_pct))'),
+    'FinanceOverviewPage must use s.utilization_pct directly for baseProgressWidth visual clamping'
+  );
+  pass('23a. FinanceOverviewPage uses backend utilization_pct for Base progress visual clamping');
+
+  // 23b. No client-side utilization calculation from monetary fields (P6-01A)
+  assert.ok(
+    !financeOverviewPage.includes('actual_spend / s.base_budget') &&
+      !financeOverviewPage.includes('actual_spend / base_budget') &&
+      !financeOverviewPage.includes('s.actual_spend / s.base_budget'),
+    'FinanceOverviewPage must NOT recalculate utilization from actual_spend / base_budget'
+  );
+  pass('23b. Zero client-side utilization recomputation from money fields in FinanceOverviewPage');
+
+  // 23c. Single normalizeFinancialSummary implementation across src/ (P6-01A)
+  async function findFiles(dir) {
+    const entries = await readdir(dir, { withFileTypes: true, recursive: true });
+    return entries
+      .filter((e) => e.isFile() && (e.name.endsWith('.js') || e.name.endsWith('.jsx')))
+      .map((e) => path.join(e.parentPath || e.path, e.name));
+  }
+
+  const allSrcFiles = await findFiles(path.join(repoRoot, 'src'));
+  const normalizerFiles = [];
+  for (const filePath of allSrcFiles) {
+    const content = await readFile(filePath, 'utf8');
+    if (
+      content.includes('function normalizeFinancialSummary(') ||
+      content.includes('const normalizeFinancialSummary =')
+    ) {
+      normalizerFiles.push(path.relative(repoRoot, filePath));
+    }
+  }
+  assert.equal(
+    normalizerFiles.length,
+    1,
+    `Exactly ONE normalizeFinancialSummary implementation must exist across src/. Found in: ${normalizerFiles.join(', ')}`
+  );
+  assert.equal(
+    normalizerFiles[0].replace(/\\/g, '/'),
+    'src/lib/finance.js',
+    'normalizeFinancialSummary must reside in src/lib/finance.js'
+  );
+  pass('23c. Exactly ONE shared normalizeFinancialSummary implementation exists in src/ (src/lib/finance.js)');
+
+  // 23d. useFinanceOverview imports normalizeFinancialSummary from ../lib/finance.js (P6-01A)
+  assert.ok(
+    useFinanceOverviewSrc.includes("from '../lib/finance.js'") ||
+      useFinanceOverviewSrc.includes("from '../lib/finance'"),
+    'useFinanceOverview must import normalizeFinancialSummary from ../lib/finance.js'
+  );
+  pass('23d. useFinanceOverview imports shared normalizeFinancialSummary from src/lib/finance.js');
 
   // ──────────────────────────────────────────────────────────────────────────
   // SUITE 4: LIVE SUPABASE POSTGRESQL RPC VERIFICATION (Isolated Transaction)
