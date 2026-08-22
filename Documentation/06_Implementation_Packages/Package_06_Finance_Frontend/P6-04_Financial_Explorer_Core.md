@@ -1,8 +1,9 @@
 # P6-04 / P6-04A / P6-04B — Financial Explorer Core & Metadata Authorization Closure
 
 **Package**: Package 6 — Finance Frontend  
-**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING` (P6-04, P6-04A, P6-04B)  
-**Frontend Baseline**: `89e487ce9fdc09af1358f1960378b2cc1417afe2` (P6-04A base) — P6-04B applied  
+**Status**: `VERIFIED / FROZEN` (P6-04, P6-04A, P6-04B)  
+**Manual Production Acceptance**: `PASSED`  
+**Frontend Baseline**: `8b37e1862ca3ddbd1c1c66f0d3abd14b3b598199`  
 **Database Tip**: `20260822114456_p6_04b_finance_explorer_metadata_authorization_closure`  
 **Route**: `/workspace/:workspaceId/finance/explorer`  
 **Authoritative Backend Contracts**:
@@ -111,3 +112,22 @@ The comprehensive test suite `scripts/test-p6-04-financial-explorer.mjs` validat
 - `verify-doc-links.mjs` (287/287 links passed)
 - `oxlint src/` (0 errors)
 - `npm run build` (built cleanly)
+
+---
+
+## 7. Certification & Final Acceptance Record
+
+| Attribute | Certified Value |
+| :--- | :--- |
+| **Deliverables Certified** | P6-04 (Explorer Core), P6-04A (Semantic Hardening), P6-04B (Metadata Auth Closure) |
+| **Certification Status** | **`VERIFIED / FROZEN`** |
+| **Manual Production Acceptance** | **`PASSED`** |
+| **Package 6 Status** | **`IN PROGRESS`** (P6-01..04B VERIFIED / FROZEN · P6-04C Saved Views NOT STARTED) |
+| **Route** | `/workspace/:workspaceId/finance/explorer` |
+| **Frontend Baseline Commit** | `8b37e1862ca3ddbd1c1c66f0d3abd14b3b598199` |
+| **Database Tip** | `20260822114456_p6_04b_finance_explorer_metadata_authorization_closure` |
+| **Deployment Run** | GitHub Actions Run `32571976563` (`SUCCESS`) |
+| **Live Production Verification** | Confirmed Finance Operator metadata discovery across 4 Projects, 8 Phases, 8 Task Lists, 16 Tasks |
+| **Security Advisor Baseline** | Exactly 6 accepted warnings (5 Process public SECURITY DEFINER + 1 password protection) · 0 new warnings |
+| **Operational RLS State** | 100% preserved · 0 changes to `phases_select_member` or `task_lists_select_member` policies |
+| **Financial Correctness** | Zero double counting · Leaf expense aggregation only · Unavailable summary handling · Strict cross-tenancy isolation |
