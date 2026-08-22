@@ -1,7 +1,8 @@
 # P6-03 — Expense Ledger & Correction / Void Administration
 
 **Package**: Package 6 — Finance Frontend  
-**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING`  
+**Status**: `VERIFIED / FROZEN`  
+**Frontend Baseline**: `b94cae6c7cf3dcab6adcce9f4104306ff56f4fa8`  
 **Database Tip**: `20260820174313_p4_01b_finance_active_tenancy_authorization_closure`  
 **Route**: `/workspace/:workspaceId/finance/expenses`  
 **Authoritative Backend RPCs**:
@@ -11,9 +12,15 @@
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary & Certification
 
 P6-03 & P6-03A deliver the centralized **Finance Expense Ledger UI** and administrative controls for SNS Projects ERP. It provides real-time transaction oversight, multi-attribute filtering, complete line item inspection, and controlled modification workflows (Correction, Void, and Hard Delete).
+
+**Certification Status**:
+- **P6-03 / P6-03A**: `VERIFIED`
+- **Manual Production Acceptance**: `PASSED`
+- **P6-03 Expense Ledger & Administration**: `VERIFIED / FROZEN`
+- **Package 6 Overall**: `IN PROGRESS` (P6-01/01A FROZEN · P6-02/02A FROZEN · P6-03/03A FROZEN)
 
 ---
 
@@ -79,8 +86,9 @@ Access and mutation authorities strictly conform to the Package 4 active tenancy
 
 ---
 
-## 4. Verification Suite
+## 4. Verification Suite & Production Acceptance
 
+### 4.1 Automated Verification
 Automated verification is covered by `scripts/test-p6-03-expense-ledger.mjs` (42 assertions) and passes the complete regression gate:
 - `test-p6-03-expense-ledger.mjs` (42/42 passed)
 - `test-p6-02-budget-management.mjs` (46/46 passed)
@@ -91,3 +99,8 @@ Automated verification is covered by `scripts/test-p6-03-expense-ledger.mjs` (42
 - `verify-doc-links.mjs` (passed)
 - `oxlint src/` (0 errors)
 - `npm run build` (built cleanly)
+
+### 4.2 Production Acceptance Evidence Note
+- Signed-in manual browser production acceptance has **PASSED**.
+- **Important Preservation Principle**: Production data was intentionally left intact. Existing active production expenses (e.g. *Prepare installation acceptance checklist* for ₹3,200.00 and *Close landlord and access coordination* for ₹33,333.00) remain active, and the production audit ledger remains limited to the original creation events. Destructive and mutation workflows (Correction, Void, and Hard-Delete) were independently proven by isolated, rollback-backed automated database integration testing.
+- **Database Baseline**: Zero new migrations introduced. Database migration tip remains `20260820174313_p4_01b_finance_active_tenancy_authorization_closure`, with the established 6-warning Security Advisor baseline preserved.
