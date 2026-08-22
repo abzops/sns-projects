@@ -119,22 +119,20 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
         }
         setError(null);
 
-        // 1. Parallel fetch core entities
+        // 1. Parallel fetch: Finance-authorized metadata RPC + Finance-authorized financial data
+        //    ARCHITECTURAL NOTE: projects/phases/task_lists/tasks/profiles/departments are fetched
+        //    via get_workspace_finance_explorer_metadata (SECURITY INVOKER → private SECURITY DEFINER
+        //    internal) which validates Finance authorization and bypasses operational RLS so Finance
+        //    Operators see all workspace hierarchy — not just operationally involved phases/task_lists.
+        //    budgets and expense_transactions use their existing Finance-authorized RLS.
         const [
           wsSummaryRes,
-          projectsRes,
+          metadataRes,
           budgetsRes,
           expensesRes,
-          profilesRes,
-          departmentsRes,
-          deptMembersRes,
         ] = await Promise.all([
           supabase.rpc('get_workspace_financial_summary', { p_workspace_id: workspaceId }),
-          supabase
-            .from('projects')
-            .select('id, workspace_id, name, color, owner_id, created_by, created_at, project_status')
-            .eq('workspace_id', workspaceId)
-            .order('name'),
+          supabase.rpc('get_workspace_finance_explorer_metadata', { p_workspace_id: workspaceId }),
           supabase
             .from('budgets')
             .select('id, workspace_id, entity_type, project_id, phase_id, task_list_id, base_budget, safety_buffer, created_at, updated_at')
@@ -164,97 +162,34 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
             `)
             .eq('workspace_id', workspaceId)
             .order('expense_date', { ascending: false }),
-          supabase.from('profiles').select('id, full_name'),
-          supabase.from('departments').select('id, name, code, workspace_id').eq('workspace_id', workspaceId),
-          supabase.from('department_memberships').select('id, workspace_id, department_id, user_id, is_primary, is_active').eq('workspace_id', workspaceId).eq('is_active', true),
         ]);
 
         if (fetchId !== activeFetchIdRef.current) return;
 
         // Explicitly check errors from all initial parallel queries
         if (wsSummaryRes.error) throw wsSummaryRes.error;
-        if (projectsRes.error) throw projectsRes.error;
+        if (metadataRes.error) throw metadataRes.error;
         if (budgetsRes.error) throw budgetsRes.error;
         if (expensesRes.error) throw expensesRes.error;
-        if (profilesRes.error) throw profilesRes.error;
-        if (departmentsRes.error) throw departmentsRes.error;
-        if (deptMembersRes.error) throw deptMembersRes.error;
 
-        const rawProjects = projectsRes.data || [];
+        // Extract metadata from the Finance-authorized RPC response
+        const metadata = metadataRes.data || {};
+        const rawProjects = metadata.projects || [];
+        const rawPhases = metadata.phases || [];
+        const rawTaskLists = metadata.task_lists || [];
+        // Merge task_statuses onto tasks (RPC returns statuses separately)
+        const taskStatusesById = new Map((metadata.task_statuses || []).map((ts) => [ts.id, ts]));
+        const rawTasks = (metadata.tasks || []).map((t) => ({
+          ...t,
+          task_statuses: t.status_id ? (taskStatusesById.get(t.status_id) || null) : null,
+        }));
+        // Build profiles map from Finance-scoped profiles (only referenced identities)
+        const rawProfiles = metadata.profiles || [];
+        // Build primary department map from Finance-scoped primary_departments
+        const rawPrimaryDepts = metadata.primary_departments || [];
+
         const rawBudgets = budgetsRes.data || [];
         const rawExpenses = expensesRes.data || [];
-        const rawProfiles = profilesRes.data || [];
-        const rawDepartments = departmentsRes.data || [];
-        const rawDeptMembers = deptMembersRes.data || [];
-
-        const projectIds = rawProjects.map((p) => p.id);
-        const expenseTaskIds = Array.from(new Set(rawExpenses.map((e) => e.task_id).filter(Boolean)));
-
-        // 2. Fetch Phases, Task Lists, Tasks scoped to this workspace's projects and expenses
-        let phasesQuery = supabase.from('phases').select('id, project_id, name, created_by, created_at, position, owner_id').order('position');
-        let taskListsQuery = supabase.from('task_lists').select('id, project_id, phase_id, name, position, created_by, created_at, completed_at, owner_id').order('position');
-        
-        if (projectIds.length > 0) {
-          phasesQuery = phasesQuery.in('project_id', projectIds);
-          taskListsQuery = taskListsQuery.in('project_id', projectIds);
-        }
-
-        const [phasesRes, taskListsRes] = await Promise.all([phasesQuery, taskListsQuery]);
-        if (phasesRes.error) throw phasesRes.error;
-        if (taskListsRes.error) throw taskListsRes.error;
-
-        const rawPhases = phasesRes.data || [];
-        const rawTaskLists = taskListsRes.data || [];
-
-        // Tasks query: tasks in workspace projects OR tasks attached to workspace expense transactions
-        let rawTasks = [];
-        if (projectIds.length > 0 || expenseTaskIds.length > 0) {
-          let tasksQuery = supabase
-            .from('tasks')
-            .select(`
-              id,
-              project_id,
-              phase_id,
-              task_list_id,
-              parent_task_id,
-              process_step_id,
-              process_instance_id,
-              title,
-              status_id,
-              assignee_id,
-              owner_id,
-              created_by,
-              created_at,
-              updated_at,
-              due_date,
-              task_statuses (
-                id,
-                name,
-                color,
-                system_code
-              ),
-              subtasks (
-                id,
-                title,
-                status
-              )
-            `)
-            .order('created_at', { ascending: false });
-
-          if (projectIds.length > 0 && expenseTaskIds.length > 0) {
-            tasksQuery = tasksQuery.or(`project_id.in.(${projectIds.join(',')}),id.in.(${expenseTaskIds.join(',')})`);
-          } else if (projectIds.length > 0) {
-            tasksQuery = tasksQuery.in('project_id', projectIds);
-          } else if (expenseTaskIds.length > 0) {
-            tasksQuery = tasksQuery.in('id', expenseTaskIds);
-          }
-
-          const tasksRes = await tasksQuery;
-          if (tasksRes.error) throw tasksRes.error;
-          if (tasksRes.data) {
-            rawTasks = tasksRes.data;
-          }
-        }
 
         if (fetchId !== activeFetchIdRef.current) return;
 
@@ -314,16 +249,16 @@ export function useFinancialExplorer(workspaceId, authorizationScopeKey = 'defau
 
         // 4. Build Lookup Indices
         const profilesMap = new Map(rawProfiles.map((pr) => [pr.id, pr.full_name]));
-        const departmentsMap = new Map(rawDepartments.map((d) => [d.id, d]));
         
-        // Resolve PRIMARY active department per user in current workspace (dm.is_active = true AND dm.is_primary = true)
+        // Resolve PRIMARY active department per user in current workspace (from metadata RPC)
         const userPrimaryDeptMap = new Map(); // userId -> { id, name, code }
-        for (const dm of rawDeptMembers) {
-          if (dm.is_active && dm.is_primary) {
-            const dept = departmentsMap.get(dm.department_id);
-            if (dept) {
-              userPrimaryDeptMap.set(dm.user_id, dept);
-            }
+        for (const pd of rawPrimaryDepts) {
+          if (pd.user_id && pd.department_id) {
+            userPrimaryDeptMap.set(pd.user_id, {
+              id: pd.department_id,
+              name: pd.department_name,
+              code: pd.department_code,
+            });
           }
         }
 

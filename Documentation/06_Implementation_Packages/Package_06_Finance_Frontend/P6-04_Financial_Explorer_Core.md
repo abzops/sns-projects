@@ -1,27 +1,30 @@
-# P6-04 — Financial Explorer Core
+# P6-04 / P6-04A / P6-04B — Financial Explorer Core & Metadata Authorization Closure
 
 **Package**: Package 6 — Finance Frontend  
-**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING`  
-**Frontend Baseline**: `0092695404acec404b935de3611b5c80cd2632e4` (P6-04 base) — P6-04A hotfix applied on top  
-**Database Tip**: `20260820174313_p4_01b_finance_active_tenancy_authorization_closure`  
+**Status**: `IMPLEMENTED / MANUAL ACCEPTANCE PENDING` (P6-04, P6-04A, P6-04B)  
+**Frontend Baseline**: `89e487ce9fdc09af1358f1960378b2cc1417afe2` (P6-04A base) — P6-04B applied  
+**Database Tip**: `20260822114456_p6_04b_finance_explorer_metadata_authorization_closure`  
 **Route**: `/workspace/:workspaceId/finance/explorer`  
 **Authoritative Backend Contracts**:
 - `public.get_workspace_financial_summary(p_workspace_id uuid)`
 - `public.get_project_financial_summary(p_project_id uuid)`
 - `public.get_phase_financial_summary(p_phase_id uuid)`
 - `public.get_task_list_financial_summary(p_task_list_id uuid)`
+- `public.get_workspace_finance_explorer_metadata(p_workspace_id uuid)`
+- `private.get_workspace_finance_explorer_metadata_internal(p_workspace_id uuid, p_user_id uuid)`
 
 ---
 
 ## 1. Executive Summary
 
-P6-04 delivers the centralized **Financial Explorer Core** for SNS Projects ERP. It provides multi-dimensional, read-only operational search, deep financial drill-down, cascading filtering, single-dimension grouping, and client-side CSV exports across the entire organizational work hierarchy.
+P6-04 / P6-04A / P6-04B delivers the centralized **Financial Explorer Core** for SNS Projects ERP. It provides multi-dimensional, read-only operational search, deep financial drill-down, cascading filtering, single-dimension grouping, authorization-safe workspace hierarchy metadata discovery, and client-side CSV exports across the entire organizational work hierarchy.
 
 ### Scope & Constraints:
-- **Read-Only**: P6-04 Financial Explorer performs zero client-side mutations (no budget editing, expense correction, void, hard delete, or reallocation).
-- **Saved Views Deferred**: Persistent Saved Views are explicitly deferred to P6-04A pending canonical database storage.
-- **Alert Center Out of Scope**: Finance Alerts and notification lifecycle belong to the dedicated Alert Center package.
-- **Database Migrations**: Zero new database migrations.
+- **Read-Only**: Financial Explorer performs zero client-side mutations (no budget editing, expense correction, void, hard delete, or reallocation).
+- **P6-04A Closure**: Hardens financial semantics against RPC failures (null values, never fake ₹0 / GREEN / UNBUDGETED), canonical Phase/Task List ownership, primary department exclusivity, descendant financial activity dates, item text search, high-risk budget unit deduplication, and non-blocking cached refresh.
+- **P6-04B Closure**: Resolves Finance Operator metadata authorization via dedicated `get_workspace_finance_explorer_metadata` RPC (SECURITY INVOKER delegating to private SECURITY DEFINER engine). Preserves 100% of operational RLS without broadening `public.phases` or `public.task_lists` SELECT policies. Fixes empty-workspace cross-tenancy query leakage.
+- **Saved Views (P6-04C)**: Persistent Saved Views are deferred to P6-04C pending canonical database storage.
+- **Alert Center**: Finance Alerts and notification lifecycle belong to the dedicated Alert Center package.
 
 ---
 
@@ -95,16 +98,16 @@ Authorization checks are enforced via `useFinanceAccess(workspaceId)` with fail-
 ---
 
 ## 6. Verification & Automated Test Suite
-
-The comprehensive test suite `scripts/test-p6-04-financial-explorer.mjs` validates 27 automated assertions across access control, normalized data modeling, zero double-counting, cascading filters, and live PostgreSQL RPCs:
-
-- `test-p6-04-financial-explorer.mjs` (27/27 assertions passed)
+ 
+The comprehensive test suite `scripts/test-p6-04-financial-explorer.mjs` validates 60 automated assertions across access control, normalized data modeling, zero double-counting, cascading filters, P6-04A semantic hardening, P6-04B metadata authorization RPC, operational RLS preservation, and live PostgreSQL RPCs:
+ 
+- `test-p6-04-financial-explorer.mjs` (60/60 assertions passed)
 - `test-p6-03-expense-ledger.mjs` (42/42 assertions passed)
 - `test-p6-02-budget-management.mjs` (46/46 assertions passed)
 - `test-p6-01-finance-overview.mjs` (34/34 assertions passed)
 - `test-p5-01-expense-execution.mjs` (39/39 assertions passed)
 - `test-p5-03-subtask-completion.mjs` (37/37 assertions passed)
 - `test-p4-01-finance-foundation.mjs` (74/74 assertions passed)
-- `verify-doc-links.mjs` (283/283 links passed)
+- `verify-doc-links.mjs` (287/287 links passed)
 - `oxlint src/` (0 errors)
 - `npm run build` (built cleanly)
