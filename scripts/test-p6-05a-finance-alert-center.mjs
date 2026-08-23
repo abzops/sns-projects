@@ -596,6 +596,219 @@ async function runP605ATestSuite() {
   pass('P6-05A3-M: 100% Design Token Parity: No undefined CSS variables (var(--brand), var(--border-light)) in P6-05A files');
 
   // --------------------------------------------------------------------------
+  // SUITE 3.6: P6-05A4 DISABLED & AUTHORIZATION LOADING CONTRACT CLOSURE (A - J)
+  // --------------------------------------------------------------------------
+  console.log('\n--- Suite 3.6: P6-05A4 Disabled & Authorization Loading Contract Closure (A - J) ---');
+
+  // Pure function simulating useFinanceAlerts safe state derivation contract
+  function deriveFinanceAlertsState({
+    enabled,
+    userId,
+    workspaceId,
+    activeCacheKey,
+    activeScopeKey,
+    alerts,
+    loading,
+    refreshing,
+    error,
+    initialFetchCompleted,
+    pendingAlertActions,
+  }) {
+    const hasQueryPrerequisites = Boolean(enabled && userId && workspaceId);
+    const isCurrentScope = Boolean(
+      hasQueryPrerequisites && activeCacheKey === activeScopeKey
+    );
+    const safeAlerts = isCurrentScope ? alerts : [];
+    const safePendingAlertActions = isCurrentScope ? pendingAlertActions : {};
+    const safeLoading = hasQueryPrerequisites
+      ? (loading || activeCacheKey !== activeScopeKey)
+      : false;
+    const safeRefreshing = isCurrentScope ? refreshing : false;
+    const safeError = isCurrentScope ? error : null;
+    const safeInitialFetchCompleted = isCurrentScope ? initialFetchCompleted : false;
+
+    return {
+      alerts: safeAlerts,
+      loading: safeLoading,
+      refreshing: safeRefreshing,
+      error: safeError,
+      initialFetchCompleted: safeInitialFetchCompleted,
+      pendingAlertActions: safePendingAlertActions,
+    };
+  }
+
+  // Pure function simulating FinanceAlertCenterPage render decision flow
+  function evaluatePageRenderBranch({
+    financeAccessLoading,
+    canViewWorkspaceFinance,
+    financeAccessError,
+    alertQueryLoading,
+    alertCount,
+    alertError,
+  }) {
+    if (financeAccessLoading) {
+      return 'AUTH_LOADING_SKELETON';
+    }
+    if (!canViewWorkspaceFinance || financeAccessError) {
+      return 'ACCESS_RESTRICTED';
+    }
+    if (alertQueryLoading && alertCount === 0 && !alertError) {
+      return 'ALERT_LOADING_SKELETON';
+    }
+    if (alertError && alertCount === 0) {
+      return 'INITIAL_LOAD_ERROR';
+    }
+    return 'READY_UI';
+  }
+
+  // A. enabled=false returns/exposes loading=false
+  const disabledState = deriveFinanceAlertsState({
+    enabled: false,
+    userId: 'user-unauth',
+    workspaceId: 'ws-1',
+    activeCacheKey: 'user-unauth:ws-1:default',
+    activeScopeKey: 'user-unauth:ws-1:default',
+    alerts: [{ id: 'leak-1' }],
+    loading: true,
+    refreshing: false,
+    error: null,
+    initialFetchCompleted: false,
+    pendingAlertActions: { 'alert-1': 'acknowledge' },
+  });
+  assert.equal(disabledState.loading, false, '[P6-05A4-A] enabled=false must return loading=false');
+  pass('P6-05A4-A: enabled=false returns loading=false (never stalls on alert loading)');
+
+  // B. enabled=false exposes alerts=[]
+  assert.equal(disabledState.alerts.length, 0, '[P6-05A4-B] enabled=false must expose alerts=[]');
+  pass('P6-05A4-B: enabled=false exposes empty alerts array with zero data exposure');
+
+  // C. enabled=false exposes pendingAlertActions={}
+  assert.deepEqual(disabledState.pendingAlertActions, {}, '[P6-05A4-C] enabled=false must expose empty pendingAlertActions');
+  pass('P6-05A4-C: enabled=false exposes empty pendingAlertActions object');
+
+  // D. Member/Viewer canViewWorkspaceFinance=false reaches Access Restricted, not Alert Center skeleton
+  const memberBranch = evaluatePageRenderBranch({
+    financeAccessLoading: false,
+    canViewWorkspaceFinance: false,
+    financeAccessError: null,
+    alertQueryLoading: disabledState.loading,
+    alertCount: disabledState.alerts.length,
+    alertError: disabledState.error,
+  });
+  assert.equal(memberBranch, 'ACCESS_RESTRICTED', '[P6-05A4-D] canViewWorkspaceFinance=false must reach ACCESS_RESTRICTED');
+  pass('P6-05A4-D: Member/Viewer without finance authorization reaches Access Restricted view (not Alert Center skeleton)');
+
+  // E. financeAccessError reaches Access Restricted
+  const accessErrorBranch = evaluatePageRenderBranch({
+    financeAccessLoading: false,
+    canViewWorkspaceFinance: false,
+    financeAccessError: 'Failed to verify membership status',
+    alertQueryLoading: false,
+    alertCount: 0,
+    alertError: null,
+  });
+  assert.equal(accessErrorBranch, 'ACCESS_RESTRICTED', '[P6-05A4-E] financeAccessError must reach ACCESS_RESTRICTED');
+  pass('P6-05A4-E: Authorization check error reaches Access Restricted screen with error feedback');
+
+  // F. financeAccessLoading=true still shows authorization-resolution skeleton
+  const authLoadingBranch = evaluatePageRenderBranch({
+    financeAccessLoading: true,
+    canViewWorkspaceFinance: false,
+    financeAccessError: null,
+    alertQueryLoading: false,
+    alertCount: 0,
+    alertError: null,
+  });
+  assert.equal(authLoadingBranch, 'AUTH_LOADING_SKELETON', '[P6-05A4-F] financeAccessLoading=true must show AUTH_LOADING_SKELETON');
+  pass('P6-05A4-F: financeAccessLoading=true renders authorization-resolution skeleton');
+
+  // G. authorized same-scope initial alert fetch shows alert loading skeleton
+  const authorizedInitialLoadingState = deriveFinanceAlertsState({
+    enabled: true,
+    userId: 'owner-1',
+    workspaceId: 'ws-1',
+    activeCacheKey: 'owner-1:ws-1:default',
+    activeScopeKey: 'owner-1:ws-1:default',
+    alerts: [],
+    loading: true,
+    refreshing: false,
+    error: null,
+    initialFetchCompleted: false,
+    pendingAlertActions: {},
+  });
+  const authorizedAlertLoadingBranch = evaluatePageRenderBranch({
+    financeAccessLoading: false,
+    canViewWorkspaceFinance: true,
+    financeAccessError: null,
+    alertQueryLoading: authorizedInitialLoadingState.loading,
+    alertCount: authorizedInitialLoadingState.alerts.length,
+    alertError: authorizedInitialLoadingState.error,
+  });
+  assert.equal(authorizedAlertLoadingBranch, 'ALERT_LOADING_SKELETON', '[P6-05A4-G] Authorized initial fetch must show ALERT_LOADING_SKELETON');
+  pass('P6-05A4-G: Authorized same-scope initial alert fetch renders Alert Center loading skeleton');
+
+  // H. authorized workspace scope mismatch exposes zero stale alerts and reports loading=true until current scope is established
+  const scopeMismatchState = deriveFinanceAlertsState({
+    enabled: true,
+    userId: 'owner-1',
+    workspaceId: 'ws-new',
+    activeCacheKey: 'owner-1:ws-old:default',
+    activeScopeKey: 'owner-1:ws-new:default',
+    alerts: [{ id: 'old-ws-alert', workspace_id: 'ws-old' }],
+    loading: false,
+    refreshing: false,
+    error: null,
+    initialFetchCompleted: true,
+    pendingAlertActions: {},
+  });
+  assert.equal(scopeMismatchState.alerts.length, 0, '[P6-05A4-H] Scope mismatch must expose zero alerts');
+  assert.equal(scopeMismatchState.loading, true, '[P6-05A4-H] Scope mismatch must report loading=true');
+  pass('P6-05A4-H: Authorized workspace scope mismatch exposes zero stale alerts and reports loading=true until scope convergence');
+
+  // I. after scope convergence, current alerts are exposed normally
+  const convergedState = deriveFinanceAlertsState({
+    enabled: true,
+    userId: 'owner-1',
+    workspaceId: 'ws-new',
+    activeCacheKey: 'owner-1:ws-new:default',
+    activeScopeKey: 'owner-1:ws-new:default',
+    alerts: [{ id: 'new-ws-alert', workspace_id: 'ws-new' }],
+    loading: false,
+    refreshing: false,
+    error: null,
+    initialFetchCompleted: true,
+    pendingAlertActions: {},
+  });
+  assert.equal(convergedState.alerts.length, 1, '[P6-05A4-I] Converged scope must expose alerts normally');
+  assert.equal(convergedState.loading, false, '[P6-05A4-I] Converged scope must report loading=false');
+  pass('P6-05A4-I: After scope convergence, new workspace alerts are exposed normally');
+
+  // J. render order proves unauthorized branch is evaluated before authorized alert-query loading branch
+  // Even if alertQueryLoading were erroneously true, canViewWorkspaceFinance=false MUST produce ACCESS_RESTRICTED
+  const shadowTestBranch = evaluatePageRenderBranch({
+    financeAccessLoading: false,
+    canViewWorkspaceFinance: false,
+    financeAccessError: null,
+    alertQueryLoading: true, // simulated erroneous query loading
+    alertCount: 0,
+    alertError: null,
+  });
+  assert.equal(
+    shadowTestBranch,
+    'ACCESS_RESTRICTED',
+    '[P6-05A4-J] Unauthorized status must take strict precedence over alert query loading'
+  );
+  pass('P6-05A4-J: Render order proves unauthorized branch is evaluated before authorized alert-query loading branch');
+
+  // Also verify source code structure in FinanceAlertCenterPage.jsx
+  assert.match(
+    pageCode,
+    /\/\/ 1\. Finance Authorization Resolving[\s\S]*?\/\/ 2\. Unauthorized \/ Access Denied[\s\S]*?\/\/ 3\. Authorized Finance Alert Query Initial Loading/,
+    'FinanceAlertCenterPage.jsx must implement the required render order (1. Auth resolving -> 2. Access denied -> 3. Alert initial loading)'
+  );
+  pass('P6-05A4 source code contract: Page enforces 1. Auth resolving -> 2. Access Denied -> 3. Alert Loading sequence');
+
+  // --------------------------------------------------------------------------
   // SUITE 4: UI ARCHITECTURE, MODALS & LIFECYCLE PRESENTATION
   // --------------------------------------------------------------------------
   console.log('\n--- Suite 4: UI Architecture, Modals & Lifecycle Presentation ---');
@@ -810,7 +1023,7 @@ async function runP605ATestSuite() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log(`  ALL ${passCount} P6-05A, P6-05A1, P6-05A2 & P6-05A3 ASSERTIONS PASSED!`);
+  console.log(`  ALL ${passCount} P6-05A, P6-05A1, P6-05A2, P6-05A3 & P6-05A4 ASSERTIONS PASSED!`);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 

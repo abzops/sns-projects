@@ -345,12 +345,15 @@ export function useFinanceAlerts(
   );
 
   // Render-time scope isolation: guarantee stale scope alerts are never exposed on render
+  const hasQueryPrerequisites = Boolean(enabled && userId && workspaceId);
   const isCurrentScope = Boolean(
-    enabled && userId && workspaceId && activeCacheKey === activeScopeKey
+    hasQueryPrerequisites && activeCacheKey === activeScopeKey
   );
   const safeAlerts = isCurrentScope ? alerts : [];
   const safePendingAlertActions = isCurrentScope ? pendingAlertActions : {};
-  const safeLoading = loading || !isCurrentScope;
+  const safeLoading = hasQueryPrerequisites
+    ? (loading || activeCacheKey !== activeScopeKey)
+    : false;
   const safeRefreshing = isCurrentScope ? refreshing : false;
   const safeError = isCurrentScope ? error : null;
   const safeInitialFetchCompleted = isCurrentScope ? initialFetchCompleted : false;

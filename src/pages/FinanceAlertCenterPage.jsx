@@ -285,8 +285,8 @@ export default function FinanceAlertCenterPage() {
     <RoleBadge role="head" customLabel="Finance Operator" size="sm" />
   ) : null;
 
-  // 1. Initial Loading / Resolution Skeleton
-  if (financeAccessLoading || (loading && alerts.length === 0 && !error)) {
+  // 1. Finance Authorization Resolving
+  if (financeAccessLoading) {
     return (
       <div className={styles.page}>
         <PageHeader
@@ -319,7 +319,22 @@ export default function FinanceAlertCenterPage() {
     );
   }
 
-  // 3. Initial Load Error (Zero cached rows)
+  // 3. Authorized Finance Alert Query Initial Loading
+  if (loading && alerts.length === 0 && !error) {
+    return (
+      <div className={styles.page}>
+        <PageHeader
+          title="Finance Alert Center"
+          subtitle="Persistent budget risk incidents & lifecycle management"
+          badge={headerBadge}
+        />
+        <MetricCardsSkeleton count={5} />
+        <Skeleton height="360px" radius="var(--radius-sm)" />
+      </div>
+    );
+  }
+
+  // 4. Initial Load Error (Zero cached rows)
   if (error && alerts.length === 0) {
     return (
       <div className={styles.page}>
