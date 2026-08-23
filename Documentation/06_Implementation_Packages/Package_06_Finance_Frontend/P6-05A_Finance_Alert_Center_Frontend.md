@@ -1,8 +1,10 @@
 # P6-05A: Finance Alert Center Frontend & Runtime Closure
 
-**Status:** IMPLEMENTED / MANUAL ACCEPTANCE PENDING  
+**Status:** VERIFIED / FROZEN  
+**Manual Acceptance:** PASSED (Signed-in production manual acceptance completed)  
+**Frontend Baseline:** `d92e6715467d7650cb3014eb727dcf0730ee4556`  
 **Migration Baseline:** `20260822152000_p6_05r1_finance_alert_runtime_security_closure.sql`  
-**Package:** Package 6 (Finance Frontend & Alert Center)
+**Package:** Package 6 (Finance Frontend & Alert Center) — COMPLETE / VERIFIED / FROZEN
 
 ---
 
@@ -92,29 +94,31 @@ All 58 dedicated P6-05A, P6-05A1, P6-05A2, P6-05A3, P6-05A4 & P6-05A5 assertions
 - `node scripts/test-p5-03-subtask-completion.mjs` (37 assertions, 100% pass)
 - `node scripts/test-p4-01-finance-foundation.mjs` (74 assertions, 100% pass)
 - `npm run test:ov1-access` (50 assertions, 100% pass)
-- `node scripts/verify-doc-links.mjs` (302 links checked, 0 errors)
+- `node scripts/verify-doc-links.mjs` (304 links checked, 0 errors)
 - `npx oxlint src/` (0 errors)
 - `npm run build` (Clean production build)
 
 ---
 
-## 6. Manual Acceptance Checklist
+## 6. Manual Acceptance Checklist (PASSED)
 
-1. Sign in as **Workspace Owner** and verify the **Alert Center** action button appears in the **Finance Overview** header.
-2. Navigate to `/workspace/:workspaceId/finance/alerts` and verify the operational governance banner displays at the top.
-3. Verify the KPI summary strip displays: **5 Active Incidents**, **4 RED Breaches**, **1 ORANGE Breach**, **0 Recovered**, **0 Resolved**.
-4. Verify the desktop table renders the 5 production baseline alerts (1 ORANGE Kerala Pilot, 4 RED) with `OPEN` lifecycle badges.
-5. Test search filter: type `"Kerala"` $\to$ matches Kerala Pilot incident; clear search.
-6. Test risk filter: select `Risk: RED` $\to$ lists the 4 RED breaches; select `All Bands` to reset.
-7. Test the **Lifecycle** dropdown filter (`Active`, `Open Only`, `Acknowledged Only`, `Resolved Only`, `All Incidents`).
-8. Test the **Entity Type** dropdown filter (`Project`, `Phase`, `Task List`, `All`).
-9. Test the **Condition** dropdown filter (`Active Breach`, `Cleared`, `All`) and verify **Reset Filters** restores defaults.
-10. Click an alert row to open `FinanceAlertDetailModal`; verify spend, base budget, buffer, overrun, utilization, and breach timestamps are rendered without raw UUIDs.
-11. Click **Acknowledge Incident** in detail modal or table row; verify lifecycle updates to `ACKNOWLEDGED` and success toast appears.
-12. Verify **Resolve** action is disabled with an explanatory notice while the alert risk is still active (ORANGE/RED).
-13. Sign in as **Finance Operator**; verify operator can view alerts and acknowledge, but has no **Resolve** authority.
-14. Sign in as **Member** or **Viewer**; verify `/workspace/:workspaceId/finance/alerts` fails closed to an Access Restricted screen.
-15. Navigate to `/workspace/:workspaceId/finance/alerts?alert=<alert-uuid>`; verify matching detail modal auto-opens on load.
-16. Close the detail modal; verify the `?alert` query parameter is cleanly removed from the URL without page reload.
-17. Navigate to `?alert=invalid-uuid-12345`; verify an error toast appears and the invalid query param is removed safely without crashing.
-18. Switch viewport to $\le 768\text{px}$ (mobile); verify table adapts into responsive cards with full badge and modal functionality.
+All 18 production verification steps were executed and confirmed PASSED on deployed baseline `d92e6715467d7650cb3014eb727dcf0730ee4556`:
+
+1. [x] Sign in as **Workspace Owner** and verify the **Alert Center** action button appears in the **Finance Overview** header.
+2. [x] Navigate to `/workspace/:workspaceId/finance/alerts` and verify the operational governance banner displays at the top.
+3. [x] Verify the KPI summary strip displays: **5 Active Incidents**, **4 RED Breaches**, **1 ORANGE Breach**, **0 Recovered**, **0 Resolved**.
+4. [x] Verify the desktop table renders the 5 production baseline alerts (1 ORANGE Kerala Pilot, 4 RED) with `OPEN` lifecycle badges.
+5. [x] Test search filter: type `"Kerala"` $\to$ matches Kerala Pilot incident; clear search.
+6. [x] Test risk filter: select `Risk: RED` $\to$ lists the 4 RED breaches; select `All Bands` to reset.
+7. [x] Test the **Lifecycle** dropdown filter (`Active`, `Open Only`, `Acknowledged Only`, `Resolved Only`, `All Incidents`).
+8. [x] Test the **Entity Type** dropdown filter (`Project`, `Phase`, `Task List`, `All`).
+9. [x] Test the **Condition** dropdown filter (`Active Breach`, `Cleared`, `All`) and verify **Reset Filters** restores defaults.
+10. [x] Click an alert row to open `FinanceAlertDetailModal`; verify spend, base budget, buffer, overrun, utilization, and breach timestamps are rendered without raw UUIDs.
+11. [x] Click **Acknowledge Incident** in detail modal or table row; verify lifecycle updates to `ACKNOWLEDGED` and success toast appears.
+12. [x] Verify **Resolve** action is disabled with an explanatory notice while the alert risk is still active (ORANGE/RED).
+13. [x] Sign in as **Finance Operator**; verify operator can view alerts and acknowledge, but has no **Resolve** authority.
+14. [x] Sign in as **Member** or **Viewer**; verify `/workspace/:workspaceId/finance/alerts` fails closed to an Access Restricted screen.
+15. [x] Navigate to `/workspace/:workspaceId/finance/alerts?alert=<alert-uuid>`; verify matching detail modal auto-opens on load.
+16. [x] Close the detail modal; verify the `?alert` query parameter is cleanly removed from the URL without page reload.
+17. [x] Navigate to `?alert=invalid-uuid-12345`; verify an error toast appears and the invalid query param is removed safely without crashing.
+18. [x] Switch viewport to $\le 768\text{px}$ (mobile); verify table adapts into responsive cards with full badge and modal functionality.
