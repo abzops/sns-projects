@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { getSupabase, supabaseConfigError } from '../lib/supabase'
 import { reconcileAuthUser } from '../lib/authGate'
 
-const AuthContext = createContext({})
+export const AuthContext = createContext({})
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)

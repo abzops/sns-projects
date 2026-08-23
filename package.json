@@ -17,6 +17,7 @@
     "test:ov1-dashboard": "node scripts/test-ov1-c-role-aware-dashboard.mjs",
     "test:loading-stabilization": "node scripts/test-operational-v1-loading-stabilization.mjs",
     "test:stability": "node scripts/test-operational-v1-stability.mjs",
+    "test:p7-01": "node scripts/test-p7-01-financial-hierarchy.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

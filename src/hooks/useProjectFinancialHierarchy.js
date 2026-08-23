@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { normalizeProjectFinancialHierarchy } from '../lib/finance.js';
 
 export { normalizeProjectFinancialHierarchy };

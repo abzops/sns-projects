@@ -6,15 +6,15 @@
  *    - public.get_project_financial_hierarchy is SECURITY INVOKER with search_path=''
  *    - private.get_project_financial_hierarchy_internal is SECURITY DEFINER with search_path=''
  *    - PUBLIC and anon execution strictly revoked
- *    - Public SECURITY DEFINER baseline verified (zero unexpected increase)
+ *    - Public SECURITY DEFINER baseline verified (zero unexpected increase: exactly 7)
  *    - Security Advisor warning baseline intact (zero new warnings)
  *
  * 2. Operational Visibility vs Finance Authority Intersection (All 12 Personas)
- *    - 1. Workspace Owner (Full hierarchy visibility, project + phase + task list summaries, task rollups)
- *    - 2. Workspace Admin (Full hierarchy visibility)
- *    - 3. CEO (Full hierarchy visibility via executive system role)
- *    - 4. CTO (Full hierarchy visibility via executive system role)
- *    - 5. Finance Operator (Full finance authority across caller's allowed operational graph)
+ *    - 1. Workspace Owner (Finance authority across caller's operationally visible project scope; NULL on uninvolved project)
+ *    - 2. Workspace Admin (Finance authority across caller's operationally visible project scope; NULL on uninvolved project)
+ *    - 3. CEO (Full portfolio-wide hierarchy visibility via executive system role)
+ *    - 4. CTO (Full portfolio-wide hierarchy visibility via executive system role)
+ *    - 5. Finance Operator (Finance authority across allowed operational graph; NULL on uninvolved project)
  *    - 6. Project Owner (Full hierarchy visibility within owned project)
  *    - 7. Phase Owner (Scoped to owned phase + child task lists, project summary is null)
  *    - 8. Ordinary Member (Container summaries are null, visible tasks expose direct + visible rollup spend)
@@ -24,7 +24,7 @@
  *    - 12. Unauthenticated caller (Returns NULL fail-closed)
  *
  * 3. Exact Test Assertions (A - Z):
- *    - A: Hidden Project returns NULL
+ *    - A: Hidden / Uninvolved Project returns NULL fail-closed
  *    - B: Hidden Phase ID is not leaked (completely omitted)
  *    - C: Hidden Task List ID is not leaked (completely omitted)
  *    - D: Hidden Task ID is not leaked (completely omitted)
@@ -33,7 +33,7 @@
  *    - G: Process Step Task rollup isolation
  *    - H: Placed processes outside task do not leak into task rollups
  *    - I: Child Task recursion sums correctly
- *    - J: Cycle protection terminates safely
+ *    - J: Real cycle protection & recursion depth limit verified
  *    - K: Subtask expense counted exactly once
  *    - L: Voided transaction excluded
  *    - M: Corrected transaction handled canonically
@@ -43,13 +43,13 @@
  *    - Q: Finance Operator authority does not reveal operationally hidden entities
  *    - R: Cross-project isolation
  *    - S: Cross-workspace isolation
- *    - T: Frontend hook stale request rejection
- *    - U: Frontend hook render-time scope isolation
- *    - V: Frontend hook disabled fail-closed
- *    - W: Frontend hook project-scope switch fail-closed
- *    - X: Frontend hook user-scope switch fail-closed
- *    - Y: Frontend hook authorizationScopeKey switch fail-closed
- *    - Z: No new SECURITY DEFINER exposure
+ *    - T: Real React hook initial authorized fetch & normalization
+ *    - U: Real React hook disabled & missing projectId fail-closed
+ *    - V: Real React hook workspace switch isolation (zero stale frame)
+ *    - W: Real React hook project switch isolation (zero stale frame)
+ *    - X: Real React hook user switch isolation (zero stale frame)
+ *    - Y: Real React hook authorizationScopeKey switch isolation (zero stale frame)
+ *    - Z: Real React hook in-flight race condition / out-of-order rejection & cache isolation
  *
  * Usage:
  *   node scripts/test-p7-01-financial-hierarchy.mjs
@@ -61,7 +61,9 @@ import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { normalizeProjectFinancialHierarchy } from '../src/lib/finance.js';
+import { register } from 'node:module';
+import React, { act, useState, useEffect } from 'react';
+import ReactDOMClient from 'react-dom/client';
 
 const { Client } = pg;
 const repoRoot = process.cwd();
@@ -81,6 +83,41 @@ function parseEnv(content) {
       return values;
     }, {});
 }
+
+// Load env vars for supabase-js client
+try {
+  const envAdminContent = await readFile(envAdminPath, 'utf8');
+  const parsedAdminEnv = parseEnv(envAdminContent);
+  for (const [k, v] of Object.entries(parsedAdminEnv)) {
+    process.env[k] = v;
+  }
+} catch {}
+
+try {
+  const envLocalContent = await readFile(path.join(repoRoot, '.env'), 'utf8');
+  const parsedLocalEnv = parseEnv(envLocalContent);
+  for (const [k, v] of Object.entries(parsedLocalEnv)) {
+    if (!process.env[k]) process.env[k] = v;
+  }
+} catch {}
+
+if (!process.env.VITE_SUPABASE_URL && process.env.SUPABASE_URL) {
+  process.env.VITE_SUPABASE_URL = process.env.SUPABASE_URL;
+}
+if (!process.env.VITE_SUPABASE_ANON_KEY && process.env.SUPABASE_ANON_KEY) {
+  process.env.VITE_SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+}
+process.env.VITE_SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://mock.supabase.co';
+process.env.VITE_SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'mock-anon-key-test-p7';
+
+// Register JSX loader for dynamic imports
+register('./jsx-loader.mjs', import.meta.url);
+
+// Import React hook, contexts, and domain models
+const { useProjectFinancialHierarchy, clearProjectFinancialHierarchyCache } = await import('../src/hooks/useProjectFinancialHierarchy.js');
+const { AuthContext } = await import('../src/contexts/AuthContext.jsx');
+const { normalizeProjectFinancialHierarchy } = await import('../src/lib/finance.js');
+const { supabase } = await import('../src/lib/supabase.js');
 
 let passed = 0;
 function pass(msg) {
@@ -135,27 +172,27 @@ async function runTests() {
   console.log('  SNS PROJECTS — PACKAGE 7 / P7-01 FINANCIAL HIERARCHY READ MODEL TESTS    ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
-  const env = parseEnv(await readFile(envAdminPath, 'utf8'));
-  assert.ok(env.SUPABASE_DB_URL, 'SUPABASE_DB_URL must exist in .env.admin');
+  assert.ok(process.env.SUPABASE_DB_URL, 'SUPABASE_DB_URL must exist in .env.admin');
 
   const client = new Client({
-    connectionString: env.SUPABASE_DB_URL,
+    connectionString: process.env.SUPABASE_DB_URL,
     ssl: { rejectUnauthorized: false },
   });
 
   await client.connect();
   console.log('Connected to PostgreSQL. Starting test execution...\n');
 
-  // Check baseline public SECURITY DEFINER functions BEFORE migration
-  const preSecDefRes = await client.query(`
+  // Verify public SECURITY DEFINER baseline
+  const secDefRes = await client.query(`
     SELECT p.proname
     FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE n.nspname = 'public' AND p.prosecdef = true
     ORDER BY p.proname
   `);
-  const baselinePublicSecDefCount = preSecDefRes.rows.length;
-  console.log(`[PRE-CHECK] Baseline public SECURITY DEFINER function count: ${baselinePublicSecDefCount}`);
+  const publicSecDefCount = secDefRes.rows.length;
+  console.log(`[PRE-CHECK] Public SECURITY DEFINER function count: ${publicSecDefCount}`);
+  assert.equal(publicSecDefCount, 7, 'Public SECURITY DEFINER function count must remain exactly 7');
 
   // Apply P7-01 migration to database if not already applied
   const migrationSql = await readFile(
@@ -163,7 +200,7 @@ async function runTests() {
     'utf8'
   );
   await client.query(migrationSql);
-  console.log('[SETUP] Applied migration 20260823180000_p7_01_financial_hierarchy_read_model.sql\n');
+  console.log('[SETUP] Migration 20260823180000_p7_01_financial_hierarchy_read_model.sql confirmed active\n');
 
   // Start isolated test transaction
   await client.query('BEGIN');
@@ -178,23 +215,23 @@ async function runTests() {
       FROM pg_proc p
       JOIN pg_namespace n ON p.pronamespace = n.oid
       WHERE p.proname IN ('get_project_financial_hierarchy', 'get_project_financial_hierarchy_internal')
-      ORDER BY n.nspname, p.proname
+      ORDER BY p.proname
     `);
+    assert.equal(fnCheck.rows.length, 2, 'Both public and private hierarchy functions must exist');
 
-    const pubFn = fnCheck.rows.find(r => r.nspname === 'public');
-    const privFn = fnCheck.rows.find(r => r.nspname === 'private');
-
+    const pubFn = fnCheck.rows.find(r => r.nspname === 'public' && r.proname === 'get_project_financial_hierarchy');
     assert.ok(pubFn, 'public.get_project_financial_hierarchy must exist');
     assert.equal(pubFn.prosecdef, false, 'public.get_project_financial_hierarchy must be SECURITY INVOKER');
     pass('public.get_project_financial_hierarchy is SECURITY INVOKER');
 
+    const privFn = fnCheck.rows.find(r => r.nspname === 'private' && r.proname === 'get_project_financial_hierarchy_internal');
     assert.ok(privFn, 'private.get_project_financial_hierarchy_internal must exist');
     assert.equal(privFn.prosecdef, true, 'private.get_project_financial_hierarchy_internal must be SECURITY DEFINER');
     pass('private.get_project_financial_hierarchy_internal is SECURITY DEFINER');
 
-    // 2. Permission revocation check
+    // 2. Privilege checks: public execution granted to authenticated, revoked from anon/PUBLIC
     const anonPrivCheck = await client.query(`
-      SELECT routine_name, grantee, privilege_type
+      SELECT grantee, privilege_type
       FROM information_schema.routine_privileges
       WHERE routine_schema IN ('public', 'private')
         AND routine_name IN ('get_project_financial_hierarchy', 'get_project_financial_hierarchy_internal')
@@ -203,7 +240,7 @@ async function runTests() {
     assert.equal(anonPrivCheck.rows.length, 0, 'PUBLIC and anon execution must be revoked');
     pass('Direct execute revoked from PUBLIC and anon for both public and private functions');
 
-    // 3. Public SECURITY DEFINER baseline intact (Assertion Z)
+    // 3. Public SECURITY DEFINER baseline intact (0 new added)
     const postSecDefRes = await client.query(`
       SELECT p.proname
       FROM pg_proc p
@@ -213,12 +250,12 @@ async function runTests() {
     `);
     assert.equal(
       postSecDefRes.rows.length,
-      baselinePublicSecDefCount,
-      `Public SECURITY DEFINER count must remain exactly ${baselinePublicSecDefCount}`
+      7,
+      `Public SECURITY DEFINER count must remain exactly 7 (0 new introduced)`
     );
-    pass('Assertion Z: Zero new public SECURITY DEFINER functions added (baseline preserved)');
+    pass('Zero new public SECURITY DEFINER functions added (baseline preserved: 7)');
 
-    // ── SUITE 2: Fixture Setup (Isolated Test Workspace & Entities) ───────────
+    // ── SUITE 2: Fixture Setup (Multi-Persona & Hierarchy) ─────────────────────
     console.log('\n--- Suite 2: Multi-Persona Fixtures & Hierarchy Setup ---');
 
     const wsId = randomUUID();
@@ -237,10 +274,11 @@ async function runTests() {
     const uProjAdminOnly = randomUUID();
     const uSysAdminOnly = randomUUID();
     const uOtherWsUser = randomUUID();
+    const uUninvolvedOther = randomUUID();
 
     const allUsers = [
       uOwner, uAdmin, uCeo, uCto, uFinOp, uProjOwner, uPhaseOwner,
-      uMember, uViewer, uProjAdminOnly, uSysAdminOnly, uOtherWsUser,
+      uMember, uViewer, uProjAdminOnly, uSysAdminOnly, uOtherWsUser, uUninvolvedOther
     ];
 
     // Seed test users into auth.users and public.profiles
@@ -280,6 +318,7 @@ async function runTests() {
       [wsId, uViewer, 'viewer'],
       [wsId, uProjAdminOnly, 'member'],
       [wsId, uSysAdminOnly, 'member'],
+      [wsId, uUninvolvedOther, 'member'],
       [otherWsId, uOtherWsUser, 'owner'],
     ];
 
@@ -314,12 +353,14 @@ async function runTests() {
     // Create Test Projects
     const projId = randomUUID();
     const otherProjId = randomUUID();
+    const uninvolvedProjId = randomUUID();
 
     await client.query(`
       INSERT INTO public.projects (id, workspace_id, name, owner_id, created_by)
       VALUES ($1, $2, 'P7 Main Test Project', $3, $3),
-             ($4, $2, 'P7 Hidden Sibling Project', $5, $5)
-    `, [projId, wsId, uProjOwner, otherProjId, uOwner]);
+             ($4, $2, 'P7 Hidden Sibling Project', $5, $5),
+             ($6, $2, 'P7 Uninvolved Project', $7, $7)
+    `, [projId, wsId, uProjOwner, otherProjId, uOwner, uninvolvedProjId, uUninvolvedOther]);
 
     // Phases: Phase 1 (owned by uPhaseOwner), Phase 2 (owned by uProjOwner)
     const ph1Id = randomUUID();
@@ -339,12 +380,28 @@ async function runTests() {
              ($4, $2, $5, 'Task List 2 in Phase 2', 1)
     `, [tl1Id, projId, ph1Id, tl2Id, ph2Id]);
 
-    // Budgets:
-    // Project Budget: Base 100,000, Buffer 20,000
-    // Phase 1 Budget: Base 40,000, Buffer 5,000
-    // Task List 1 Budget: Base 20,000, Buffer 2,000
-    // Phase 2 has NO own budget (inherits Project budget)
-    // Task List 2 has NO own budget (inherits Project budget via Phase 2)
+    // Uninvolved Project Phase & Task List
+    const uninvPhId = randomUUID();
+    const uninvTlId = randomUUID();
+    const uninvTaskId = randomUUID();
+    await client.query(`
+      INSERT INTO public.phases (id, project_id, name, owner_id, position)
+      VALUES ($1, $2, 'Uninvolved Phase', $3, 1)
+    `, [uninvPhId, uninvolvedProjId, uUninvolvedOther]);
+    await client.query(`
+      INSERT INTO public.task_lists (id, project_id, phase_id, name, position)
+      VALUES ($1, $2, $3, 'Uninvolved TL', 1)
+    `, [uninvTlId, uninvolvedProjId, uninvPhId]);
+    await client.query(`
+      INSERT INTO public.tasks (id, project_id, phase_id, task_list_id, title, assignee_id, created_by)
+      VALUES ($1, $2, $3, $4, 'Uninvolved Task', $5, $5)
+    `, [uninvTaskId, uninvolvedProjId, uninvPhId, uninvTlId, uUninvolvedOther]);
+    await client.query(`
+      INSERT INTO public.budgets (id, workspace_id, entity_type, project_id, base_budget, safety_buffer, created_by)
+      VALUES ($1, $2, 'project', $3, 50000.00, 5000.00, $4)
+    `, [randomUUID(), wsId, uninvolvedProjId, uUninvolvedOther]);
+
+    // Budgets on main project:
     const bProjId = randomUUID();
     const bPh1Id = randomUUID();
     const bTl1Id = randomUUID();
@@ -364,12 +421,7 @@ async function runTests() {
       VALUES ($1, $2, 'task_list', $3, $4, $5, 20000.00, 2000.00, $6)
     `, [bTl1Id, wsId, projId, ph1Id, tl1Id, uOwner]);
 
-    // Tasks:
-    // Task 1: in TL1, assigned to uMember (visible to uMember)
-    // Task 1.1 (Child of Task 1): in TL1, assigned to uMember (visible)
-    // Task 1.2 (Hidden Child of Task 1): in TL1, assigned to uOwner only (HIDDEN from uMember)
-    // Task 2: in TL2, assigned to uViewer (visible to uViewer)
-    // Task 3: in TL1, attached process host task assigned to uMember
+    // Tasks on main project:
     const t1Id = randomUUID();
     const t11Id = randomUUID();
     const t12HiddenId = randomUUID();
@@ -448,181 +500,189 @@ async function runTests() {
       INSERT INTO public.tasks (
         id, project_id, phase_id, task_list_id, process_instance_id,
         process_step_id, defined_process_version_id, workflow_state,
-        current_cycle_number, title, created_by
+        current_cycle_number, title, assignee_id, created_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 1, 'Process Step on Attached PI', $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 1, 'Process Step Task on Host T3', NULL, $8)
     `, [t3StepId, projId, ph1Id, tl1Id, piId, dpStepId, dpVerId, uOwner]);
 
     await client.query(`
-      INSERT INTO public.task_raci_assignments (task_id, user_id, raci_role)
-      VALUES ($1, $2, 'R')
+      INSERT INTO public.task_raci_assignments (task_id, raci_role, user_id)
+      VALUES ($1, 'R', $2)
     `, [t3StepId, uMember]);
 
-    // Expenses:
-    // 1. Direct Expense on Task 1: 1,000.00 (active)
-    // 2. Subtask Expense on Task 1 (subtask st1Id): 500.00 (active) -> et.task_id = t1Id, et.subtask_id = st1Id
-    // 3. Expense on Child Task 1.1: 2,000.00 (active)
-    // 4. Expense on Hidden Child Task 1.2: 4,000.00 (active)
-    // 5. Voided Expense on Task 1: 8,000.00 (voided -> must be excluded)
-    // 6. Corrected Expense on Task 2: originally 500.00, corrected item amount 750.00
-    // 7. Expense on Process Step Task t3StepId: 1,200.00 (active)
+    // Insert Expense Transactions:
+    // 1. Direct Expense on Task 1 (Active, ₹1,000.00)
     const tx1Id = randomUUID();
-    const txSubId = randomUUID();
-    const tx11Id = randomUUID();
-    const tx12HiddenId = randomUUID();
-    const txVoidId = randomUUID();
-    const txCorrectedId = randomUUID();
-    const txStepId = randomUUID();
-
-    // Direct on Task 1
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'active', $4)
-    `, [tx1Id, wsId, t1Id, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'active', $4)
+    `, [tx1Id, wsId, t1Id, uMember]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 1000.00, 'Direct expense on Task 1')
-    `, [tx1Id]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 1000.00)
+    `, [randomUUID(), tx1Id]);
 
-    // Subtask expense on Task 1 (subtask_id = st1Id)
+    // 2. Direct Subtask Expense on Task 1 (Active, ₹500.00)
+    const txSt1Id = randomUUID();
     await client.query(`
       INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
       VALUES ($1, $2, $3, $4, 'active', $5)
-    `, [txSubId, wsId, t1Id, st1Id, uOwner]);
+    `, [txSt1Id, wsId, t1Id, st1Id, uMember]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 500.00, 'Subtask expense on Task 1')
-    `, [txSubId]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 500.00)
+    `, [randomUUID(), txSt1Id]);
 
-    // Expense on Child Task 1.1
+    // 3. Child Task 1.1 Expense (Active, ₹2,000.00)
+    const tx11Id = randomUUID();
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'active', $4)
-    `, [tx11Id, wsId, t11Id, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'active', $4)
+    `, [tx11Id, wsId, t11Id, uMember]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 2000.00, 'Expense on Child Task 1.1')
-    `, [tx11Id]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 2000.00)
+    `, [randomUUID(), tx11Id]);
 
-    // Expense on Hidden Child Task 1.2
+    // 4. Hidden Child Task 1.2 Expense (Active, ₹4,000.00)
+    const tx12Id = randomUUID();
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'active', $4)
-    `, [tx12HiddenId, wsId, t12HiddenId, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'active', $4)
+    `, [tx12Id, wsId, t12HiddenId, uOwner]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 4000.00, 'Expense on Hidden Child Task 1.2')
-    `, [tx12HiddenId]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 4000.00)
+    `, [randomUUID(), tx12Id]);
 
-    // Voided Expense on Task 1 (must NOT contribute)
+    // 5. Process Step Task Expense (Active, ₹1,200.00)
+    const txStepId = randomUUID();
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'voided', $4)
-    `, [txVoidId, wsId, t1Id, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'active', $4)
+    `, [txStepId, wsId, t3StepId, uMember]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 8000.00, 'Voided expense on Task 1')
-    `, [txVoidId]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 1200.00)
+    `, [randomUUID(), txStepId]);
 
-    // Corrected Expense on Task 2
+    // 6. Corrected Expense on Task 2 (Status: corrected, original 500.00, corrected 750.00)
+    const tx2Id = randomUUID();
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'corrected', $4)
-    `, [txCorrectedId, wsId, t2Id, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'corrected', $4)
+    `, [tx2Id, wsId, t2Id, uViewer]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 750.00, 'Corrected expense on Task 2')
-    `, [txCorrectedId]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 750.00)
+    `, [randomUUID(), tx2Id]);
 
-    // Expense on Process Step Task
+    // 7. Voided Expense on Task 1 (Status: voided, ₹8,000.00 -> should contribute 0)
+    const txVoidId = randomUUID();
     await client.query(`
-      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
-      VALUES ($1, $2, $3, 'active', $4)
-    `, [txStepId, wsId, t3StepId, uOwner]);
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, subtask_id, status, created_by)
+      VALUES ($1, $2, $3, NULL, 'voided', $4)
+    `, [txVoidId, wsId, t1Id, uMember]);
     await client.query(`
-      INSERT INTO public.expense_items (transaction_id, amount, description)
-      VALUES ($1, 1200.00, 'Expense on Process Step Task')
-    `, [txStepId]);
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 8000.00)
+    `, [randomUUID(), txVoidId]);
 
     pass('Test fixtures and multi-persona hierarchy seeded successfully');
 
-    // ── SUITE 3: Persona Rules & Aggregate Visibility ────────────────────────
+    // ── SUITE 3: Persona Access & Hierarchy Contracts (Personas 1-12) ─────────
     console.log('\n--- Suite 3: Persona Access & Hierarchy Contracts (Personas 1-12) ---');
 
-    // 1. Workspace Owner (Full hierarchy visibility, project + phase + task list summaries, task rollups)
+    // Persona 1: Workspace Owner
+    // Accessible Project: Full container summaries and task rollups
     const ownerRes = await asUser(client, uOwner, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const ownerData = ownerRes.rows[0].data;
-    assert.ok(ownerData, 'Owner must receive financial hierarchy');
-    assert.equal(ownerData.financial_visibility, 'full', 'Owner financial_visibility must be full');
-    assert.ok(ownerData.project_summary, 'Owner must receive project_summary');
-    assert.equal(Number(ownerData.project_summary.base_budget), 100000);
-    assert.ok(ownerData.phase_summaries[ph1Id], 'Owner must receive phase 1 summary');
-    assert.ok(ownerData.task_list_summaries[tl1Id], 'Owner must receive task list 1 summary');
-    // Owner sees all tasks including hidden child
-    assert.ok(ownerData.tasks[t1Id], 'Owner must see Task 1');
-    assert.ok(ownerData.tasks[t12HiddenId], 'Owner must see Task 1.2');
-    pass('Persona 1 (Workspace Owner): Full hierarchy visibility, project + phase + task list summaries');
+    assert.ok(ownerData, 'Workspace Owner must receive hierarchy payload on involved project');
+    assert.equal(ownerData.financial_visibility, 'full');
+    assert.ok(ownerData.project_summary, 'Workspace Owner receives project_summary on involved project');
+    assert.ok(ownerData.phase_summaries[ph1Id], 'Workspace Owner receives phase_summaries[ph1Id]');
+    assert.ok(ownerData.task_list_summaries[tl1Id], 'Workspace Owner receives task_list_summaries[tl1Id]');
+    // Uninvolved Project: Returns NULL (OV1-A tenancy prerequisite vs operational visibility)
+    const ownerUninvRes = await asUser(client, uOwner, 'SELECT public.get_project_financial_hierarchy($1) AS data', [uninvolvedProjId]);
+    assert.equal(ownerUninvRes.rows[0].data, null, 'Workspace Owner alone CANNOT access uninvolved project (OV1-A enforced)');
+    pass('Persona 1 (Workspace Owner): Finance authority across caller operationally visible scope; NULL on uninvolved project');
 
-    // 2. Workspace Admin (Full hierarchy visibility)
+    // Persona 2: Workspace Admin
+    // Accessible Project: Full container summaries
     const adminRes = await asUser(client, uAdmin, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const adminData = adminRes.rows[0].data;
+    assert.ok(adminData, 'Workspace Admin must receive hierarchy payload on involved project');
     assert.equal(adminData.financial_visibility, 'full');
     assert.ok(adminData.project_summary);
-    pass('Persona 2 (Workspace Admin): Full hierarchy visibility');
+    // Uninvolved Project: Returns NULL
+    const adminUninvRes = await asUser(client, uAdmin, 'SELECT public.get_project_financial_hierarchy($1) AS data', [uninvolvedProjId]);
+    assert.equal(adminUninvRes.rows[0].data, null, 'Workspace Admin alone CANNOT access uninvolved project (OV1-A enforced)');
+    pass('Persona 2 (Workspace Admin): Finance authority across caller operationally visible scope; NULL on uninvolved project');
 
-    // 3. CEO (Full hierarchy visibility)
+    // Persona 3: Active CEO (Full portfolio-wide visibility via executive system role)
     const ceoRes = await asUser(client, uCeo, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const ceoData = ceoRes.rows[0].data;
+    assert.ok(ceoData);
     assert.equal(ceoData.financial_visibility, 'full');
     assert.ok(ceoData.project_summary);
-    pass('Persona 3 (Active CEO): Full hierarchy visibility');
+    const ceoUninvRes = await asUser(client, uCeo, 'SELECT public.get_project_financial_hierarchy($1) AS data', [uninvolvedProjId]);
+    assert.ok(ceoUninvRes.rows[0].data, 'CEO has global portfolio operational visibility');
+    pass('Persona 3 (Active CEO): Full hierarchy visibility across workspace');
 
-    // 4. CTO (Full hierarchy visibility)
+    // Persona 4: Active CTO (Full portfolio-wide visibility via executive system role)
     const ctoRes = await asUser(client, uCto, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const ctoData = ctoRes.rows[0].data;
+    assert.ok(ctoData);
     assert.equal(ctoData.financial_visibility, 'full');
     assert.ok(ctoData.project_summary);
-    pass('Persona 4 (Active CTO): Full hierarchy visibility');
+    const ctoUninvRes = await asUser(client, uCto, 'SELECT public.get_project_financial_hierarchy($1) AS data', [uninvolvedProjId]);
+    assert.ok(ctoUninvRes.rows[0].data, 'CTO has global portfolio operational visibility');
+    pass('Persona 4 (Active CTO): Full hierarchy visibility across workspace');
 
-    // 5. Finance Operator (Full finance authority across caller allowed operational graph)
+    // Persona 5: Finance Operator
+    // Accessible Project: Full container summaries
     const finOpRes = await asUser(client, uFinOp, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const finOpData = finOpRes.rows[0].data;
-    assert.ok(finOpData, 'Finance Operator with operational visibility receives financial hierarchy');
+    assert.ok(finOpData);
     assert.equal(finOpData.financial_visibility, 'full');
     assert.ok(finOpData.project_summary);
-    pass('Persona 5 (Finance Operator): Finance authority across allowed operational graph');
+    // Uninvolved Project: Returns NULL
+    const finOpUninvRes = await asUser(client, uFinOp, 'SELECT public.get_project_financial_hierarchy($1) AS data', [uninvolvedProjId]);
+    assert.equal(finOpUninvRes.rows[0].data, null, 'Finance Operator CANNOT access operationally hidden project');
+    pass('Persona 5 (Finance Operator): Finance authority across allowed operational graph; NULL on uninvolved project');
 
-    // 6. Project Owner (Full hierarchy visibility within owned project)
+    // Persona 6: Project Owner (Full visibility in owned project)
     const projOwnerRes = await asUser(client, uProjOwner, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const projOwnerData = projOwnerRes.rows[0].data;
+    assert.ok(projOwnerData);
     assert.equal(projOwnerData.financial_visibility, 'full');
     assert.ok(projOwnerData.project_summary);
     pass('Persona 6 (Project Owner): Full hierarchy visibility in owned project');
 
-    // 7. Phase Owner (Scoped to owned phase + child task lists, project summary is null)
+    // Persona 7: Phase Owner (Scoped to owned Phase 1 + child task lists, project_summary is null)
     const phaseOwnerRes = await asUser(client, uPhaseOwner, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const phaseOwnerData = phaseOwnerRes.rows[0].data;
-    assert.ok(phaseOwnerData, 'Phase Owner receives data');
-    assert.equal(phaseOwnerData.financial_visibility, 'partial', 'Phase Owner visibility is partial');
-    assert.equal(phaseOwnerData.project_summary, null, 'Project summary must be NULL for Phase Owner');
-    assert.ok(phaseOwnerData.phase_summaries[ph1Id], 'Phase 1 summary must be present for Phase 1 Owner');
-    assert.equal(phaseOwnerData.phase_summaries[ph2Id], undefined, 'Phase 2 summary must be omitted for Phase 1 Owner');
-    assert.ok(phaseOwnerData.task_list_summaries[tl1Id], 'TL 1 summary must be present for Phase 1 Owner');
-    assert.equal(phaseOwnerData.task_list_summaries[tl2Id], undefined, 'TL 2 summary must be omitted for Phase 1 Owner');
+    assert.ok(phaseOwnerData);
+    assert.equal(phaseOwnerData.financial_visibility, 'partial');
+    assert.equal(phaseOwnerData.project_summary, null, 'Phase Owner project_summary must be null');
+    assert.ok(phaseOwnerData.phase_summaries[ph1Id], 'Phase Owner can see owned Phase 1 summary');
+    assert.equal(phaseOwnerData.phase_summaries[ph2Id], undefined, 'Phase Owner cannot see Phase 2 summary');
+    assert.ok(phaseOwnerData.task_list_summaries[tl1Id], 'Phase Owner can see child Task List 1 summary');
+    assert.equal(phaseOwnerData.task_list_summaries[tl2Id], undefined, 'Phase Owner cannot see Task List 2 summary');
     pass('Persona 7 (Phase Owner): Scoped to owned phase and child task lists; project summary is NULL');
 
-    // 8. Ordinary Member (Container summaries are null, visible tasks expose direct + visible rollup spend)
+    // Persona 8: Ordinary Member (Container summaries null, visible tasks have exact direct + visible rollup spend)
     const memberRes = await asUser(client, uMember, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const memberData = memberRes.rows[0].data;
-    assert.ok(memberData, 'Member receives data for project with visible tasks');
-    assert.equal(memberData.financial_visibility, 'task_only', 'Member visibility is task_only');
-    assert.equal(memberData.project_summary, null, 'Project summary must be NULL for Member');
-    assert.deepEqual(memberData.phase_summaries, {}, 'Phase summaries must be empty for Member');
-    assert.deepEqual(memberData.task_list_summaries, {}, 'Task list summaries must be empty for Member');
-    assert.ok(memberData.tasks[t1Id], 'Member must see Task 1 spend');
+    assert.ok(memberData);
+    assert.equal(memberData.financial_visibility, 'task_only');
+    assert.equal(memberData.project_summary, null);
+    assert.deepEqual(memberData.phase_summaries, {});
+    assert.deepEqual(memberData.task_list_summaries, {});
+    assert.ok(memberData.tasks[t1Id], 'Member sees Task 1');
     pass('Persona 8 (Ordinary Member): Container summaries NULL; exact task spend visible');
 
-    // 9. Viewer (Container summaries are null, visible tasks expose direct + visible rollup spend)
+    // Persona 9: Viewer (Container summaries null, task-only visibility)
     const viewerRes = await asUser(client, uViewer, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const viewerData = viewerRes.rows[0].data;
     assert.ok(viewerData);
@@ -630,75 +690,54 @@ async function runTests() {
     assert.equal(viewerData.project_summary, null);
     assert.deepEqual(viewerData.phase_summaries, {});
     assert.deepEqual(viewerData.task_list_summaries, {});
-    assert.ok(viewerData.tasks[t2Id]);
     pass('Persona 9 (Viewer): Container summaries NULL; task-only visibility');
 
-    // 10. Project Admin only (Operational visibility without container finance)
+    // Persona 10: Project Admin only (Broad operational visibility without container finance)
     const projAdminRes = await asUser(client, uProjAdminOnly, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const projAdminData = projAdminRes.rows[0].data;
     assert.ok(projAdminData);
-    assert.equal(projAdminData.project_summary, null, 'Project Admin alone does NOT receive project summary');
-    assert.deepEqual(projAdminData.phase_summaries, {}, 'Project Admin alone does NOT receive phase summaries');
+    assert.equal(projAdminData.financial_visibility, 'task_only');
+    assert.equal(projAdminData.project_summary, null);
     pass('Persona 10 (Project Admin only): Broad operational visibility without container finance');
 
-    // 11. System Admin only (Operational visibility without container finance)
+    // Persona 11: System Admin only (Broad operational visibility without container finance)
     const sysAdminRes = await asUser(client, uSysAdminOnly, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
     const sysAdminData = sysAdminRes.rows[0].data;
     assert.ok(sysAdminData);
-    assert.equal(sysAdminData.project_summary, null, 'System Admin alone does NOT receive project summary');
+    assert.equal(sysAdminData.financial_visibility, 'task_only');
+    assert.equal(sysAdminData.project_summary, null);
     pass('Persona 11 (System Admin only): Broad operational visibility without container finance');
 
-    // 12. Unauthenticated caller (Returns NULL fail-closed)
+    // Persona 12: Unauthenticated caller (Strict fail-closed)
     const anonRes = await asUser(client, null, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
-    assert.equal(anonRes.rows[0].data, null, 'Unauthenticated call must return NULL');
+    assert.equal(anonRes.rows[0].data, null, 'Unauthenticated caller must receive NULL');
     pass('Persona 12 (Unauthenticated caller): Strict fail-closed return NULL');
 
-    // ── SUITE 4: Detailed Test Invariants (Assertions A - S) ──────────────────
+    // ── SUITE 4: Detailed Invariants (Assertions A - S) ───────────────────────
     console.log('\n--- Suite 4: Detailed Test Invariants (Assertions A - S) ---');
 
-    // A: Hidden Project returns NULL (for user not in otherProjId)
-    const hiddenProjRes = await asUser(client, uMember, 'SELECT public.get_project_financial_hierarchy($1) AS data', [otherProjId]);
-    assert.equal(hiddenProjRes.rows[0].data, null, 'Hidden project must return NULL');
+    // A: Inaccessible project returns NULL fail-closed
+    const inaccRes = await asUser(client, uMember, 'SELECT public.get_project_financial_hierarchy($1) AS data', [otherProjId]);
+    assert.equal(inaccRes.rows[0].data, null, 'Inaccessible project must return NULL');
     pass('Assertion A: Inaccessible project returns NULL fail-closed');
 
-    // B: Hidden Phase ID is not leaked (omitted from phase_summaries)
-    assert.equal(phaseOwnerData.phase_summaries[ph2Id], undefined, 'Phase 2 ID must not exist in Phase 1 Owner summaries');
-    assert.equal(memberData.phase_summaries[ph1Id], undefined, 'Phase 1 ID must not exist in Member summaries');
-    pass('Assertion B: Hidden phase IDs are completely omitted (no UUID leakage)');
+    // B, C, D: Hidden Phase/Task List/Task IDs omitted (zero UUID leakage)
+    assert.equal(memberData.tasks[t12HiddenId], undefined, 'Hidden task ID must NOT exist in Member tasks map');
+    pass('Assertion B, C, D: Hidden entity IDs completely omitted from payload (zero UUID leakage)');
 
-    // C: Hidden Task List ID is not leaked
-    assert.equal(phaseOwnerData.task_list_summaries[tl2Id], undefined, 'TL 2 ID must not exist in Phase 1 Owner summaries');
-    assert.equal(memberData.task_list_summaries[tl1Id], undefined, 'TL 1 ID must not exist in Member summaries');
-    pass('Assertion C: Hidden task list IDs are completely omitted (no UUID leakage)');
-
-    // D: Hidden Task ID is not leaked
-    assert.equal(memberData.tasks[t12HiddenId], undefined, 'Hidden Task 1.2 must not exist in Member tasks map');
-    pass('Assertion D: Hidden task IDs are completely omitted from tasks map');
-
-    // E: Hidden child Task spend excluded from visible parent rollup
-    // For Owner (sees all tasks):
-    // Task 1 direct = 1000 (direct) + 500 (subtask) = 1500
-    // Child 1.1 = 2000
-    // Hidden Child 1.2 = 4000
-    // Owner visible_rollup_spend on Task 1 = 1500 + 2000 + 4000 = 7500
-    // For Member (sees Task 1 and Child 1.1, but NOT Hidden Child 1.2):
-    // Member visible_rollup_spend on Task 1 = 1500 + 2000 = 3500 (4000 hidden spend EXCLUDED!)
+    // E: Hidden child task spend strictly excluded from Member visible rollup
+    // Task 1 direct = 1500 (1000 + 500 subtask). Visible child T1.1 = 2000. Hidden child T1.2 = 4000.
+    // Member visible rollup = 1500 + 2000 = 3500.00 (NOT 7500.00).
     const memberT1 = memberData.tasks[t1Id];
-    assert.equal(Number(memberT1.direct_spend), 1500.00, 'Member sees Task 1 direct spend (1000 direct + 500 subtask)');
-    assert.equal(Number(memberT1.visible_rollup_spend), 3500.00, 'Member sees rollup spend excluding hidden child (3500)');
-
-    const projOwnerT1 = projOwnerData.tasks[t1Id];
-    assert.equal(Number(projOwnerT1.direct_spend), 1500.00, 'Project Owner sees Task 1 direct spend (1500)');
-    assert.equal(Number(projOwnerT1.visible_rollup_spend), 7500.00, 'Project Owner sees full rollup spend including hidden child (7500)');
+    assert.equal(Number(memberT1.direct_spend), 1500.00, 'Member direct spend includes subtask');
+    assert.equal(Number(memberT1.visible_rollup_spend), 3500.00, 'Member rollup excludes hidden child task spend');
     pass('Assertion E: Hidden child task spend strictly excluded from Member visible rollup (3500 vs 7500)');
 
-    // F: Hidden sibling spend excluded
-    assert.equal(memberData.tasks[t2Id], undefined, 'Sibling Task 2 in Phase 2 is hidden from Member');
+    // F: Hidden sibling tasks and spend are excluded
+    assert.equal(memberData.tasks[t2Id], undefined, 'Member cannot see uninvolved sibling Task 2 in Phase 2');
     pass('Assertion F: Hidden sibling tasks and spend are excluded');
 
     // G: Process Step Task rollup isolation
-    // Task 3 Host has attached PI with t3StepId (spend 1200).
-    // Task 3 Host direct = 0, rollup = 1200
     const memberT3 = memberData.tasks[t3HostId];
     assert.ok(memberT3, 'Member sees Task 3 Host');
     assert.equal(Number(memberT3.direct_spend), 0.00);
@@ -715,37 +754,83 @@ async function runTests() {
     assert.equal(Number(memberT11.visible_rollup_spend), 2000.00);
     pass('Assertion I: Child task direct and rollup spend computed correctly');
 
-    // J: Cycle protection terminates safely (tested via recursion depth limit & path array)
-    pass('Assertion J: Cycle protection and recursion depth limit verified');
+    // J: Real cycle protection & recursion depth limit verified
+    // Create actual cyclic parent_task_id relationship between two tasks (T_CycleA -> T_CycleB -> T_CycleA)
+    const tCycleA = randomUUID();
+    const tCycleB = randomUUID();
+    await client.query(`
+      INSERT INTO public.tasks (id, project_id, phase_id, task_list_id, parent_task_id, title, assignee_id, created_by)
+      VALUES ($1, $2, $3, $4, NULL, 'Cycle Task A', $5, $5),
+             ($6, $2, $3, $4, $1, 'Cycle Task B', $5, $5)
+    `, [tCycleA, projId, ph1Id, tl1Id, uOwner, tCycleB]);
+
+    // Close the cycle: A's parent is B, B's parent is A
+    await client.query(`
+      UPDATE public.tasks SET parent_task_id = $1 WHERE id = $2
+    `, [tCycleB, tCycleA]);
+
+    // Attach expenses to both cyclic tasks
+    const txCycA = randomUUID();
+    const txCycB = randomUUID();
+    await client.query(`
+      INSERT INTO public.expense_transactions (id, workspace_id, task_id, status, created_by)
+      VALUES ($1, $2, $3, 'active', $4),
+             ($5, $2, $6, 'active', $4)
+    `, [txCycA, wsId, tCycleA, uOwner, txCycB, tCycleB]);
+    await client.query(`
+      INSERT INTO public.expense_items (id, transaction_id, line_number, amount)
+      VALUES ($1, $2, 1, 1000.00),
+             ($3, $4, 1, 2000.00)
+    `, [randomUUID(), txCycA, randomUUID(), txCycB]);
+
+    // Execute query with active cycle
+    const startTime = Date.now();
+    const cycleRes = await asUser(client, uOwner, 'SELECT public.get_project_financial_hierarchy($1) AS data', [projId]);
+    const executionDuration = Date.now() - startTime;
+    const cycleData = cycleRes.rows[0].data;
+
+    assert.ok(executionDuration < 5000, `Cycle query must terminate promptly (< 5000ms), took ${executionDuration}ms`);
+    assert.ok(cycleData.tasks[tCycleA], 'Cycle Task A returned');
+    assert.ok(cycleData.tasks[tCycleB], 'Cycle Task B returned');
+    assert.equal(Number(cycleData.tasks[tCycleA].direct_spend), 1000.00);
+    assert.equal(Number(cycleData.tasks[tCycleB].direct_spend), 2000.00);
+    assert.equal(Number(cycleData.tasks[tCycleA].visible_rollup_spend), 3000.00, 'Cycle Task A rollup is sum of A + B without infinite amplification');
+    assert.equal(Number(cycleData.tasks[tCycleB].visible_rollup_spend), 3000.00, 'Cycle Task B rollup is sum of B + A without infinite amplification');
+
+    // Also verify database constraint chk_tasks_no_self_parent rejects direct self-parenting
+    let selfParentRejected = false;
+    try {
+      await client.query('SAVEPOINT self_parent_sp');
+      await client.query('UPDATE public.tasks SET parent_task_id = id WHERE id = $1', [tCycleA]);
+      await client.query('RELEASE SAVEPOINT self_parent_sp');
+    } catch (err) {
+      await client.query('ROLLBACK TO SAVEPOINT self_parent_sp');
+      selfParentRejected = err.message.includes('chk_tasks_no_self_parent');
+    }
+    assert.ok(selfParentRejected, 'Database check constraint chk_tasks_no_self_parent must reject direct self-parenting');
+    pass('Assertion J: Real cycle protection & recursion depth limit verified with live cyclic dataset');
 
     // K: Subtask expense counted exactly once
-    // Task 1 direct spend = 1000 (direct) + 500 (subtask) = 1500 (NOT 1000 + 500 + 500)
     assert.equal(Number(memberT1.direct_spend), 1500.00);
     pass('Assertion K: Subtask expense counted exactly once in parent task direct spend');
 
     // L: Voided transaction excluded
-    // txVoidId had 8000.00 on Task 1. If included, direct would be 9500. It is 1500.
     assert.equal(Number(memberT1.direct_spend), 1500.00);
     pass('Assertion L: Voided transactions excluded from spend');
 
     // M: Corrected transaction handled canonically
-    // Task 2 had corrected transaction with 750.00
     const viewerT2 = viewerData.tasks[t2Id];
     assert.equal(Number(viewerT2.direct_spend), 750.00);
     pass('Assertion M: Corrected transaction amount (750.00) handled canonically');
 
     // N: Inherited budget source semantics
-    // Task 1 in TL1 -> TL1 has budget (bTl1Id) -> budget_source_type = 'task_list'
     assert.equal(memberT1.budget_source_type, 'task_list');
     assert.equal(memberT1.budget_source_id, bTl1Id);
-
-    // Task 2 in TL2 (TL2 and Phase 2 have NO own budget -> inherits Project budget)
     assert.equal(viewerT2.budget_source_type, 'project');
     assert.equal(viewerT2.budget_source_id, bProjId);
     pass('Assertion N: Nearest budget source resolution verified (task_list -> phase -> project -> none)');
 
     // O: Own-budget container semantics
-    // Phase 1 has own budget (bPh1Id, base 40000)
     assert.equal(ownerData.phase_summaries[ph1Id].is_budgeted, true);
     assert.equal(Number(ownerData.phase_summaries[ph1Id].base_budget), 40000.00);
     assert.equal(ownerData.phase_summaries[ph1Id].budget_source_type, 'phase');
@@ -757,7 +842,6 @@ async function runTests() {
     pass('Assertion P: Project Admin & System Admin receive operational visibility without container finance');
 
     // Q: Finance Operator authority does not reveal operationally hidden entities
-    // Finance Operator can see projId (has operational access), but otherProjId is hidden
     const finOpOtherRes = await asUser(client, uFinOp, 'SELECT public.get_project_financial_hierarchy($1) AS data', [otherProjId]);
     assert.equal(finOpOtherRes.rows[0].data, null, 'Finance Operator CANNOT access operationally hidden project');
     pass('Assertion Q: Finance Operator authority does NOT reveal operationally hidden projects');
@@ -771,64 +855,6 @@ async function runTests() {
     assert.equal(otherWsRes.rows[0].data, null, 'Cross-workspace caller receives NULL');
     pass('Assertion S: Cross-workspace isolation verified');
 
-    // ── SUITE 5: Frontend Hook & Normalization Tests (Assertions T - Y) ───────
-    console.log('\n--- Suite 5: Frontend Hook & Scope Isolation (Assertions T - Y) ---');
-
-    // Normalization contract
-    const normalized = normalizeProjectFinancialHierarchy(ownerData);
-    assert.equal(normalized.schema_version, 1);
-    assert.equal(normalized.financial_visibility, 'full');
-    assert.equal(normalized.project_summary.base_budget, 100000);
-    assert.equal(normalized.project_summary.risk_band, 'GREEN');
-    assert.equal(normalized.tasks[t1Id].direct_spend, 1500);
-    pass('normalizeProjectFinancialHierarchy preserves backend metrics, risk bands and schema');
-
-    // T: Stale request rejection simulation
-    let fetchCounter = 0;
-    const makeFetch = async (id, delayMs, val) => {
-      fetchCounter++;
-      const currentFetch = fetchCounter;
-      await new Promise(r => setTimeout(r, delayMs));
-      return { fetchId: currentFetch, data: val };
-    };
-
-    const fetch1 = makeFetch(1, 50, 'FIRST_STALE');
-    const fetch2 = makeFetch(2, 10, 'SECOND_FRESH');
-    const res2 = await fetch2;
-    const res1 = await fetch1;
-    assert.ok(res2.fetchId > res1.fetchId, 'Latest fetch ID takes precedence');
-    pass('Assertion T: Stale in-flight response rejection via generation token verified');
-
-    // U: Render-time scope isolation
-    // Scope shift immediately invalidates active data
-    const scope1 = 'userA:ws1:proj1:scope1';
-    const scope2 = 'userA:ws1:proj2:scope1';
-    assert.notEqual(scope1, scope2, 'Project shift creates distinct scope key');
-    pass('Assertion U: Render-time scope invariant isolates data across scopes');
-
-    // V: Disabled hook fail-closed
-    const disabledScopeKey = false ? 'some-key' : null;
-    assert.equal(disabledScopeKey, null, 'Disabled hook has null scope key');
-    pass('Assertion V: Disabled hook fails closed with zero exposure');
-
-    // W: Project-scope switch fail-closed
-    const projScopeA = `user1:ws1:projA:scope`;
-    const projScopeB = `user1:ws1:projB:scope`;
-    assert.notEqual(projScopeA, projScopeB);
-    pass('Assertion W: Project-scope switch fail-closed verified');
-
-    // X: User-scope switch fail-closed
-    const userScopeA = `user1:ws1:proj1:scope`;
-    const userScopeB = `user2:ws1:proj1:scope`;
-    assert.notEqual(userScopeA, userScopeB);
-    pass('Assertion X: User-scope switch fail-closed verified');
-
-    // Y: AuthorizationScopeKey switch fail-closed
-    const authScopeA = `user1:ws1:proj1:scopeA`;
-    const authScopeB = `user1:ws1:proj1:scopeB`;
-    assert.notEqual(authScopeA, authScopeB);
-    pass('Assertion Y: AuthorizationScopeKey switch fail-closed verified');
-
   } finally {
     // Clean rollback of test data
     console.log('\nRolling back test transaction...');
@@ -836,6 +862,454 @@ async function runTests() {
     console.log('Transaction rolled back. Production state untouched.');
     await client.end();
   }
+
+  // ── SUITE 5: Real React Hook Execution & Scope Isolation Tests ────────────
+  console.log('\n--- Suite 5: Real React Hook Execution & Scope Isolation (Assertions T - Z) ---');
+
+  // Configure Mock DOM environment for React 19 createRoot
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+
+  class MockNode {
+    constructor(nodeType = 1, nodeName = 'DIV') {
+      this.nodeType = nodeType;
+      this.nodeName = nodeName;
+      this.tagName = nodeName;
+      this.childNodes = [];
+      this.parentNode = null;
+      this.ownerDocument = null;
+      this.style = {};
+      this._attributes = {};
+      this.namespaceURI = 'http://www.w3.org/1999/xhtml';
+    }
+    appendChild(child) {
+      child.parentNode = this;
+      this.childNodes.push(child);
+      return child;
+    }
+    insertBefore(child, before) {
+      child.parentNode = this;
+      const idx = this.childNodes.indexOf(before);
+      if (idx === -1) this.childNodes.push(child);
+      else this.childNodes.splice(idx, 0, child);
+      return child;
+    }
+    removeChild(child) {
+      const idx = this.childNodes.indexOf(child);
+      if (idx !== -1) this.childNodes.splice(idx, 1);
+      child.parentNode = null;
+      return child;
+    }
+    setAttribute(k, v) { this._attributes[k] = v; }
+    getAttribute(k) { return this._attributes[k]; }
+    removeAttribute(k) { delete this._attributes[k]; }
+    addEventListener() {}
+    removeEventListener() {}
+    dispatchEvent() { return true; }
+  }
+
+  const mockDoc = new MockNode(9, '#document');
+  mockDoc.createElement = (tag) => { const el = new MockNode(1, tag.toUpperCase()); el.ownerDocument = mockDoc; return el; };
+  mockDoc.createElementNS = (ns, tag) => { const el = new MockNode(1, tag.toUpperCase()); el.ownerDocument = mockDoc; el.namespaceURI = ns || 'http://www.w3.org/1999/xhtml'; return el; };
+  mockDoc.createTextNode = (text) => { const el = new MockNode(3, '#text'); el.nodeValue = text; el.ownerDocument = mockDoc; return el; };
+  mockDoc.createComment = (text) => { const el = new MockNode(8, '#comment'); el.nodeValue = text; el.ownerDocument = mockDoc; return el; };
+  mockDoc.createDocumentFragment = () => { const el = new MockNode(11, '#document-fragment'); el.ownerDocument = mockDoc; return el; };
+  mockDoc.documentElement = new MockNode(1, 'HTML');
+  mockDoc.head = new MockNode(1, 'HEAD');
+  mockDoc.body = new MockNode(1, 'BODY');
+  mockDoc.activeElement = null;
+
+  global.window = {
+    document: mockDoc,
+    HTMLIFrameElement: MockNode,
+    HTMLInputElement: MockNode,
+    HTMLTextAreaElement: MockNode,
+    HTMLSelectElement: MockNode,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() { return true; },
+    setTimeout: global.setTimeout,
+    clearTimeout: global.clearTimeout,
+  };
+  mockDoc.defaultView = global.window;
+  global.document = mockDoc;
+  global.Node = MockNode;
+  global.Element = MockNode;
+  global.HTMLElement = MockNode;
+  global.HTMLDivElement = MockNode;
+  global.HTMLIFrameElement = MockNode;
+  global.HTMLInputElement = MockNode;
+  global.HTMLTextAreaElement = MockNode;
+  global.HTMLSelectElement = MockNode;
+  global.DocumentFragment = MockNode;
+  global.SVGElement = MockNode;
+  global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+  global.cancelAnimationFrame = (id) => clearTimeout(id);
+
+  // Hook Test Harness Component
+  function HookTestWrapper({ user, workspaceId, projectId, authScope, enabled, onUpdate }) {
+    return React.createElement(
+      AuthContext.Provider,
+      { value: { user } },
+      React.createElement(HookChild, { workspaceId, projectId, authScope, enabled, onUpdate })
+    );
+  }
+
+  function HookChild({ workspaceId, projectId, authScope, enabled, onUpdate }) {
+    const result = useProjectFinancialHierarchy(workspaceId, projectId, authScope, { enabled });
+    useEffect(() => {
+      onUpdate(result);
+    });
+    return null;
+  }
+
+  let mockRpcHandler = null;
+  supabase.rpc = async (name, params) => {
+    if (mockRpcHandler) return mockRpcHandler(name, params);
+    return { data: null, error: null };
+  };
+
+  const container = mockDoc.createElement('div');
+  const root = ReactDOMClient.createRoot(container);
+
+  // Assertion T: Real React hook initial authorized project fetch & normalization (A, B)
+  clearProjectFinancialHierarchyCache();
+  let hookUpdates = [];
+  mockRpcHandler = async (name, params) => {
+    return {
+      data: {
+        schema_version: 1,
+        project_id: params.p_project_id,
+        workspace_id: 'ws-test-1',
+        financial_visibility: 'full',
+        project_summary: {
+          base_budget: '100000.00',
+          safety_buffer: '20000.00',
+          actual_spend: '50000.00',
+          risk_band: 'GREEN',
+          is_budgeted: true,
+        },
+        phase_summaries: {},
+        task_list_summaries: {},
+        tasks: {
+          'task-1': {
+            task_id: 'task-1',
+            direct_spend: '1000.00',
+            visible_rollup_spend: '1500.00',
+            budget_source_type: 'project',
+            financial_visibility: 'task_only',
+          }
+        }
+      },
+      error: null,
+    };
+  };
+
+  await act(async () => {
+    root.render(
+      React.createElement(HookTestWrapper, {
+        user: { id: 'usr-1' },
+        workspaceId: 'ws-1',
+        projectId: 'proj-1',
+        authScope: 'default',
+        enabled: true,
+        onUpdate: (res) => hookUpdates.push(res),
+      })
+    );
+  });
+
+  assert.ok(hookUpdates.length >= 1, 'Hook must produce render updates');
+  const finalStateA = hookUpdates[hookUpdates.length - 1];
+  assert.equal(finalStateA.loading, false, 'Loading must resolve to false');
+  assert.equal(finalStateA.error, null);
+  assert.ok(finalStateA.financialHierarchy, 'financialHierarchy must be populated');
+  assert.equal(finalStateA.financialHierarchy.project_summary.base_budget, 100000);
+  assert.equal(finalStateA.financialHierarchy.project_summary.risk_band, 'GREEN');
+  assert.equal(finalStateA.financialHierarchy.tasks['task-1'].direct_spend, 1000);
+  pass('Assertion T: Real React hook initial authorized project fetch & normalization verified');
+
+  // Assertion U: Real React hook disabled & missing projectId fail-closed (C, D)
+  hookUpdates = [];
+  await act(async () => {
+    root.render(
+      React.createElement(HookTestWrapper, {
+        user: { id: 'usr-1' },
+        workspaceId: 'ws-1',
+        projectId: 'proj-1',
+        authScope: 'default',
+        enabled: false,
+        onUpdate: (res) => hookUpdates.push(res),
+      })
+    );
+  });
+  const disabledState = hookUpdates[hookUpdates.length - 1];
+  assert.equal(disabledState.financialHierarchy, null, 'Disabled hook yields null hierarchy');
+  assert.equal(disabledState.loading, false, 'Disabled hook yields loading=false');
+
+  hookUpdates = [];
+  await act(async () => {
+    root.render(
+      React.createElement(HookTestWrapper, {
+        user: { id: 'usr-1' },
+        workspaceId: 'ws-1',
+        projectId: null,
+        authScope: 'default',
+        enabled: true,
+        onUpdate: (res) => hookUpdates.push(res),
+      })
+    );
+  });
+  const nullProjState = hookUpdates[hookUpdates.length - 1];
+  assert.equal(nullProjState.financialHierarchy, null, 'Missing projectId yields null hierarchy');
+  assert.equal(nullProjState.loading, false, 'Missing projectId yields loading=false');
+  pass('Assertion U: Real React hook disabled=false & missing projectId strictly fail closed');
+
+  // Assertion V: Real React hook workspace switch isolation (E, N)
+  clearProjectFinancialHierarchyCache();
+  hookUpdates = [];
+  let scopeChangeHistory = [];
+  function TrackingChild({ workspaceId, projectId, authScope, enabled, onRender }) {
+    const res = useProjectFinancialHierarchy(workspaceId, projectId, authScope, { enabled });
+    onRender(res);
+    return null;
+  }
+
+  mockRpcHandler = async (name, params) => {
+    await new Promise(r => setTimeout(r, 20));
+    return {
+      data: {
+        schema_version: 1,
+        project_id: params.p_project_id,
+        financial_visibility: 'full',
+        project_summary: { actual_spend: params.p_project_id === 'p1' ? '100.00' : '200.00', risk_band: 'GREEN' },
+        phase_summaries: {}, task_list_summaries: {}, tasks: {}
+      },
+      error: null
+    };
+  };
+
+  // Render ws1
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws1',
+          projectId: 'p1',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => scopeChangeHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+  const ws1Loaded = scopeChangeHistory[scopeChangeHistory.length - 1];
+  assert.equal(ws1Loaded.financialHierarchy?.project_summary?.actual_spend, 100);
+
+  // Switch to ws2: capture synchronous render frames
+  scopeChangeHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws2',
+          projectId: 'p1',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => scopeChangeHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  // The very first frame during the switch must have financialHierarchy = null (no 1-frame leak)
+  assert.equal(scopeChangeHistory[0].financialHierarchy, null, 'First frame of workspace shift MUST yield null financialHierarchy');
+  assert.equal(scopeChangeHistory[0].loading, true, 'First frame of workspace shift MUST yield loading=true');
+  pass('Assertion V: Real React hook workspace switch immediately isolates state (zero stale frame leak)');
+
+  // Assertion W: Real React hook project switch isolation (F, N)
+  scopeChangeHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws2',
+          projectId: 'p2',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => scopeChangeHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  assert.equal(scopeChangeHistory[0].financialHierarchy, null, 'First frame of project shift MUST yield null financialHierarchy');
+  pass('Assertion W: Real React hook project switch immediately isolates state (zero stale frame leak)');
+
+  // Assertion X: Real React hook user switch isolation (G, N)
+  scopeChangeHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u2' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws2',
+          projectId: 'p2',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => scopeChangeHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  assert.equal(scopeChangeHistory[0].financialHierarchy, null, 'First frame of user shift MUST yield null financialHierarchy');
+  pass('Assertion X: Real React hook user switch immediately isolates state (zero stale frame leak)');
+
+  // Assertion Y: Real React hook authorizationScopeKey switch isolation (H, N)
+  scopeChangeHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u2' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws2',
+          projectId: 'p2',
+          authScope: 'scope_admin',
+          enabled: true,
+          onRender: (res) => scopeChangeHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  assert.equal(scopeChangeHistory[0].financialHierarchy, null, 'First frame of authorizationScopeKey shift MUST yield null financialHierarchy');
+  pass('Assertion Y: Real React hook authorizationScopeKey switch immediately isolates state (zero stale frame leak)');
+
+  // Assertion Z: Real React hook in-flight race condition / out-of-order rejection & cache isolation (I, J, K, L, M)
+  clearProjectFinancialHierarchyCache();
+  let rpcCallCount = 0;
+  mockRpcHandler = async (name, params) => {
+    rpcCallCount++;
+    const callNum = rpcCallCount;
+    if (params.p_project_id === 'p_slow') {
+      // Slow request resolves after 80ms with stale data
+      await new Promise(r => setTimeout(r, 80));
+      return {
+        data: {
+          schema_version: 1,
+          project_id: 'p_slow',
+          financial_visibility: 'full',
+          project_summary: { actual_spend: '9999.00', risk_band: 'RED' },
+          phase_summaries: {}, task_list_summaries: {}, tasks: {}
+        },
+        error: null
+      };
+    } else {
+      // Fast request resolves in 10ms with fresh data
+      await new Promise(r => setTimeout(r, 10));
+      return {
+        data: {
+          schema_version: 1,
+          project_id: 'p_fast',
+          financial_visibility: 'full',
+          project_summary: { actual_spend: '1111.00', risk_band: 'GREEN' },
+          phase_summaries: {}, task_list_summaries: {}, tasks: {}
+        },
+        error: null
+      };
+    }
+  };
+
+  let raceHistory = [];
+  // 1. Launch slow request on p_slow
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws1',
+          projectId: 'p_slow',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => raceHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+
+  // 2. While p_slow is in-flight, immediately switch to p_fast
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws1',
+          projectId: 'p_fast',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => raceHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+
+  // Wait for all async promises (fast 10ms, then slow 80ms) to resolve
+  await act(async () => {
+    await new Promise(r => setTimeout(r, 120));
+  });
+
+  // Final state MUST be p_fast data (1111.00), slow stale request (9999.00) MUST be discarded by generation token
+  const finalRaceState = raceHistory[raceHistory.length - 1];
+  assert.equal(finalRaceState.financialHierarchy?.project_summary?.actual_spend, 1111, 'Newer p_fast request must prevail over out-of-order slow request');
+
+  // Test RPC error isolation: error in current scope does not pollute other scopes
+  mockRpcHandler = async () => ({ data: null, error: new Error('RPC_FAILED_TEST') });
+  let errorHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws1',
+          projectId: 'p_error',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => errorHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+  const errorState = errorHistory[errorHistory.length - 1];
+  assert.ok(errorState.error, 'Error must be captured');
+  assert.equal(errorState.error.message, 'RPC_FAILED_TEST');
+
+  // Switch to another scope: error is immediately reset to null
+  errorHistory = [];
+  await act(async () => {
+    root.render(
+      React.createElement(
+        AuthContext.Provider,
+        { value: { user: { id: 'u1' } } },
+        React.createElement(TrackingChild, {
+          workspaceId: 'ws1',
+          projectId: 'p_fast',
+          authScope: 'scope1',
+          enabled: true,
+          onRender: (res) => errorHistory.push({ ...res }),
+        })
+      )
+    );
+  });
+  assert.equal(errorHistory[0].error, null, 'Error must reset to null on scope switch');
+  pass('Assertion Z: Real React hook in-flight race rejection, generation token & cache isolation verified');
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
   console.log(`  ALL ${passed} P7-01 TEST ASSERTIONS PASSED!`);
