@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Loader2, Info, Ban } from 'lucide-react';
 import Modal from '../Modal.jsx';
 import FinanceRiskBadge from './FinanceRiskBadge.jsx';
 import { formatCurrency } from '../../lib/expenseExecution.js';
@@ -10,12 +10,14 @@ import styles from './FinanceAlertResolveModal.module.css';
  *
  * Controlled resolution modal for acknowledged finance alert incidents.
  * Available only to Budget Managers (canManageBudgets) when canonical risk
- * has recovered to GREEN or YELLOW.
+ * has recovered to GREEN or YELLOW. Includes frontend defense-in-depth guards.
  */
 export default function FinanceAlertResolveModal({
   isOpen,
   onClose,
   alert,
+  canManageBudgets = true,
+  pendingAction = null,
   onResolve,
 }) {
   const [note, setNote] = useState('');
@@ -24,9 +26,15 @@ export default function FinanceAlertResolveModal({
 
   if (!alert) return null;
 
+  const isRiskRecovered = alert.current_risk_band === 'GREEN' || alert.current_risk_band === 'YELLOW';
+  const isAcknowledged = alert.lifecycle_status === 'acknowledged';
+  const canResolveCurrent = isAcknowledged && isRiskRecovered && canManageBudgets;
+
+  const isPending = submitting || pendingAction === 'resolve';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
+    if (!canResolveCurrent || isPending) return;
 
     setClientError(null);
     try {
@@ -87,13 +95,42 @@ export default function FinanceAlertResolveModal({
           </div>
         </div>
 
-        {/* Informational Guidance Notice */}
-        <div className={styles.infoBanner}>
-          <Info size={18} color="var(--green)" style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <strong>Operational Incident Closure:</strong> Resolving this incident closes the alert record in the workspace. It does <strong>not</strong> delete finance history, budgets, expenses, or alter financial totals.
+        {/* Defense-in-depth Ineligibility Notice */}
+        {!canResolveCurrent && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--radius-xs)',
+              padding: '0.75rem 1rem',
+              color: 'var(--text)',
+              fontSize: '0.8125rem',
+              display: 'flex',
+              gap: '0.625rem',
+              lineHeight: '1.4',
+            }}
+          >
+            <Ban size={18} color="var(--red)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong>Resolution Ineligible:</strong>{' '}
+              {!isAcknowledged
+                ? `Incident lifecycle is "${alert.lifecycle_status}". Incident must be acknowledged before it can be resolved.`
+                : !isRiskRecovered
+                ? `Current financial risk is ${alert.current_risk_band}. Incident can only be resolved after budget returns to GREEN or YELLOW.`
+                : 'Only authorized Budget Managers may resolve finance alerts.'}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Informational Guidance Notice */}
+        {canResolveCurrent && (
+          <div className={styles.infoBanner}>
+            <Info size={18} color="var(--green)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong>Operational Incident Closure:</strong> Resolving this incident closes the alert record in the workspace. It does <strong>not</strong> delete finance history, budgets, expenses, or alter financial totals.
+            </div>
+          </div>
+        )}
 
         {/* Error Banner */}
         {clientError && (
@@ -114,7 +151,7 @@ export default function FinanceAlertResolveModal({
             placeholder="Optional context on how the budget condition was addressed or cleared..."
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            disabled={submitting}
+            disabled={isPending || !canResolveCurrent}
           />
         </div>
 
@@ -124,16 +161,21 @@ export default function FinanceAlertResolveModal({
             type="button"
             className={styles.cancelBtn}
             onClick={onClose}
-            disabled={submitting}
+            disabled={isPending}
           >
             Cancel
           </button>
           <button
             type="submit"
             className={styles.resolveBtn}
-            disabled={submitting}
+            disabled={isPending || !canResolveCurrent}
+            title={
+              !canResolveCurrent
+                ? 'Resolution is disabled because the alert does not meet recovery criteria'
+                : 'Confirm resolution of this alert'
+            }
           >
-            {submitting ? (
+            {isPending ? (
               <>
                 <Loader2 size={14} className={styles.spinning} />
                 <span>Resolving...</span>

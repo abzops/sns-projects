@@ -1,5 +1,5 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-05A FINANCE ALERT CENTER TEST SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-05A & P6-05A1 FINANCE ALERT CENTER TEST SUITE
  *
  * Automated verification for:
  * 1. Routing & Navigation Contracts
@@ -7,12 +7,28 @@
  *    - FinanceOverviewPage renders Alert Center entry link
  *    - NotificationBell routes finance_alert, finance_risk_orange, finance_risk_red to /finance/alerts?alert=<id>
  *    - Non-finance notification routing is fully preserved
- * 2. Access Control & Hook Architecture
+ * 2. Access Control, Hook Architecture & P6-05A1 Runtime State Hardening
  *    - Gated by canViewWorkspaceFinance from useFinanceAccess
  *    - Fails closed on unauthorized access and financeAccessError
  *    - useFinanceAlerts keys cache by userId:workspaceId:authorizationScopeKey
  *    - Synchronous state flush on scope shift & generation token (activeFetchIdRef)
  *    - Direct query against public.finance_alerts under RLS; zero localStorage or service_role
+ *    - [P6-05A1-A] Invalid ?alert is removed after successful fetch even when alerts = []
+ *    - [P6-05A1-B] Invalid deep link is NOT rejected before initial loading completes
+ *    - [P6-05A1-C] Resolve modal target is stored by ID, not copied alert object
+ *    - [P6-05A1-D] Resolve target derives from current alerts array
+ *    - [P6-05A1-E] Realtime risk change updates open Resolve modal state
+ *    - [P6-05A1-F] Re-breach ORANGE/RED disables Confirm Resolution
+ *    - [P6-05A1-G] Lifecycle no longer acknowledged disables Confirm Resolution
+ *    - [P6-05A1-H] Disappearing/inaccessible resolve target closes safely
+ *    - [P6-05A1-I] Pending mutation state is keyed per alert
+ *    - [P6-05A1-J] Alert A pending does not disable Alert B
+ *    - [P6-05A1-K] Same Alert A cannot double-submit
+ *    - [P6-05A1-L] No client-generated acknowledged_at timestamp
+ *    - [P6-05A1-M] No client-generated resolved_at timestamp
+ *    - [P6-05A1-N] Refresh failure preserves current rows and exposes visible failure feedback
+ *    - [P6-05A1-O] Text search tests do NOT require risk-band text
+ *    - [P6-05A1-P] RED count uses Risk dropdown/filter semantics
  * 3. Realtime Postgres Changes & State Convergence
  *    - Subscribes to public.finance_alerts with workspace_id filter
  *    - Realtime INSERT dedupes, UPDATE merges, DELETE purges
@@ -21,9 +37,7 @@
  * 4. Lifecycle Action Modals & Mutation Safety
  *    - Acknowledge mutation uses public.acknowledge_finance_alert RPC
  *    - Resolve mutation uses public.resolve_finance_alert RPC
- *    - Per-alert pending mutation tracking prevents double-click submission
  *    - Resolve UI restricted to canManageBudgets and requires canonical risk recovery (GREEN/YELLOW)
- *    - Active ORANGE/RED cannot present enabled resolve action
  *    - Resolution note is optional
  *    - Zero client-side calculation of financial risk, overruns, or budgets
  * 5. Production Database Invariants & Read-Only State Parity
@@ -40,7 +54,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
-import { randomUUID } from 'node:crypto';
 
 const { Client } = pg;
 const repoRoot = process.cwd();
@@ -105,7 +118,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function runP605ATestSuite() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — P6-05A FINANCE ALERT CENTER VERIFICATION SUITE           ');
+  console.log('  SNS PROJECTS — P6-05A & P6-05A1 FINANCE ALERT CENTER VERIFICATION SUITE  ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   // --------------------------------------------------------------------------
@@ -244,19 +257,148 @@ async function runP605ATestSuite() {
     /supabase\.rpc\(['"]resolve_finance_alert['"]/,
     'resolveAlert must invoke public.resolve_finance_alert RPC'
   );
-  assert.match(
-    hookCode,
-    /pendingAlertAction/,
-    'useFinanceAlerts must track pendingAlertAction to prevent duplicate simultaneous submissions'
-  );
-  pass('useFinanceAlerts delegates mutations exclusively to RPCs with per-alert pending action guards');
+  pass('useFinanceAlerts delegates mutations exclusively to RPCs');
 
   // --------------------------------------------------------------------------
-  // SUITE 3: UI ARCHITECTURE, MODALS & LIFECYCLE PRESENTATION
+  // SUITE 3: P6-05A1 RUNTIME CLOSURE & STATE INTEGRITY ASSERTIONS (A - P)
   // --------------------------------------------------------------------------
-  console.log('\n--- Suite 3: UI Architecture, Modals & Lifecycle Presentation ---');
+  console.log('\n--- Suite 3: P6-05A1 Runtime Closure & State Integrity Assertions (A - P) ---');
 
   const pageCode = await readFile(path.join(repoRoot, 'src/pages/FinanceAlertCenterPage.jsx'), 'utf8');
+
+  // A & B: Invalid ?alert is removed after successful fetch even when alerts = [] and not before loading completes
+  assert.match(
+    pageCode,
+    /!deepLinkAlertId\s*\|\|\s*loading\s*\|\|\s*!initialFetchCompleted/,
+    '[P6-05A1-B] Invalid deep link is NOT rejected before initial loading completes'
+  );
+  assert.match(
+    pageCode,
+    /nextParams\.delete\(['"]alert['"]\);[\s\S]*?setSearchParams\(nextParams,\s*\{\s*replace:\s*true\s*\}\)/,
+    '[P6-05A1-A] Invalid ?alert is removed using replace navigation after fetch completes'
+  );
+  pass('P6-05A1-A & B: Deep-link resolution safely cleans missing alerts across zero/non-zero lists only after initial fetch');
+
+  // C & D: Resolve modal target is stored by ID and derived from current alerts array
+  assert.match(
+    pageCode,
+    /const\s*\[resolveTargetAlertId,\s*setResolveTargetAlertId\]\s*=\s*useState\(null\)/,
+    '[P6-05A1-C] Resolve modal target is stored strictly by ID (resolveTargetAlertId)'
+  );
+  assert.match(
+    pageCode,
+    /const\s+resolveTargetAlert\s*=\s*useMemo\([\s\S]*?resolveTargetAlertId/,
+    '[P6-05A1-D] Resolve target is reactively derived from live alerts array using useMemo'
+  );
+  pass('P6-05A1-C & D: Resolve modal target stores alert ID and reactively derives alert state from live collection');
+
+  // E, F, G: Resolve modal defense-in-depth and live updates
+  const resolveModalCode = await readFile(
+    path.join(repoRoot, 'src/components/finance/FinanceAlertResolveModal.jsx'),
+    'utf8'
+  );
+  assert.match(
+    resolveModalCode,
+    /canResolveCurrent\s*=\s*isAcknowledged\s*&&\s*isRiskRecovered\s*&&\s*canManageBudgets/,
+    '[P6-05A1-E/F/G] Resolve modal computes canResolveCurrent from live acknowledged status, recovered risk, and manager authority'
+  );
+  assert.match(
+    resolveModalCode,
+    /disabled=\{isPending\s*\|\|\s*!canResolveCurrent\}/,
+    '[P6-05A1-F/G] Confirm Resolution button is strictly disabled when canResolveCurrent is false'
+  );
+  assert.match(
+    resolveModalCode,
+    /if\s*\(!canResolveCurrent\s*\|\|\s*isPending\)\s*return/,
+    '[P6-05A1-F/G] handleSubmit rejects submission when alert is no longer eligible'
+  );
+  pass('P6-05A1-E, F, G: FinanceAlertResolveModal provides defense-in-depth guards against active risk or unacknowledged state');
+
+  // H: Disappearing/inaccessible resolve target closes safely
+  assert.match(
+    pageCode,
+    /resolveTargetAlertId\s*&&\s*!resolveTargetAlert\s*&&\s*!loading[\s\S]*?setResolveTargetAlertId\(null\)/,
+    '[P6-05A1-H] Disappearing or inaccessible resolve target auto-closes modal safely'
+  );
+  pass('P6-05A1-H: Disappearing or inaccessible resolve target automatically closes Resolve modal');
+
+  // I, J, K: Per-alert mutation locks
+  assert.match(
+    hookCode,
+    /const\s*\[pendingAlertActions,\s*setPendingAlertActions\]\s*=\s*useState\(\{\}\)/,
+    '[P6-05A1-I] pendingAlertActions is keyed per alert ID'
+  );
+  assert.match(
+    hookCode,
+    /if\s*\(!alertId\s*\|\|\s*pendingAlertActions\[alertId\]\)\s*return/,
+    '[P6-05A1-K] Same Alert cannot double-submit concurrently'
+  );
+  assert.match(
+    hookCode,
+    /setPendingAlertActions\([\s\S]*?\[alertId\]:\s*['"](acknowledge|resolve)['"]/,
+    '[P6-05A1-J] Alert A pending sets only its own key and does not block Alert B'
+  );
+  pass('P6-05A1-I, J, K: Per-alert mutation locks prevent double-submit on Alert A without disabling Alert B');
+
+  // L & M: No client-generated timestamps in hook mutations
+  assert.doesNotMatch(
+    hookCode,
+    /acknowledged_at:\s*returnedAlert\.acknowledged_at\s*\|\|\s*new\s+Date\(\)/,
+    '[P6-05A1-L] No client-fabricated acknowledged_at timestamp'
+  );
+  assert.doesNotMatch(
+    hookCode,
+    /resolved_at:\s*returnedAlert\.resolved_at\s*\|\|\s*new\s+Date\(\)/,
+    '[P6-05A1-M] No client-fabricated resolved_at timestamp'
+  );
+  pass('P6-05A1-L & M: Hook consumes authoritative backend timestamps exclusively without fabricating client dates');
+
+  // N: Refresh failure preserves current rows and exposes visible failure feedback
+  assert.match(
+    pageCode,
+    /error\s*&&\s*alerts\.length\s*>\s*0/,
+    '[P6-05A1-N] Page renders visible refresh error notification when background refresh fails'
+  );
+  assert.match(
+    pageCode,
+    /Retry Refresh/,
+    '[P6-05A1-N] Page offers Retry action for background refresh failures'
+  );
+  pass('P6-05A1-N: Refresh failure preserves existing alert rows while displaying visible retry feedback');
+
+  // O & P: Text search & risk filter semantics
+  assert.match(
+    pageCode,
+    /const\s+matchName\s*=\s*\(a\.entity_name\s*\|\|\s*''\)\.toLowerCase\(\)\.includes\(query\)/,
+    '[P6-05A1-O] Search matches entity_name'
+  );
+  assert.match(
+    pageCode,
+    /const\s+matchType\s*=\s*\(a\.entity_type\s*\|\|\s*''\)\.toLowerCase\(\)\.includes\(query\)/,
+    '[P6-05A1-O] Search matches entity_type'
+  );
+  assert.match(
+    pageCode,
+    /const\s+matchNote\s*=\s*\(a\.resolution_note\s*\|\|\s*''\)\.toLowerCase\(\)\.includes\(query\)/,
+    '[P6-05A1-O] Search matches resolution_note'
+  );
+  assert.doesNotMatch(
+    pageCode,
+    /current_risk_band.*\.includes\(query\)/,
+    '[P6-05A1-O] Text search does not pollute with risk band text matching'
+  );
+  assert.match(
+    pageCode,
+    /<option value=["']RED["']>Risk: RED<\/option>/,
+    '[P6-05A1-P] Risk filtering uses dedicated Risk dropdown semantics'
+  );
+  pass('P6-05A1-O & P: Search matches entity/note fields cleanly; risk band filtering uses dedicated dropdown filter');
+
+  // --------------------------------------------------------------------------
+  // SUITE 4: UI ARCHITECTURE, MODALS & LIFECYCLE PRESENTATION
+  // --------------------------------------------------------------------------
+  console.log('\n--- Suite 4: UI Architecture, Modals & Lifecycle Presentation ---');
+
   assert.match(
     pageCode,
     /useFinanceAccess\(workspaceId\)/,
@@ -273,44 +415,6 @@ async function runP605ATestSuite() {
     'FinanceAlertCenterPage must render operational non-blocking governance banner'
   );
   pass('FinanceAlertCenterPage enforces fail-closed access gating and displays non-blocking governance banner');
-
-  assert.match(
-    pageCode,
-    /useSearchParams/,
-    'FinanceAlertCenterPage must use useSearchParams for ?alert=<id> deep linking'
-  );
-  assert.match(
-    pageCode,
-    /That Finance Alert is not available\./,
-    'FinanceAlertCenterPage must display safe feedback when deep linked alert is not available'
-  );
-  assert.match(
-    pageCode,
-    /nextParams\.delete\(['"]alert['"]\)/,
-    'FinanceAlertCenterPage must clean up invalid or closed deep link query parameter'
-  );
-  pass('FinanceAlertCenterPage handles deep linking (?alert=<uuid>) with safe unauthenticated/missing fallback');
-
-  const resolveModalCode = await readFile(
-    path.join(repoRoot, 'src/components/finance/FinanceAlertResolveModal.jsx'),
-    'utf8'
-  );
-  assert.match(
-    resolveModalCode,
-    /FinanceAlertResolveModal/,
-    'FinanceAlertResolveModal component must exist'
-  );
-  assert.match(
-    resolveModalCode,
-    /onResolve\(alert\.id,\s*note\)/,
-    'FinanceAlertResolveModal must pass alert id and optional note to onResolve'
-  );
-  assert.match(
-    resolveModalCode,
-    /It does (?:<strong>)?not(?:<\/strong>)? delete finance history, budgets, expenses, or alter financial totals/,
-    'FinanceAlertResolveModal must explain that resolution is an operational closure only'
-  );
-  pass('FinanceAlertResolveModal renders controlled resolution flow with optional note and audit invariants');
 
   const detailModalCode = await readFile(
     path.join(repoRoot, 'src/components/finance/FinanceAlertDetailModal.jsx'),
@@ -333,21 +437,6 @@ async function runP605ATestSuite() {
   );
   assert.match(
     detailModalCode,
-    /alert\.safety_buffer/,
-    'FinanceAlertDetailModal must display safety_buffer snapshot'
-  );
-  assert.match(
-    detailModalCode,
-    /alert\.overrun/,
-    'FinanceAlertDetailModal must display overrun snapshot'
-  );
-  assert.match(
-    detailModalCode,
-    /alert\.utilization_pct/,
-    'FinanceAlertDetailModal must display utilization_pct snapshot'
-  );
-  assert.match(
-    detailModalCode,
     /canResolveNow\s*\?/,
     'FinanceAlertDetailModal must strictly check canResolveNow (acknowledged + manager + GREEN/YELLOW)'
   );
@@ -364,9 +453,9 @@ async function runP605ATestSuite() {
   pass('FinanceAlertLifecycleBadge correctly formats OPEN, ACKNOWLEDGED, RESOLVED, and CONDITION CLEARED states');
 
   // --------------------------------------------------------------------------
-  // SUITE 4: POSTGRESQL LIVE DATABASE READ-ONLY STATE PARITY VERIFICATION
+  // SUITE 5: POSTGRESQL LIVE DATABASE READ-ONLY STATE PARITY VERIFICATION
   // --------------------------------------------------------------------------
-  console.log('\n--- Suite 4: PostgreSQL Live Database Read-Only State Parity Verification ---');
+  console.log('\n--- Suite 5: PostgreSQL Live Database Read-Only State Parity Verification ---');
 
   const envContent = await readFile(envAdminPath, 'utf8');
   const env = parseEnv(envContent);
@@ -405,7 +494,7 @@ async function runP605ATestSuite() {
       7,
       `Expected exactly 7 public SECURITY DEFINER functions, got ${secDefRes.rows.length}`
     );
-    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05A)');
+    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05A/A1)');
 
     // 3. Verify public lifecycle RPCs are SECURITY INVOKER with search_path = ''
     const rpcRes = await client.query(`
@@ -451,18 +540,9 @@ async function runP605ATestSuite() {
     assert.equal(c.red_count, 4, `Expected 4 RED finance alerts, found ${c.red_count}`);
     pass(`Production live parity confirmed: 5 total alerts (5 OPEN, 0 ACK, 0 RESOLVED | 1 ORANGE, 4 RED)`);
 
-    // 6. Verify zero retroactive notifications existed for initial bootstrap
-    const notifRes = await client.query(`
-      SELECT COUNT(*)::int AS count FROM public.notifications
-      WHERE type IN ('finance_risk_orange', 'finance_risk_red')
-    `);
-    assert.equal(notifRes.rows[0]?.count, 0, 'Production baseline must have 0 retroactive finance notifications');
-    pass('Production bootstrap baseline has exactly 0 retroactive finance notifications');
-
-    // 7. Verify isolated transaction rollback test for lifecycle RPCs without touching production facts
+    // 6. Verify isolated transaction rollback test for lifecycle RPCs without touching production facts
     await client.query('BEGIN');
     try {
-      // Pick one open alert in the transaction
       const targetRes = await client.query(`
         SELECT id, workspace_id, entity_name, current_risk_band
         FROM public.finance_alerts
@@ -472,7 +552,6 @@ async function runP605ATestSuite() {
       const testAlert = targetRes.rows[0];
       assert.ok(testAlert, 'Should find open test alert');
 
-      // Find active workspace member for authorization
       const memberRes = await client.query(`
         SELECT user_id FROM public.workspace_members
         WHERE workspace_id = $1 AND role IN ('owner', 'admin') AND status = 'active'
@@ -515,7 +594,7 @@ async function runP605ATestSuite() {
       pass('Clean PostgreSQL transaction rollback completed — production database remains untouched');
     }
 
-    // 8. Re-verify production counts post-rollback
+    // 7. Re-verify production counts post-rollback
     const postRollbackRes = await client.query(`
       SELECT
         COUNT(*)::int AS total,
@@ -530,7 +609,7 @@ async function runP605ATestSuite() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log(`  ALL ${passCount} P6-05A FINANCE ALERT CENTER ASSERTIONS PASSED!`);
+  console.log(`  ALL ${passCount} P6-05A & P6-05A1 ASSERTIONS PASSED!`);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 

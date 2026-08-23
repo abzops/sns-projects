@@ -8,9 +8,11 @@
  * - Read-only query directly against public.finance_alerts under RLS
  * - Realtime Postgres Changes synchronization for live operational awareness
  * - Fail-closed access control via useFinanceAccess (canViewWorkspaceFinance)
- * - Deep linking support via ?alert=<uuid> with safe fallback for invalid IDs
+ * - Deep linking support via ?alert=<uuid> with safe fallback for invalid IDs across zero/non-zero alerts
  * - Zero direct DML mutations; delegating strictly to acknowledge_finance_alert & resolve_finance_alert RPCs
  * - Resolution authority strictly gated by canManageBudgets and current risk recovery (GREEN/YELLOW)
+ * - Reactive Resolve modal state tracking by alert ID (live updates, auto-close on disappearance)
+ * - Per-alert mutation locks prevent concurrent double submissions
  * - Informational side-effect only: alerts do not block operational execution
  */
 
@@ -81,7 +83,8 @@ export default function FinanceAlertCenterPage() {
     loading,
     refreshing,
     error,
-    pendingAlertAction,
+    initialFetchCompleted,
+    pendingAlertActions,
     acknowledgeAlert,
     resolveAlert,
     refetch,
@@ -89,9 +92,9 @@ export default function FinanceAlertCenterPage() {
     enabled: canViewWorkspaceFinance && !financeAccessError,
   });
 
-  // Modal / Selected Item State (tracked by ID for realtime state convergence)
+  // Modal / Selected Item State (tracked strictly by ID for realtime state convergence)
   const [selectedAlertId, setSelectedAlertId] = useState(null);
-  const [resolveTargetAlert, setResolveTargetAlert] = useState(null);
+  const [resolveTargetAlertId, setResolveTargetAlertId] = useState(null);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,18 +107,19 @@ export default function FinanceAlertCenterPage() {
   const deepLinkAlertId = searchParams.get('alert');
 
   useEffect(() => {
-    if (!deepLinkAlertId || loading) return;
+    if (!deepLinkAlertId || loading || !initialFetchCompleted) return;
 
     const matched = alerts.find((a) => a.id === deepLinkAlertId);
     if (matched) {
       setSelectedAlertId(matched.id);
-    } else if (alerts.length > 0) {
+    } else {
+      // Completed fetch and alert not found (handles both alerts.length === 0 and alerts.length > 0)
       showToast('That Finance Alert is not available.', 'error');
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('alert');
       setSearchParams(nextParams, { replace: true });
     }
-  }, [deepLinkAlertId, alerts, loading, searchParams, setSearchParams, showToast]);
+  }, [deepLinkAlertId, alerts, loading, initialFetchCompleted, searchParams, setSearchParams, showToast]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedAlertId(null);
@@ -126,11 +130,24 @@ export default function FinanceAlertCenterPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Selected Alert Object derived from current live alerts array
+  // Selected Alert Object derived dynamically from live alerts array
   const selectedAlert = useMemo(() => {
     if (!selectedAlertId) return null;
     return alerts.find((a) => a.id === selectedAlertId) || null;
   }, [alerts, selectedAlertId]);
+
+  // Resolve Target Alert derived dynamically from live alerts array
+  const resolveTargetAlert = useMemo(() => {
+    if (!resolveTargetAlertId) return null;
+    return alerts.find((a) => a.id === resolveTargetAlertId) || null;
+  }, [alerts, resolveTargetAlertId]);
+
+  // Auto-close resolve modal safely if target alert disappears or becomes inaccessible
+  useEffect(() => {
+    if (resolveTargetAlertId && !resolveTargetAlert && !loading) {
+      setResolveTargetAlertId(null);
+    }
+  }, [resolveTargetAlertId, resolveTargetAlert, loading]);
 
   // 1. KPI presentation counts from ALL authorized workspace alerts
   const kpiStats = useMemo(() => {
@@ -182,7 +199,7 @@ export default function FinanceAlertCenterPage() {
         if (conditionFilter === 'active_breach' && isCleared) return false;
         if (conditionFilter === 'cleared' && !isCleared) return false;
 
-        // Search text matching
+        // Search text matching across entity_name, entity_type, and resolution_note
         if (query) {
           const matchName = (a.entity_name || '').toLowerCase().includes(query);
           const matchType = (a.entity_type || '').toLowerCase().includes(query);
@@ -250,7 +267,7 @@ export default function FinanceAlertCenterPage() {
     try {
       await resolveAlert(alertId, note);
       showToast('Finance Alert resolved successfully.', 'success');
-      setResolveTargetAlert(null);
+      setResolveTargetAlertId(null);
     } catch (err) {
       showToast(err.message || 'Failed to resolve alert', 'error');
       throw err;
@@ -298,7 +315,7 @@ export default function FinanceAlertCenterPage() {
     );
   }
 
-  // 3. Load Error
+  // 3. Initial Load Error (Zero cached rows)
   if (error && alerts.length === 0) {
     return (
       <div className={styles.page}>
@@ -363,6 +380,47 @@ export default function FinanceAlertCenterPage() {
           <strong>Operational Governance:</strong> Finance alerts provide financial risk visibility and do not block operational task or process execution.
         </span>
       </div>
+
+      {/* Background Refresh Failure Notice (preserves loaded rows) */}
+      {error && alerts.length > 0 && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 'var(--radius-xs)',
+            padding: '0.625rem 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            color: 'var(--red)',
+            fontSize: '0.8125rem',
+            gap: '0.5rem',
+          }}
+          role="alert"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <span>Failed to refresh alerts: {error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--red)',
+              color: 'var(--red)',
+              borderRadius: 'var(--radius-xs)',
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Retry Refresh
+          </button>
+        </div>
+      )}
 
       {/* KPI Summary Cards Strip */}
       <div className={styles.kpiStrip}>
@@ -541,8 +599,10 @@ export default function FinanceAlertCenterPage() {
               </thead>
               <tbody>
                 {filteredAlerts.map((alert) => {
-                  const isPending = pendingAlertAction?.alertId === alert.id;
-                  const isPendingAck = isPending && pendingAlertAction?.action === 'acknowledge';
+                  const currentPendingAction = pendingAlertActions[alert.id] || null;
+                  const isPending = Boolean(currentPendingAction);
+                  const isPendingAck = currentPendingAction === 'acknowledge';
+
                   const isConditionCleared = Boolean(
                     alert.condition_cleared_at ||
                       (alert.lifecycle_status !== 'resolved' &&
@@ -614,7 +674,7 @@ export default function FinanceAlertCenterPage() {
                           <button
                             type="button"
                             className={styles.tableResolveBtn}
-                            onClick={() => setResolveTargetAlert(alert)}
+                            onClick={() => setResolveTargetAlertId(alert.id)}
                             disabled={isPending}
                             title="Resolve cleared incident"
                           >
@@ -648,7 +708,8 @@ export default function FinanceAlertCenterPage() {
           {/* Mobile Cards View */}
           <div className={styles.mobileCardsContainer}>
             {filteredAlerts.map((alert) => {
-              const isPending = pendingAlertAction?.alertId === alert.id;
+              const currentPendingAction = pendingAlertActions[alert.id] || null;
+              const isPending = Boolean(currentPendingAction);
               const isConditionCleared = Boolean(
                 alert.condition_cleared_at ||
                   (alert.lifecycle_status !== 'resolved' &&
@@ -712,7 +773,7 @@ export default function FinanceAlertCenterPage() {
                         <button
                           type="button"
                           className={styles.tableResolveBtn}
-                          onClick={() => setResolveTargetAlert(alert)}
+                          onClick={() => setResolveTargetAlertId(alert.id)}
                           disabled={isPending}
                         >
                           <CheckCircle2 size={13} />
@@ -736,11 +797,11 @@ export default function FinanceAlertCenterPage() {
           alert={selectedAlert}
           canManageBudgets={canManageBudgets}
           canViewWorkspaceFinance={canViewWorkspaceFinance}
-          pendingAlertAction={pendingAlertAction}
+          pendingAlertActions={pendingAlertActions}
           onAcknowledge={handleAcknowledge}
           onOpenResolve={(target) => {
             handleCloseDetail();
-            setResolveTargetAlert(target);
+            setResolveTargetAlertId(target?.id || target);
           }}
         />
       )}
@@ -749,8 +810,10 @@ export default function FinanceAlertCenterPage() {
       {resolveTargetAlert && (
         <FinanceAlertResolveModal
           isOpen={Boolean(resolveTargetAlert)}
-          onClose={() => setResolveTargetAlert(null)}
+          onClose={() => setResolveTargetAlertId(null)}
           alert={resolveTargetAlert}
+          canManageBudgets={canManageBudgets}
+          pendingAction={pendingAlertActions[resolveTargetAlert.id]}
           onResolve={handleResolve}
         />
       )}

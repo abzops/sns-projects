@@ -17,14 +17,15 @@ export default function FinanceAlertDetailModal({
   alert,
   canManageBudgets,
   canViewWorkspaceFinance,
-  pendingAlertAction,
+  pendingAlertActions,
   onAcknowledge,
   onOpenResolve,
 }) {
   if (!alert) return null;
 
-  const isPending = pendingAlertAction?.alertId === alert.id;
-  const isPendingAck = isPending && pendingAlertAction?.action === 'acknowledge';
+  const currentPendingAction = pendingAlertActions?.[alert.id] || null;
+  const isPending = Boolean(currentPendingAction);
+  const isPendingAck = currentPendingAction === 'acknowledge';
 
   const isConditionCleared = Boolean(
     alert.condition_cleared_at ||

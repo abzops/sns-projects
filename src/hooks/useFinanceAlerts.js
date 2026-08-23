@@ -10,9 +10,10 @@
  * - Synchronous state flush on scope shift prevents stale persona/workspace data leaks
  * - Generation token (activeFetchIdRef) eliminates async fetch race conditions
  * - Realtime Postgres Changes subscription (INSERT, UPDATE, DELETE) with deduplication
- * - Manual refresh fallback preserves rendered list during background sync
+ * - Manual refresh fallback preserves rendered list during background sync & surfaces errors
  * - Zero direct client table DML; mutations delegate strictly to SECURITY INVOKER RPCs
- * - Per-alert mutation pending tracking prevents double submission
+ * - Per-alert mutation pending tracking (keyed by alertId) prevents duplicate submissions
+ * - Authoritative RPC return merging without fabricating client timestamps
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -34,9 +35,10 @@ export function useFinanceAlerts(
   const [loading, setLoading] = useState(() => Boolean(enabled && userId && workspaceId));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [initialFetchCompleted, setInitialFetchCompleted] = useState(false);
 
-  // Track pending mutation per alert: { alertId, action: 'acknowledge' | 'resolve' }
-  const [pendingAlertAction, setPendingAlertAction] = useState(null);
+  // Track pending mutations per alert: { [alertId]: 'acknowledge' | 'resolve' }
+  const [pendingAlertActions, setPendingAlertActions] = useState({});
 
   const activeFetchIdRef = useRef(0);
   const channelRef = useRef(null);
@@ -49,7 +51,8 @@ export function useFinanceAlerts(
       setAlerts([]);
       setError(null);
       setRefreshing(false);
-      setPendingAlertAction(null);
+      setPendingAlertActions({});
+      setInitialFetchCompleted(false);
       setLoading(Boolean(enabled && userId && workspaceId));
 
       if (channelRef.current) {
@@ -67,6 +70,7 @@ export function useFinanceAlerts(
         setLoading(false);
         setRefreshing(false);
         setError(null);
+        setInitialFetchCompleted(false);
         return;
       }
 
@@ -92,6 +96,7 @@ export function useFinanceAlerts(
         }
 
         setAlerts(Array.isArray(data) ? data : []);
+        setInitialFetchCompleted(true);
       } catch (err) {
         if (fetchId !== activeFetchIdRef.current) return;
         console.error('[useFinanceAlerts] Failed to fetch finance alerts:', err);
@@ -173,9 +178,9 @@ export function useFinanceAlerts(
   // 4. Acknowledge Alert Mutation (Calls public.acknowledge_finance_alert)
   const acknowledgeAlert = useCallback(
     async (alertId) => {
-      if (!alertId || pendingAlertAction) return { success: false };
+      if (!alertId || pendingAlertActions[alertId]) return { success: false };
 
-      setPendingAlertAction({ alertId, action: 'acknowledge' });
+      setPendingAlertActions((prev) => ({ ...prev, [alertId]: 'acknowledge' }));
       try {
         const { data, error: rpcError } = await supabase.rpc('acknowledge_finance_alert', {
           p_alert_id: alertId,
@@ -185,41 +190,49 @@ export function useFinanceAlerts(
           throw rpcError;
         }
 
-        // Authoritative immediate merge + realtime convergence
+        const returnedAlert = data?.alert || data || {};
+
+        // Authoritative merge of server-returned fields (without client-side timestamp fabrication)
         setAlerts((prev) =>
           prev.map((a) => {
             if (a.id === alertId) {
-              const returnedAlert = data?.alert || data || {};
               return {
                 ...a,
-                lifecycle_status: 'acknowledged',
-                acknowledged_at: returnedAlert.acknowledged_at || new Date().toISOString(),
                 ...returnedAlert,
+                lifecycle_status: returnedAlert.lifecycle_status || a.lifecycle_status,
               };
             }
             return a;
           })
         );
 
+        // If returned fields were unexpectedly missing, trigger background refetch
+        if (!returnedAlert.lifecycle_status) {
+          fetchAlerts({ isRefresh: true });
+        }
+
         return { success: true, data };
       } catch (err) {
         console.error('[useFinanceAlerts] acknowledge_finance_alert failed:', err);
-        // If state desynchronized, trigger background refresh
         fetchAlerts({ isRefresh: true });
         throw err;
       } finally {
-        setPendingAlertAction(null);
+        setPendingAlertActions((prev) => {
+          const next = { ...prev };
+          delete next[alertId];
+          return next;
+        });
       }
     },
-    [pendingAlertAction, fetchAlerts]
+    [pendingAlertActions, fetchAlerts]
   );
 
   // 5. Resolve Alert Mutation (Calls public.resolve_finance_alert)
   const resolveAlert = useCallback(
     async (alertId, resolutionNote = null) => {
-      if (!alertId || pendingAlertAction) return { success: false };
+      if (!alertId || pendingAlertActions[alertId]) return { success: false };
 
-      setPendingAlertAction({ alertId, action: 'resolve' });
+      setPendingAlertActions((prev) => ({ ...prev, [alertId]: 'resolve' }));
       try {
         const { data, error: rpcError } = await supabase.rpc('resolve_finance_alert', {
           p_alert_id: alertId,
@@ -230,34 +243,41 @@ export function useFinanceAlerts(
           throw rpcError;
         }
 
-        // Authoritative immediate merge + realtime convergence
+        const returnedAlert = data?.alert || data || {};
+
+        // Authoritative merge of server-returned fields (without client-side timestamp fabrication)
         setAlerts((prev) =>
           prev.map((a) => {
             if (a.id === alertId) {
-              const returnedAlert = data?.alert || data || {};
               return {
                 ...a,
-                lifecycle_status: 'resolved',
-                resolution_note: resolutionNote?.trim() || null,
-                resolved_at: returnedAlert.resolved_at || new Date().toISOString(),
                 ...returnedAlert,
+                lifecycle_status: returnedAlert.lifecycle_status || a.lifecycle_status,
               };
             }
             return a;
           })
         );
 
+        // If returned fields were unexpectedly missing, trigger background refetch
+        if (!returnedAlert.lifecycle_status) {
+          fetchAlerts({ isRefresh: true });
+        }
+
         return { success: true, data };
       } catch (err) {
         console.error('[useFinanceAlerts] resolve_finance_alert failed:', err);
-        // If state desynchronized, trigger background refresh
         fetchAlerts({ isRefresh: true });
         throw err;
       } finally {
-        setPendingAlertAction(null);
+        setPendingAlertActions((prev) => {
+          const next = { ...prev };
+          delete next[alertId];
+          return next;
+        });
       }
     },
-    [pendingAlertAction, fetchAlerts]
+    [pendingAlertActions, fetchAlerts]
   );
 
   return {
@@ -265,7 +285,9 @@ export function useFinanceAlerts(
     loading,
     refreshing,
     error,
-    pendingAlertAction,
+    initialFetchCompleted,
+    pendingAlertActions,
+    getPendingAction: (alertId) => pendingAlertActions[alertId] || null,
     acknowledgeAlert,
     resolveAlert,
     refetch: () => fetchAlerts({ isRefresh: true }),
