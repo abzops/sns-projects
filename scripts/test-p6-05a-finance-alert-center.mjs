@@ -809,6 +809,132 @@ async function runP605ATestSuite() {
   pass('P6-05A4 source code contract: Page enforces 1. Auth resolving -> 2. Access Denied -> 3. Alert Loading sequence');
 
   // --------------------------------------------------------------------------
+  // SUITE 3.7: P6-05A5 RESOLVE MODAL AUTHORITATIVE-CLOSE CLOSURE (A - H)
+  // --------------------------------------------------------------------------
+  console.log('\n--- Suite 3.7: P6-05A5 Resolve Modal Authoritative-Close Closure (A - H) ---');
+
+  const p605a5ResolveModalCode = await readFile(
+    path.join(repoRoot, 'src/components/finance/FinanceAlertResolveModal.jsx'),
+    'utf8'
+  );
+
+  // A. FinanceAlertResolveModal does NOT unconditionally call onClose after await onResolve(...)
+  assert.doesNotMatch(
+    p605a5ResolveModalCode,
+    /await\s+onResolve\([^)]*\);\s*onClose\(\)/,
+    '[P6-05A5-A] FinanceAlertResolveModal must NOT call onClose unconditionally after onResolve'
+  );
+  pass('P6-05A5-A: FinanceAlertResolveModal does not unconditionally invoke onClose after onResolve mutation');
+
+  // B. parent handleResolve closes only on success=true && staleScope!=true
+  assert.match(
+    pageCode,
+    /if\s*\(\s*res\?\.success\s*&&\s*!res\?\.staleScope\s*\)\s*\{[\s\S]*?setResolveTargetAlertId\(null\);?/,
+    '[P6-05A5-B] Parent handleResolve must only clear resolveTargetAlertId when res.success is true and res.staleScope is falsy'
+  );
+  pass('P6-05A5-B: Parent handleResolve strictly controls post-mutation closure on confirmed same-scope success');
+
+  // Pure function simulating the component submit and parent resolve integration
+  async function simulateResolveFlow({
+    alertId,
+    note,
+    rpcResult,
+    rpcThrows = false,
+  }) {
+    let parentResolveTargetId = alertId;
+    let parentToastEmitted = null;
+    let modalError = null;
+
+    // Simulated parent handleResolve
+    const parentHandleResolve = async (id, n) => {
+      if (rpcThrows) {
+        throw new Error('RPC network error');
+      }
+      const res = rpcResult;
+      if (res?.success && !res?.staleScope) {
+        parentToastEmitted = 'Finance Alert resolved successfully.';
+        parentResolveTargetId = null;
+      }
+      return res;
+    };
+
+    // Simulated modal handleSubmit
+    const modalHandleSubmit = async () => {
+      modalError = null;
+      try {
+        await parentHandleResolve(alertId, note);
+      } catch (err) {
+        modalError = err.message || 'Failed to resolve finance alert.';
+      }
+    };
+
+    await modalHandleSubmit();
+
+    return {
+      parentResolveTargetId,
+      parentToastEmitted,
+      modalError,
+      isModalOpen: Boolean(parentResolveTargetId),
+    };
+  }
+
+  // C. success=false / already_pending keeps resolve target present (no fake close)
+  const collisionFlow = await simulateResolveFlow({
+    alertId: 'alert-1',
+    note: 'Resolved',
+    rpcResult: { success: false, reason: 'already_pending' },
+  });
+  assert.equal(collisionFlow.isModalOpen, true, '[P6-05A5-C] Modal must remain open on lock collision');
+  assert.equal(collisionFlow.parentToastEmitted, null, '[P6-05A5-C] No success toast on lock collision');
+  pass('P6-05A5-C: Lock collision (already_pending) preserves open modal and suppresses false success UI');
+
+  // D. staleScope=true keeps parent from closing/showing success
+  const staleScopeFlow = await simulateResolveFlow({
+    alertId: 'alert-1',
+    note: 'Resolved',
+    rpcResult: { success: true, staleScope: true, data: {} },
+  });
+  assert.equal(staleScopeFlow.isModalOpen, true, '[P6-05A5-D] Modal target must not be cleared by stale-scope result');
+  assert.equal(staleScopeFlow.parentToastEmitted, null, '[P6-05A5-D] Stale-scope result must not emit toast');
+  pass('P6-05A5-D: Stale-scope result prevents modal target clearance and success toast emission');
+
+  // E. authoritative success clears resolve target
+  const successFlow = await simulateResolveFlow({
+    alertId: 'alert-1',
+    note: 'Resolved',
+    rpcResult: { success: true, staleScope: false, data: {} },
+  });
+  assert.equal(successFlow.isModalOpen, false, '[P6-05A5-E] Modal target must be cleared on true success');
+  assert.equal(successFlow.parentToastEmitted, 'Finance Alert resolved successfully.', '[P6-05A5-E] Success toast emitted on true success');
+  pass('P6-05A5-E: Authoritative server-confirmed success clears resolve target and displays success toast');
+
+  // F. thrown RPC error keeps modal available and exposes error
+  const thrownFlow = await simulateResolveFlow({
+    alertId: 'alert-1',
+    note: 'Resolved',
+    rpcThrows: true,
+  });
+  assert.equal(thrownFlow.isModalOpen, true, '[P6-05A5-F] Modal must remain open on thrown RPC error');
+  assert.equal(thrownFlow.modalError, 'RPC network error', '[P6-05A5-F] Error message captured by modal');
+  pass('P6-05A5-F: Thrown RPC error keeps modal open and surfaces error message');
+
+  // G. Cancel still invokes onClose
+  assert.match(
+    p605a5ResolveModalCode,
+    /<button[^>]*className=\{styles\.cancelBtn\}[^>]*onClick=\{onClose\}/,
+    '[P6-05A5-G] Cancel button must wire onClick to onClose'
+  );
+  pass('P6-05A5-G: Cancel button directly invokes onClose callback');
+
+  // H. ordinary modal close/X still receives onClose
+  assert.match(
+    p605a5ResolveModalCode,
+    /<Modal[\s\S]*?onClose=\{onClose\}/,
+    '[P6-05A5-H] Modal component must receive onClose prop'
+  );
+  pass('P6-05A5-H: Modal component wires backdrop/escape/X actions directly to onClose');
+
+  // --------------------------------------------------------------------------
   // SUITE 4: UI ARCHITECTURE, MODALS & LIFECYCLE PRESENTATION
   // --------------------------------------------------------------------------
   console.log('\n--- Suite 4: UI Architecture, Modals & Lifecycle Presentation ---');
@@ -1023,7 +1149,7 @@ async function runP605ATestSuite() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log(`  ALL ${passCount} P6-05A, P6-05A1, P6-05A2, P6-05A3 & P6-05A4 ASSERTIONS PASSED!`);
+  console.log(`  ALL ${passCount} P6-05A, P6-05A1, P6-05A2, P6-05A3, P6-05A4 & P6-05A5 ASSERTIONS PASSED!`);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 

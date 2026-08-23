@@ -40,7 +40,6 @@ export default function FinanceAlertResolveModal({
     try {
       setSubmitting(true);
       await onResolve(alert.id, note);
-      onClose();
     } catch (err) {
       console.error('[FinanceAlertResolveModal] Resolution failed:', err);
       setClientError(err.message || 'Failed to resolve finance alert.');

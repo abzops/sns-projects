@@ -8,7 +8,7 @@
 
 ## 1. Overview & Objectives
 
-P6-05A, P6-05A1, P6-05A2, P6-05A3, and P6-05A4 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
+P6-05A, P6-05A1, P6-05A2, P6-05A3, P6-05A4, and P6-05A5 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
 
 The interface serves as the central command hub for financial risk incidents, supporting:
 1. **Persistent Incident Tracking:** Realtime visualization of active (OPEN, ACKNOWLEDGED) and historical (RESOLVED) budget threshold breaches.
@@ -19,6 +19,7 @@ The interface serves as the central command hub for financial risk incidents, su
 6. **Atomic Mutation Mutex & Scope Isolation (P6-05A2 / P6-05A3):** Synchronous ref mutex (`pendingAlertActionsRef`) with unique lock-token ownership eliminates double-submit race conditions per alert before React rerenders, and in-flight scope token validation (`activeScopeRef`) discards stale responses upon workspace navigation.
 7. **Render-Time Scope Invariant & Token Parity (P6-05A3):** Render-time current-scope invariant prevents old workspace alert exposure before `useEffect` executes, and 100% canonical CSS design tokens (`--accent`, `--line-light`) eliminate undefined variable fallbacks.
 8. **Disabled / Authorization Loading Contract Closure (P6-05A4):** Hook loading evaluates `hasQueryPrerequisites` ensuring disabled hooks (`enabled=false`) report `loading=false`, `alerts=[]`, and `pendingAlertActions={}`; page separates authorization resolving (`financeAccessLoading`), access denial (`!canViewWorkspaceFinance`), and query loading (`loading && alerts.length === 0`), eliminating false perpetual skeletons for unauthorized members.
+9. **Resolve Modal Authoritative-Close Closure (P6-05A5):** Removed unconditional `onClose()` inside `FinanceAlertResolveModal.handleSubmit`, making `FinanceAlertCenterPage` the sole authority for post-mutation success closure. This ensures lock collisions (`already_pending`) and stale scope returns (`staleScope: true`) keep the modal open and suppress false success feedback.
 
 ---
 
@@ -78,8 +79,8 @@ stateDiagram-v2
 
 ## 5. Verification & Regression Suite
 
-All 50 dedicated P6-05A, P6-05A1, P6-05A2, P6-05A3 & P6-05A4 assertions and all full regression test suites passed:
-- `node scripts/test-p6-05a-finance-alert-center.mjs` (50 assertions, 100% pass)
+All 58 dedicated P6-05A, P6-05A1, P6-05A2, P6-05A3, P6-05A4 & P6-05A5 assertions and all full regression test suites passed:
+- `node scripts/test-p6-05a-finance-alert-center.mjs` (58 assertions, 100% pass)
 - `node scripts/test-p6-05-finance-alert-runtime.mjs` (40 assertions, 100% pass)
 - `node scripts/test-p6-04c-saved-views.mjs` (50 assertions, 100% pass)
 - `node scripts/test-p6-04-financial-explorer.mjs` (60 assertions, 100% pass)
