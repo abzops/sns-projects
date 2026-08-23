@@ -7,54 +7,20 @@
  * Invariants & Access Control:
  * - Scoped by (userId, workspaceId, authorizationScopeKey, enabled)
  * - Queries public.finance_alerts directly under RLS
+ * - Render-time current-scope invariant prevents old workspace alert exposure before effects run
  * - Synchronous state flush on scope shift prevents stale persona/workspace data leaks
  * - Generation token (activeFetchIdRef) eliminates async fetch race conditions
  * - Realtime Postgres Changes subscription (INSERT, UPDATE, DELETE) with deduplication
  * - Manual refresh fallback preserves rendered list during background sync & surfaces errors
  * - Zero direct client table DML; mutations delegate strictly to SECURITY INVOKER RPCs
- * - Synchronous ref-backed mutation mutex (pendingAlertActionsRef) prevents atomic race conditions
- * - In-flight scope check (activeScopeRef) prevents stale mutation responses leaking into new scopes
+ * - Unique lock token ownership (pendingAlertActionsRef) prevents stale mutation finally blocks from releasing newer locks
+ * - In-flight scope check (activeScopeRef) prevents stale mutation responses from leaking into new scopes
  * - Authoritative RPC return merging without fabricating client timestamps
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-
-/**
- * Pure synchronous lock manager for per-alert mutation mutual exclusion.
- */
-export function createAlertActionLockManager(initialActions = {}) {
-  const locks = { ...initialActions };
-
-  return {
-    acquire(alertId, action) {
-      if (!alertId || locks[alertId]) {
-        return false;
-      }
-      locks[alertId] = action;
-      return true;
-    },
-    release(alertId) {
-      if (!alertId) return;
-      delete locks[alertId];
-    },
-    isLocked(alertId) {
-      return Boolean(locks[alertId]);
-    },
-    getAction(alertId) {
-      return locks[alertId] || null;
-    },
-    clear() {
-      for (const key of Object.keys(locks)) {
-        delete locks[key];
-      }
-    },
-    snapshot() {
-      return { ...locks };
-    },
-  };
-}
 
 export function useFinanceAlerts(
   workspaceId,
@@ -76,7 +42,8 @@ export function useFinanceAlerts(
   // React state for rendering pending button / spinner states
   const [pendingAlertActions, setPendingAlertActions] = useState({});
 
-  // Authoritative synchronous runtime mutex ref to prevent synchronous race conditions
+  // Unique token counter and authoritative synchronous runtime mutex ref
+  const mutationTokenRef = useRef(0);
   const pendingAlertActionsRef = useRef({});
   const activeScopeRef = useRef(activeScopeKey);
   activeScopeRef.current = activeScopeKey;
@@ -84,28 +51,36 @@ export function useFinanceAlerts(
   const activeFetchIdRef = useRef(0);
   const channelRef = useRef(null);
 
-  // Synchronous atomic lock acquire helper
+  // Synchronous atomic lock acquire helper with opaque unique ownership token
   const acquireAlertActionLock = useCallback((alertId, action) => {
     if (!alertId || pendingAlertActionsRef.current[alertId]) {
-      return false;
+      return null;
     }
-    pendingAlertActionsRef.current[alertId] = action;
+    const token = ++mutationTokenRef.current;
+    pendingAlertActionsRef.current[alertId] = {
+      action,
+      scopeKey: activeScopeRef.current,
+      token,
+    };
     setPendingAlertActions((prev) => ({
       ...prev,
       [alertId]: action,
     }));
-    return true;
+    return token;
   }, []);
 
-  // Synchronous atomic lock release helper
-  const releaseAlertActionLock = useCallback((alertId) => {
-    if (!alertId) return;
-    delete pendingAlertActionsRef.current[alertId];
-    setPendingAlertActions((prev) => {
-      const next = { ...prev };
-      delete next[alertId];
-      return next;
-    });
+  // Synchronous atomic lock release helper verifying token ownership
+  const releaseAlertActionLock = useCallback((alertId, token) => {
+    if (!alertId || !token) return;
+    const currentLock = pendingAlertActionsRef.current[alertId];
+    if (currentLock && currentLock.token === token) {
+      delete pendingAlertActionsRef.current[alertId];
+      setPendingAlertActions((prev) => {
+        const next = { ...prev };
+        delete next[alertId];
+        return next;
+      });
+    }
   }, []);
 
   // 1. Synchronously isolate state when scope key shifts or when enabled becomes false
@@ -245,11 +220,14 @@ export function useFinanceAlerts(
   // 4. Acknowledge Alert Mutation (Calls public.acknowledge_finance_alert)
   const acknowledgeAlert = useCallback(
     async (alertId) => {
-      if (!alertId || !enabled) return { success: false };
+      if (!alertId || !enabled) {
+        return { success: false, reason: 'invalid_request' };
+      }
 
-      // Atomic synchronous lock acquisition
-      if (!acquireAlertActionLock(alertId, 'acknowledge')) {
-        return { success: false };
+      // Atomic synchronous lock acquisition with token ownership
+      const token = acquireAlertActionLock(alertId, 'acknowledge');
+      if (!token) {
+        return { success: false, reason: 'already_pending' };
       }
 
       const scopeAtStart = activeScopeRef.current;
@@ -264,7 +242,7 @@ export function useFinanceAlerts(
 
         // Stale mutation response safety: verify scope hasn't changed in flight
         if (activeScopeRef.current !== scopeAtStart) {
-          return { success: true, data, staleScope: true };
+          return { success: true, staleScope: true, data };
         }
 
         const returnedAlert = data?.alert || data || {};
@@ -296,7 +274,7 @@ export function useFinanceAlerts(
         }
         throw err;
       } finally {
-        releaseAlertActionLock(alertId);
+        releaseAlertActionLock(alertId, token);
       }
     },
     [acquireAlertActionLock, releaseAlertActionLock, fetchAlerts, enabled]
@@ -305,11 +283,14 @@ export function useFinanceAlerts(
   // 5. Resolve Alert Mutation (Calls public.resolve_finance_alert)
   const resolveAlert = useCallback(
     async (alertId, resolutionNote = null) => {
-      if (!alertId || !enabled) return { success: false };
+      if (!alertId || !enabled) {
+        return { success: false, reason: 'invalid_request' };
+      }
 
-      // Atomic synchronous lock acquisition
-      if (!acquireAlertActionLock(alertId, 'resolve')) {
-        return { success: false };
+      // Atomic synchronous lock acquisition with token ownership
+      const token = acquireAlertActionLock(alertId, 'resolve');
+      if (!token) {
+        return { success: false, reason: 'already_pending' };
       }
 
       const scopeAtStart = activeScopeRef.current;
@@ -325,7 +306,7 @@ export function useFinanceAlerts(
 
         // Stale mutation response safety: verify scope hasn't changed in flight
         if (activeScopeRef.current !== scopeAtStart) {
-          return { success: true, data, staleScope: true };
+          return { success: true, staleScope: true, data };
         }
 
         const returnedAlert = data?.alert || data || {};
@@ -357,20 +338,31 @@ export function useFinanceAlerts(
         }
         throw err;
       } finally {
-        releaseAlertActionLock(alertId);
+        releaseAlertActionLock(alertId, token);
       }
     },
     [acquireAlertActionLock, releaseAlertActionLock, fetchAlerts, enabled]
   );
 
+  // Render-time scope isolation: guarantee stale scope alerts are never exposed on render
+  const isCurrentScope = Boolean(
+    enabled && userId && workspaceId && activeCacheKey === activeScopeKey
+  );
+  const safeAlerts = isCurrentScope ? alerts : [];
+  const safePendingAlertActions = isCurrentScope ? pendingAlertActions : {};
+  const safeLoading = loading || !isCurrentScope;
+  const safeRefreshing = isCurrentScope ? refreshing : false;
+  const safeError = isCurrentScope ? error : null;
+  const safeInitialFetchCompleted = isCurrentScope ? initialFetchCompleted : false;
+
   return {
-    alerts,
-    loading,
-    refreshing,
-    error,
-    initialFetchCompleted,
-    pendingAlertActions,
-    getPendingAction: (alertId) => pendingAlertActions[alertId] || null,
+    alerts: safeAlerts,
+    loading: safeLoading,
+    refreshing: safeRefreshing,
+    error: safeError,
+    initialFetchCompleted: safeInitialFetchCompleted,
+    pendingAlertActions: safePendingAlertActions,
+    getPendingAction: (alertId) => safePendingAlertActions[alertId] || null,
     acknowledgeAlert,
     resolveAlert,
     refetch: () => fetchAlerts({ isRefresh: true }),

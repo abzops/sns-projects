@@ -35,7 +35,7 @@
 
 .actionBtn:hover {
   background: var(--panel);
-  border-color: var(--border-light);
+  border-color: var(--line-light);
 }
 
 .refreshBtn {
@@ -79,7 +79,7 @@
 .infoBanner {
   background: var(--panel-strong);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--brand);
+  border-left: 4px solid var(--accent);
   border-radius: var(--radius-xs);
   padding: 0.75rem 1rem;
   display: flex;
@@ -200,7 +200,7 @@
 }
 
 .filterSelect:focus {
-  border-color: var(--brand);
+  border-color: var(--accent);
 }
 
 .resetBtn {
@@ -323,7 +323,7 @@
 
 .tableAckBtn:hover {
   background: var(--panel-strong);
-  border-color: var(--border-light);
+  border-color: var(--line-light);
 }
 
 .tableResolveBtn {

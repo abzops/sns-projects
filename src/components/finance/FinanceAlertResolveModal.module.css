@@ -126,7 +126,7 @@
 
 .textarea:focus {
   outline: none;
-  border-color: var(--brand);
+  border-color: var(--accent);
 }
 
 .modalFooter {

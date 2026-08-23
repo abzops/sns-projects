@@ -255,8 +255,10 @@ export default function FinanceAlertCenterPage() {
   // Acknowledge Action Handler
   const handleAcknowledge = async (alertId) => {
     try {
-      await acknowledgeAlert(alertId);
-      showToast('Finance Alert acknowledged.', 'success');
+      const res = await acknowledgeAlert(alertId);
+      if (res?.success && !res?.staleScope) {
+        showToast('Finance Alert acknowledged.', 'success');
+      }
     } catch (err) {
       showToast(err.message || 'Failed to acknowledge alert', 'error');
     }
@@ -265,9 +267,11 @@ export default function FinanceAlertCenterPage() {
   // Resolve Action Handler
   const handleResolve = async (alertId, note) => {
     try {
-      await resolveAlert(alertId, note);
-      showToast('Finance Alert resolved successfully.', 'success');
-      setResolveTargetAlertId(null);
+      const res = await resolveAlert(alertId, note);
+      if (res?.success && !res?.staleScope) {
+        showToast('Finance Alert resolved successfully.', 'success');
+        setResolveTargetAlertId(null);
+      }
     } catch (err) {
       showToast(err.message || 'Failed to resolve alert', 'error');
       throw err;
@@ -375,7 +379,7 @@ export default function FinanceAlertCenterPage() {
 
       {/* Operational Information Banner */}
       <div className={styles.infoBanner} role="status">
-        <Info size={18} color="var(--brand)" style={{ flexShrink: 0 }} />
+        <Info size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
         <span>
           <strong>Operational Governance:</strong> Finance alerts provide financial risk visibility and do not block operational task or process execution.
         </span>
@@ -427,7 +431,7 @@ export default function FinanceAlertCenterPage() {
         <div className={styles.kpiCard}>
           <div className={styles.kpiLabelRow}>
             <span className={styles.kpiLabel}>Active Incidents</span>
-            <ShieldAlert size={16} color="var(--brand)" />
+            <ShieldAlert size={16} color="var(--accent)" />
           </div>
           <div className={styles.kpiValue}>{kpiStats.active}</div>
           <span className={styles.kpiSubtext}>Open or Acknowledged</span>

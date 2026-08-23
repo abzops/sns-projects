@@ -201,7 +201,7 @@
 
 .ackBtn:hover:not(:disabled) {
   background: var(--panel);
-  border-color: var(--border-light);
+  border-color: var(--line-light);
 }
 
 .resolveBtn {

@@ -8,7 +8,7 @@
 
 ## 1. Overview & Objectives
 
-P6-05A, P6-05A1, and P6-05A2 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
+P6-05A, P6-05A1, P6-05A2, and P6-05A3 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
 
 The interface serves as the central command hub for financial risk incidents, supporting:
 1. **Persistent Incident Tracking:** Realtime visualization of active (OPEN, ACKNOWLEDGED) and historical (RESOLVED) budget threshold breaches.
@@ -16,7 +16,8 @@ The interface serves as the central command hub for financial risk incidents, su
 3. **Controlled Incident Resolution:** Enables Budget Managers (`canManageBudgets`) to resolve incidents only after underlying financial risk recovers to GREEN or YELLOW.
 4. **Deep-Linking & Notification Convergence:** Direct navigation from high-priority executive alerts (`?alert=<uuid>`) into live modal snapshots that update reactively.
 5. **Non-Blocking Governance:** Strict adherence to Decisions 9 and 64 — alerts provide visibility and audit control without blocking operational task or workflow execution.
-6. **Atomic Mutation Mutex & Scope Isolation (P6-05A2):** Synchronous ref mutex (`pendingAlertActionsRef`) eliminates double-submit race conditions per alert before React rerenders, and in-flight scope token validation (`activeScopeRef`) discards stale responses upon workspace navigation.
+6. **Atomic Mutation Mutex & Scope Isolation (P6-05A2 / P6-05A3):** Synchronous ref mutex (`pendingAlertActionsRef`) with unique lock-token ownership eliminates double-submit race conditions per alert before React rerenders, and in-flight scope token validation (`activeScopeRef`) discards stale responses upon workspace navigation.
+7. **Render-Time Scope Invariant & Token Parity (P6-05A3):** Render-time current-scope invariant prevents old workspace alert exposure before `useEffect` executes, and 100% canonical CSS design tokens (`--accent`, `--line-light`) eliminate undefined variable fallbacks.
 
 ---
 
@@ -76,8 +77,8 @@ stateDiagram-v2
 
 ## 5. Verification & Regression Suite
 
-All 33 dedicated P6-05A, P6-05A1 & P6-05A2 assertions and all full regression test suites passed:
-- `node scripts/test-p6-05a-finance-alert-center.mjs` (33 assertions, 100% pass)
+All 39 dedicated P6-05A, P6-05A1, P6-05A2 & P6-05A3 assertions and all full regression test suites passed:
+- `node scripts/test-p6-05a-finance-alert-center.mjs` (39 assertions, 100% pass)
 - `node scripts/test-p6-05-finance-alert-runtime.mjs` (40 assertions, 100% pass)
 - `node scripts/test-p6-04c-saved-views.mjs` (50 assertions, 100% pass)
 - `node scripts/test-p6-04-financial-explorer.mjs` (60 assertions, 100% pass)
