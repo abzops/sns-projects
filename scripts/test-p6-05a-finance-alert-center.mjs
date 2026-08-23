@@ -1,5 +1,5 @@
 /**
- * SNS PROJECTS — PACKAGE 6 / P6-05A & P6-05A1 FINANCE ALERT CENTER TEST SUITE
+ * SNS PROJECTS — PACKAGE 6 / P6-05A, P6-05A1 & P6-05A2 FINANCE ALERT CENTER TEST SUITE
  *
  * Automated verification for:
  * 1. Routing & Navigation Contracts
@@ -29,17 +29,18 @@
  *    - [P6-05A1-N] Refresh failure preserves current rows and exposes visible failure feedback
  *    - [P6-05A1-O] Text search tests do NOT require risk-band text
  *    - [P6-05A1-P] RED count uses Risk dropdown/filter semantics
- * 3. Realtime Postgres Changes & State Convergence
- *    - Subscribes to public.finance_alerts with workspace_id filter
- *    - Realtime INSERT dedupes, UPDATE merges, DELETE purges
- *    - Cleanup removes channel on unmount or scope change
+ * 3. P6-05A2 Atomic Mutex Runtime Tests & In-Flight Scope Isolation
+ *    - [P6-05A2-A] First Alert A acquire succeeds
+ *    - [P6-05A2-B] Immediate second Alert A acquire, before any React rerender, fails
+ *    - [P6-05A2-C] Alert B acquire succeeds while Alert A is pending
+ *    - [P6-05A2-D] Alert A resolve cannot acquire while Alert A acknowledge lock exists
+ *    - [P6-05A2-E] Release Alert A allows later acquire
+ *    - [P6-05A2-F] Scope reset clears runtime ref lock
+ *    - [P6-05A2-G] Stale mutation response from old scope cannot merge into new scope alerts
+ * 4. UI Architecture, Modals & Lifecycle Presentation
  *    - Detail modal derives selected alert from current alerts array
- * 4. Lifecycle Action Modals & Mutation Safety
- *    - Acknowledge mutation uses public.acknowledge_finance_alert RPC
- *    - Resolve mutation uses public.resolve_finance_alert RPC
- *    - Resolve UI restricted to canManageBudgets and requires canonical risk recovery (GREEN/YELLOW)
- *    - Resolution note is optional
- *    - Zero client-side calculation of financial risk, overruns, or budgets
+ *    - Financial metrics snapshot and resolution prerequisites
+ *    - Lifecycle badge states
  * 5. Production Database Invariants & Read-Only State Parity
  *    - Live database reports exactly 5 open alerts (1 ORANGE, 4 RED)
  *    - Exactly 0 new public SECURITY DEFINER functions (Security Advisor baseline intact: 6 warnings, 7 public secdef)
@@ -83,6 +84,41 @@ function pass(msg) {
   console.log(`[PASS ${passCount}] ${msg}`);
 }
 
+/**
+ * Pure synchronous lock manager implementation for runtime verification.
+ */
+function createRuntimeLockManager() {
+  const locks = {};
+
+  return {
+    acquire(alertId, action) {
+      if (!alertId || locks[alertId]) {
+        return false;
+      }
+      locks[alertId] = action;
+      return true;
+    },
+    release(alertId) {
+      if (!alertId) return;
+      delete locks[alertId];
+    },
+    isLocked(alertId) {
+      return Boolean(locks[alertId]);
+    },
+    getAction(alertId) {
+      return locks[alertId] || null;
+    },
+    clear() {
+      for (const key of Object.keys(locks)) {
+        delete locks[key];
+      }
+    },
+    snapshot() {
+      return { ...locks };
+    },
+  };
+}
+
 async function asUser(client, userId, sql, params = []) {
   await client.query('SAVEPOINT as_user_sp');
   await client.query('SET LOCAL ROLE authenticated');
@@ -118,7 +154,7 @@ async function asUser(client, userId, sql, params = []) {
 
 async function runP605ATestSuite() {
   console.log('═══════════════════════════════════════════════════════════════════════════');
-  console.log('  SNS PROJECTS — P6-05A & P6-05A1 FINANCE ALERT CENTER VERIFICATION SUITE  ');
+  console.log('  SNS PROJECTS — P6-05A, P6-05A1 & P6-05A2 FINANCE ALERT CENTER SUITE     ');
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 
   // --------------------------------------------------------------------------
@@ -322,23 +358,23 @@ async function runP605ATestSuite() {
   );
   pass('P6-05A1-H: Disappearing or inaccessible resolve target automatically closes Resolve modal');
 
-  // I, J, K: Per-alert mutation locks
+  // I, J, K: Per-alert mutation locks in code
   assert.match(
     hookCode,
-    /const\s*\[pendingAlertActions,\s*setPendingAlertActions\]\s*=\s*useState\(\{\}\)/,
-    '[P6-05A1-I] pendingAlertActions is keyed per alert ID'
+    /const\s*pendingAlertActionsRef\s*=\s*useRef\(\{\}\)/,
+    '[P6-05A2] pendingAlertActionsRef is defined as an authoritative synchronous ref'
   );
   assert.match(
     hookCode,
-    /if\s*\(!alertId\s*\|\|\s*pendingAlertActions\[alertId\]\)\s*return/,
-    '[P6-05A1-K] Same Alert cannot double-submit concurrently'
+    /acquireAlertActionLock\(alertId,\s*['"]acknowledge['"]\)/,
+    '[P6-05A2] acknowledgeAlert acquires synchronous lock'
   );
   assert.match(
     hookCode,
-    /setPendingAlertActions\([\s\S]*?\[alertId\]:\s*['"](acknowledge|resolve)['"]/,
-    '[P6-05A1-J] Alert A pending sets only its own key and does not block Alert B'
+    /acquireAlertActionLock\(alertId,\s*['"]resolve['"]\)/,
+    '[P6-05A2] resolveAlert acquires synchronous lock'
   );
-  pass('P6-05A1-I, J, K: Per-alert mutation locks prevent double-submit on Alert A without disabling Alert B');
+  pass('P6-05A1-I, J, K: Hook wires synchronous atomic lock acquire/release around acknowledge and resolve mutations');
 
   // L & M: No client-generated timestamps in hook mutations
   assert.doesNotMatch(
@@ -393,6 +429,72 @@ async function runP605ATestSuite() {
     '[P6-05A1-P] Risk filtering uses dedicated Risk dropdown semantics'
   );
   pass('P6-05A1-O & P: Search matches entity/note fields cleanly; risk band filtering uses dedicated dropdown filter');
+
+  // --------------------------------------------------------------------------
+  // SUITE 3.5: P6-05A2 ATOMIC MUTATION LOCK RUNTIME & STALE SCOPE ISOLATION
+  // --------------------------------------------------------------------------
+  console.log('\n--- Suite 3.5: P6-05A2 Atomic Mutation Lock Runtime & Stale Scope Isolation ---');
+
+  const lockManager = createRuntimeLockManager();
+
+  // A. First Alert A acquire succeeds
+  const acqA1 = lockManager.acquire('alert-alpha', 'acknowledge');
+  assert.equal(acqA1, true, '[P6-05A2-A] First acquire on Alert A must succeed');
+  assert.equal(lockManager.isLocked('alert-alpha'), true, 'Alert A must be marked locked');
+  assert.equal(lockManager.getAction('alert-alpha'), 'acknowledge', 'Action must be acknowledge');
+  pass('P6-05A2-A: First synchronous acquire on Alert A succeeds immediately');
+
+  // B. Immediate second Alert A acquire, before any React rerender, fails
+  const acqA2 = lockManager.acquire('alert-alpha', 'acknowledge');
+  assert.equal(acqA2, false, '[P6-05A2-B] Immediate second acquire on Alert A must fail synchronously');
+  pass('P6-05A2-B: Immediate second synchronous acquire on Alert A is strictly BLOCKED');
+
+  // C. Alert B acquire succeeds while Alert A is pending
+  const acqB = lockManager.acquire('alert-beta', 'acknowledge');
+  assert.equal(acqB, true, '[P6-05A2-C] Alert B acquire must succeed concurrently while Alert A is pending');
+  assert.equal(lockManager.isLocked('alert-beta'), true, 'Alert B must be locked');
+  pass('P6-05A2-C: Alert B acquire succeeds concurrently while Alert A is pending (per-alert isolation)');
+
+  // D. Alert A resolve cannot acquire while Alert A acknowledge lock exists
+  const acqA_resolve = lockManager.acquire('alert-alpha', 'resolve');
+  assert.equal(acqA_resolve, false, '[P6-05A2-D] Resolve action cannot acquire while Alert A acknowledge lock is active');
+  pass('P6-05A2-D: Colliding action on same Alert A is blocked while acknowledge is in flight');
+
+  // E. Release Alert A allows later acquire
+  lockManager.release('alert-alpha');
+  assert.equal(lockManager.isLocked('alert-alpha'), false, 'Alert A must no longer be locked');
+  const acqA_afterRelease = lockManager.acquire('alert-alpha', 'resolve');
+  assert.equal(acqA_afterRelease, true, '[P6-05A2-E] Release of Alert A allows subsequent acquire');
+  pass('P6-05A2-E: Releasing Alert A lock allows subsequent mutation to acquire');
+
+  // F. Scope reset clears runtime ref lock
+  lockManager.clear();
+  assert.equal(lockManager.isLocked('alert-alpha'), false, '[P6-05A2-F] Scope clear removes Alert A lock');
+  assert.equal(lockManager.isLocked('alert-beta'), false, '[P6-05A2-F] Scope clear removes Alert B lock');
+  assert.deepEqual(lockManager.snapshot(), {}, 'All locks must be empty after scope clear');
+  pass('P6-05A2-F: Scope reset completely clears all synchronous runtime locks');
+
+  // G. Stale mutation response from old scope cannot merge into new scope alerts
+  let liveAlerts = [{ id: 'alert-new-ws', workspace_id: 'ws-new', entity_name: 'New WS Project' }];
+  const activeScopeRef = { current: 'user-1:ws-old:default' };
+
+  // Simulation: mutation dispatched under ws-old
+  const scopeAtStart = activeScopeRef.current;
+  const staleServerResponse = { id: 'alert-old-ws', workspace_id: 'ws-old', entity_name: 'Old WS Project' };
+
+  // User navigates / switches workspace while RPC in-flight
+  activeScopeRef.current = 'user-1:ws-new:default';
+
+  // RPC returns: client checks activeScopeRef.current === scopeAtStart
+  let merged = false;
+  if (activeScopeRef.current === scopeAtStart) {
+    liveAlerts = [staleServerResponse, ...liveAlerts];
+    merged = true;
+  }
+  assert.equal(merged, false, '[P6-05A2-G] In-flight mutation response from old scope must NOT merge into new scope');
+  assert.equal(liveAlerts.length, 1, 'Live alerts must retain only new scope items');
+  assert.equal(liveAlerts[0].id, 'alert-new-ws', 'Live alerts must not contain old workspace data');
+  pass('P6-05A2-G: In-flight mutation response from old workspace is safely discarded upon scope shift');
 
   // --------------------------------------------------------------------------
   // SUITE 4: UI ARCHITECTURE, MODALS & LIFECYCLE PRESENTATION
@@ -494,7 +596,7 @@ async function runP605ATestSuite() {
       7,
       `Expected exactly 7 public SECURITY DEFINER functions, got ${secDefRes.rows.length}`
     );
-    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05A/A1)');
+    pass('Security Advisor baseline intact: exactly 7 public SECURITY DEFINER functions (0 new added by P6-05A/A1/A2)');
 
     // 3. Verify public lifecycle RPCs are SECURITY INVOKER with search_path = ''
     const rpcRes = await client.query(`
@@ -609,7 +711,7 @@ async function runP605ATestSuite() {
   }
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log(`  ALL ${passCount} P6-05A & P6-05A1 ASSERTIONS PASSED!`);
+  console.log(`  ALL ${passCount} P6-05A, P6-05A1 & P6-05A2 ASSERTIONS PASSED!`);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 

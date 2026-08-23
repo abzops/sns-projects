@@ -8,7 +8,7 @@
 
 ## 1. Overview & Objectives
 
-P6-05A and P6-05A1 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
+P6-05A, P6-05A1, and P6-05A2 deliver the production **Finance Alert Center** frontend at `/workspace/:workspaceId/finance/alerts`. It provides persistent, realtime-synchronized visibility and operational governance for budget risk breaches across workspace projects, phases, and task lists.
 
 The interface serves as the central command hub for financial risk incidents, supporting:
 1. **Persistent Incident Tracking:** Realtime visualization of active (OPEN, ACKNOWLEDGED) and historical (RESOLVED) budget threshold breaches.
@@ -16,6 +16,7 @@ The interface serves as the central command hub for financial risk incidents, su
 3. **Controlled Incident Resolution:** Enables Budget Managers (`canManageBudgets`) to resolve incidents only after underlying financial risk recovers to GREEN or YELLOW.
 4. **Deep-Linking & Notification Convergence:** Direct navigation from high-priority executive alerts (`?alert=<uuid>`) into live modal snapshots that update reactively.
 5. **Non-Blocking Governance:** Strict adherence to Decisions 9 and 64 — alerts provide visibility and audit control without blocking operational task or workflow execution.
+6. **Atomic Mutation Mutex & Scope Isolation (P6-05A2):** Synchronous ref mutex (`pendingAlertActionsRef`) eliminates double-submit race conditions per alert before React rerenders, and in-flight scope token validation (`activeScopeRef`) discards stale responses upon workspace navigation.
 
 ---
 
@@ -27,7 +28,7 @@ src/
 │   ├── FinanceAlertCenterPage.jsx       # Main Alert Center dashboard & table/card views
 │   └── FinanceAlertCenterPage.module.css # 100% canonical design system tokens
 ├── hooks/
-│   └── useFinanceAlerts.js              # Realtime data hook, RLS queries, RPC mutations
+│   └── useFinanceAlerts.js              # Realtime data hook, atomic locks, RLS queries, RPC mutations
 └── components/
     ├── NotificationBell.jsx             # Deep link routing to Alert Center for finance alerts
     └── finance/
@@ -58,15 +59,14 @@ src/
 stateDiagram-v2
     [*] --> OPEN: Initial Threshold Breach (ORANGE / RED)
     OPEN --> ACKNOWLEDGED: Acknowledge (Finance Operator / Manager)
-    ACKNOWLEDGED --> RESOLVED: Resolve (Budget Manager, only if risk GREEN / YELLOW)
-    RESOLVED --> [*]: Historical Archive
+    ACKNOWLEDGED --> RESOLVED: Resolve (Budget Manager only, GREEN/YELLOW risk)
+    RESOLVED --> [*]: Terminal State
 ```
 
-### Invariants & Hardening (P6-05A1):
-- **No Direct Table Mutations:** Client browser never issues direct `UPDATE` or `DELETE` on `public.finance_alerts`.
-- **RPC Delegation:** Mutations invoke `public.acknowledge_finance_alert` and `public.resolve_finance_alert`.
-- **Per-Alert Mutation Locks:** `pendingAlertActions[alertId]` prevents duplicate submissions on Alert A without blocking actions on Alert B.
-- **Authoritative Timestamp Merge:** Backend RPC returns authoritatively populate `acknowledged_at` and `resolved_at` without client timestamp fabrication.
+### Runtime Invariants & Resilience Guarantees
+- **Atomic Per-Alert Mutation Locks (P6-05A2):** `pendingAlertActionsRef` provides an authoritative synchronous runtime mutex preventing double-submit races before React rerenders, while maintaining per-alert concurrency (Alert A pending does not block Alert B).
+- **In-Flight Scope Isolation (P6-05A2):** `activeScopeRef` captures the active workspace/user scope key when mutations begin; if scope shifts while the RPC is in flight, the returned snapshot is safely discarded from the new scope's state.
+- **Authoritative Server Timestamps:** RPC return values merge authoritative backend timestamps (`acknowledged_at`, `resolved_at`) without client-side fabrication (`new Date().toISOString()`).
 - **Live Resolve State Tracking by ID:** `resolveTargetAlertId` dynamically derives current alert state from the live `alerts` array, updating immediately upon Realtime changes and auto-closing if the alert becomes inaccessible.
 - **Resolve Modal Defense-in-Depth:** In-modal validation guards `canResolveCurrent` against active risk re-breaches (ORANGE/RED) or unacknowledged transitions.
 - **Zero-Alert Deep Link Closure:** Invalid `?alert=<uuid>` parameters are safely stripped with user feedback after initial fetch completes, regardless of whether 0 or multiple alerts exist.
@@ -76,8 +76,8 @@ stateDiagram-v2
 
 ## 5. Verification & Regression Suite
 
-All 26 dedicated P6-05A & P6-05A1 assertions and all full regression test suites passed:
-- `node scripts/test-p6-05a-finance-alert-center.mjs` (26 assertions, 100% pass)
+All 33 dedicated P6-05A, P6-05A1 & P6-05A2 assertions and all full regression test suites passed:
+- `node scripts/test-p6-05a-finance-alert-center.mjs` (33 assertions, 100% pass)
 - `node scripts/test-p6-05-finance-alert-runtime.mjs` (40 assertions, 100% pass)
 - `node scripts/test-p6-04c-saved-views.mjs` (50 assertions, 100% pass)
 - `node scripts/test-p6-04-financial-explorer.mjs` (60 assertions, 100% pass)

@@ -12,13 +12,49 @@
  * - Realtime Postgres Changes subscription (INSERT, UPDATE, DELETE) with deduplication
  * - Manual refresh fallback preserves rendered list during background sync & surfaces errors
  * - Zero direct client table DML; mutations delegate strictly to SECURITY INVOKER RPCs
- * - Per-alert mutation pending tracking (keyed by alertId) prevents duplicate submissions
+ * - Synchronous ref-backed mutation mutex (pendingAlertActionsRef) prevents atomic race conditions
+ * - In-flight scope check (activeScopeRef) prevents stale mutation responses leaking into new scopes
  * - Authoritative RPC return merging without fabricating client timestamps
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+
+/**
+ * Pure synchronous lock manager for per-alert mutation mutual exclusion.
+ */
+export function createAlertActionLockManager(initialActions = {}) {
+  const locks = { ...initialActions };
+
+  return {
+    acquire(alertId, action) {
+      if (!alertId || locks[alertId]) {
+        return false;
+      }
+      locks[alertId] = action;
+      return true;
+    },
+    release(alertId) {
+      if (!alertId) return;
+      delete locks[alertId];
+    },
+    isLocked(alertId) {
+      return Boolean(locks[alertId]);
+    },
+    getAction(alertId) {
+      return locks[alertId] || null;
+    },
+    clear() {
+      for (const key of Object.keys(locks)) {
+        delete locks[key];
+      }
+    },
+    snapshot() {
+      return { ...locks };
+    },
+  };
+}
 
 export function useFinanceAlerts(
   workspaceId,
@@ -37,20 +73,51 @@ export function useFinanceAlerts(
   const [error, setError] = useState(null);
   const [initialFetchCompleted, setInitialFetchCompleted] = useState(false);
 
-  // Track pending mutations per alert: { [alertId]: 'acknowledge' | 'resolve' }
+  // React state for rendering pending button / spinner states
   const [pendingAlertActions, setPendingAlertActions] = useState({});
+
+  // Authoritative synchronous runtime mutex ref to prevent synchronous race conditions
+  const pendingAlertActionsRef = useRef({});
+  const activeScopeRef = useRef(activeScopeKey);
+  activeScopeRef.current = activeScopeKey;
 
   const activeFetchIdRef = useRef(0);
   const channelRef = useRef(null);
+
+  // Synchronous atomic lock acquire helper
+  const acquireAlertActionLock = useCallback((alertId, action) => {
+    if (!alertId || pendingAlertActionsRef.current[alertId]) {
+      return false;
+    }
+    pendingAlertActionsRef.current[alertId] = action;
+    setPendingAlertActions((prev) => ({
+      ...prev,
+      [alertId]: action,
+    }));
+    return true;
+  }, []);
+
+  // Synchronous atomic lock release helper
+  const releaseAlertActionLock = useCallback((alertId) => {
+    if (!alertId) return;
+    delete pendingAlertActionsRef.current[alertId];
+    setPendingAlertActions((prev) => {
+      const next = { ...prev };
+      delete next[alertId];
+      return next;
+    });
+  }, []);
 
   // 1. Synchronously isolate state when scope key shifts or when enabled becomes false
   useEffect(() => {
     if (activeScopeKey !== activeCacheKey || !enabled) {
       activeFetchIdRef.current++;
       setActiveCacheKey(activeScopeKey);
+      activeScopeRef.current = activeScopeKey;
       setAlerts([]);
       setError(null);
       setRefreshing(false);
+      pendingAlertActionsRef.current = {};
       setPendingAlertActions({});
       setInitialFetchCompleted(false);
       setLoading(Boolean(enabled && userId && workspaceId));
@@ -178,9 +245,14 @@ export function useFinanceAlerts(
   // 4. Acknowledge Alert Mutation (Calls public.acknowledge_finance_alert)
   const acknowledgeAlert = useCallback(
     async (alertId) => {
-      if (!alertId || pendingAlertActions[alertId]) return { success: false };
+      if (!alertId || !enabled) return { success: false };
 
-      setPendingAlertActions((prev) => ({ ...prev, [alertId]: 'acknowledge' }));
+      // Atomic synchronous lock acquisition
+      if (!acquireAlertActionLock(alertId, 'acknowledge')) {
+        return { success: false };
+      }
+
+      const scopeAtStart = activeScopeRef.current;
       try {
         const { data, error: rpcError } = await supabase.rpc('acknowledge_finance_alert', {
           p_alert_id: alertId,
@@ -188,6 +260,11 @@ export function useFinanceAlerts(
 
         if (rpcError) {
           throw rpcError;
+        }
+
+        // Stale mutation response safety: verify scope hasn't changed in flight
+        if (activeScopeRef.current !== scopeAtStart) {
+          return { success: true, data, staleScope: true };
         }
 
         const returnedAlert = data?.alert || data || {};
@@ -214,25 +291,28 @@ export function useFinanceAlerts(
         return { success: true, data };
       } catch (err) {
         console.error('[useFinanceAlerts] acknowledge_finance_alert failed:', err);
-        fetchAlerts({ isRefresh: true });
+        if (activeScopeRef.current === scopeAtStart) {
+          fetchAlerts({ isRefresh: true });
+        }
         throw err;
       } finally {
-        setPendingAlertActions((prev) => {
-          const next = { ...prev };
-          delete next[alertId];
-          return next;
-        });
+        releaseAlertActionLock(alertId);
       }
     },
-    [pendingAlertActions, fetchAlerts]
+    [acquireAlertActionLock, releaseAlertActionLock, fetchAlerts, enabled]
   );
 
   // 5. Resolve Alert Mutation (Calls public.resolve_finance_alert)
   const resolveAlert = useCallback(
     async (alertId, resolutionNote = null) => {
-      if (!alertId || pendingAlertActions[alertId]) return { success: false };
+      if (!alertId || !enabled) return { success: false };
 
-      setPendingAlertActions((prev) => ({ ...prev, [alertId]: 'resolve' }));
+      // Atomic synchronous lock acquisition
+      if (!acquireAlertActionLock(alertId, 'resolve')) {
+        return { success: false };
+      }
+
+      const scopeAtStart = activeScopeRef.current;
       try {
         const { data, error: rpcError } = await supabase.rpc('resolve_finance_alert', {
           p_alert_id: alertId,
@@ -241,6 +321,11 @@ export function useFinanceAlerts(
 
         if (rpcError) {
           throw rpcError;
+        }
+
+        // Stale mutation response safety: verify scope hasn't changed in flight
+        if (activeScopeRef.current !== scopeAtStart) {
+          return { success: true, data, staleScope: true };
         }
 
         const returnedAlert = data?.alert || data || {};
@@ -267,17 +352,15 @@ export function useFinanceAlerts(
         return { success: true, data };
       } catch (err) {
         console.error('[useFinanceAlerts] resolve_finance_alert failed:', err);
-        fetchAlerts({ isRefresh: true });
+        if (activeScopeRef.current === scopeAtStart) {
+          fetchAlerts({ isRefresh: true });
+        }
         throw err;
       } finally {
-        setPendingAlertActions((prev) => {
-          const next = { ...prev };
-          delete next[alertId];
-          return next;
-        });
+        releaseAlertActionLock(alertId);
       }
     },
-    [pendingAlertActions, fetchAlerts]
+    [acquireAlertActionLock, releaseAlertActionLock, fetchAlerts, enabled]
   );
 
   return {
