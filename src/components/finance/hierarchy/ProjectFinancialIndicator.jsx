@@ -70,7 +70,8 @@ export default function ProjectFinancialIndicator({ summary, loading = false }) 
           aria-label="Project financial utilization"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={utilizationPct}
+          aria-valuenow={clampedWidth}
+          aria-valuetext={`${utilizationPct}% financial utilization`}
         >
           <div
             className={`${styles.progressFill} ${styles[`risk_${riskBand.toLowerCase()}`] || styles.risk_green}`}

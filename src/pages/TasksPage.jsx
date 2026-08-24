@@ -313,7 +313,7 @@ export default function TasksPage() {
 
   // P7-01 / P7-02A: Authoritative Project Financial Hierarchy Read Model
   const {
-    data: financialHierarchy,
+    financialHierarchy,
     loading: financialLoading,
     error: financialError,
   } = useProjectFinancialHierarchy(

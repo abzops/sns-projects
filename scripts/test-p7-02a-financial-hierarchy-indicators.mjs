@@ -84,7 +84,9 @@ function parseEnv(content) {
     }, {});
 }
 
+let passedCount = 0;
 function pass(assertionId, message) {
+  passedCount++;
   console.log(`[PASS ${String(assertionId).padStart(2, '0')}] ${message}`);
 }
 
@@ -169,31 +171,44 @@ async function main() {
   );
   pass(3, 'authorizationScopeKey passed directly to hook (authoritative scope isolation)');
 
-  // Assertion 04: Zero local state duplication of financialHierarchy
+  // Assertion 04: Exact hook return destructuring contract (rejects data: financialHierarchy)
+  assert.match(
+    tasksPageCode,
+    /const\s*\{\s*financialHierarchy\s*,\s*loading:\s*financialLoading\s*,\s*error:\s*financialError\s*,?\s*\}\s*=\s*useProjectFinancialHierarchy/,
+    'TasksPage must destructure financialHierarchy directly from useProjectFinancialHierarchy'
+  );
+  assert.doesNotMatch(
+    tasksPageCode,
+    /data:\s*financialHierarchy/,
+    'TasksPage must NEVER alias non-existent data property from hook return'
+  );
+  pass(4, 'TasksPage consumes exact frozen hook return contract (financialHierarchy, rejecting data alias)');
+
+  // Assertion 05: Zero local state duplication of financialHierarchy
   assert.doesNotMatch(
     tasksPageCode,
     /setFinancialHierarchy|setProjectFinance|setFinancialData/i,
     'TasksPage must not create secondary local state holding financial hierarchy data'
   );
-  pass(4, 'Zero local state duplication of financial hierarchy data in TasksPage.jsx');
+  pass(5, 'Zero local state duplication of financial hierarchy data in TasksPage.jsx');
 
-  // Assertion 05: Zero direct table queries on budgets, expenses, or alerts in TasksPage or HierarchyTaskTree
+  // Assertion 06: Zero direct table queries on budgets, expenses, or alerts in TasksPage or HierarchyTaskTree
   assert.doesNotMatch(tasksPageCode, /\.from\(['"](budgets|expense_transactions|expense_items|finance_alerts)['"]\)/, 'Zero direct client table DML/SELECT on finance tables in TasksPage');
   assert.doesNotMatch(hierarchyTreeCode, /\.from\(['"](budgets|expense_transactions|expense_items|finance_alerts)['"]\)/, 'Zero direct client table DML/SELECT on finance tables in HierarchyTaskTree');
-  pass(5, 'Zero direct client queries on budgets/expenses/alerts in hierarchy UI (P7-01 read model is exclusive)');
+  pass(6, 'Zero direct client queries on budgets/expenses/alerts in hierarchy UI (P7-01 read model is exclusive)');
 
-  // Assertion 06: Zero N+1 financial summary RPCs
+  // Assertion 07: Zero N+1 financial summary RPCs
   assert.doesNotMatch(tasksPageCode, /get_phase_financial_summary|get_task_list_financial_summary/i, 'No N+1 financial RPC calls in TasksPage');
   assert.doesNotMatch(hierarchyTreeCode, /get_phase_financial_summary|get_task_list_financial_summary/i, 'No N+1 financial RPC calls in HierarchyTaskTree');
-  pass(6, 'Zero N+1 financial summary RPCs in hierarchy UI');
+  pass(7, 'Zero N+1 financial summary RPCs in hierarchy UI');
 
-  // Assertion 07: Reusable components in src/components/finance/hierarchy/
+  // Assertion 08: Reusable components in src/components/finance/hierarchy/
   assert.ok(ProjectFinancialIndicator, 'ProjectFinancialIndicator exported');
   assert.ok(ContainerFinancialIndicator, 'ContainerFinancialIndicator exported');
   assert.ok(TaskSpendIndicator, 'TaskSpendIndicator exported');
-  pass(7, 'Reusable hierarchy financial components reside in src/components/finance/hierarchy/');
+  pass(8, 'Reusable hierarchy financial components reside in src/components/finance/hierarchy/');
 
-  // Assertion 08: formatCompactCurrency INR formatting
+  // Assertion 09: formatCompactCurrency INR formatting
   assert.equal(formatCompactCurrency(0), '₹0', '0 formatted as ₹0');
   assert.equal(formatCompactCurrency(850), '₹850', '850 formatted as ₹850');
   assert.equal(formatCompactCurrency(12400), '₹12.4K', '12400 formatted as ₹12.4K');
@@ -204,32 +219,32 @@ async function main() {
   assert.equal(formatCompactCurrency(1840000), '₹18.4L', '1840000 formatted as ₹18.4L');
   assert.equal(formatCompactCurrency(12000000), '₹1.2Cr', '12000000 formatted as ₹1.2Cr');
   assert.equal(formatCompactCurrency(null), '₹0', 'null formatted as ₹0');
-  pass(8, 'formatCompactCurrency formats INR compact amounts canonically (₹850, ₹12.4K, ₹1.25L, ₹18.4L, ₹1.2Cr)');
+  pass(9, 'formatCompactCurrency formats INR compact amounts canonically (₹850, ₹12.4K, ₹1.25L, ₹18.4L, ₹1.2Cr)');
 
-  // Assertion 09: Kanban and List views remain 100% untouched by financial indicators
+  // Assertion 10: Kanban and List views remain 100% untouched by financial indicators
   assert.match(
     tasksPageCode,
     /view\s*===\s*['"]hierarchy['"]\s*&&\s*financialHierarchy\?\.project_summary/,
     'Project financial indicator only renders in hierarchy view'
   );
-  pass(9, 'Kanban and List views remain 100% untouched by financial indicators (Scope constraint)');
+  pass(10, 'Kanban and List views remain 100% untouched by financial indicators (Scope constraint)');
 
   // ── Suite 2: Project Financial Indicator Component ─────────────────────────
   console.log('\n--- Suite 2: Project Financial Indicator Component ---');
 
   const stripHtml = (str) => (str || '').replace(/<!--[\s\S]*?-->/g, '');
 
-  // Assertion 10: Renders null when summary is null (unauthorized/fail-closed)
+  // Assertion 11: Renders null when summary is null (unauthorized/fail-closed)
   const emptyProjectHtml = renderToString(React.createElement(ProjectFinancialIndicator, { summary: null }));
   assert.equal(emptyProjectHtml, '', 'summary=null renders empty (zero fake values)');
-  pass(10, 'ProjectFinancialIndicator renders null when summary is null (zero fake ₹0 / 0% / GREEN)');
+  pass(11, 'ProjectFinancialIndicator renders null when summary is null (zero fake ₹0 / 0% / GREEN)');
 
-  // Assertion 11: Renders skeleton during initial load when loading=true and !summary
+  // Assertion 12: Renders skeleton during initial load when loading=true and !summary
   const skeletonHtml = renderToString(React.createElement(ProjectFinancialIndicator, { summary: null, loading: true }));
   assert.ok(skeletonHtml.includes('skeletonWrap'), 'Skeleton element rendered during initial loading');
-  pass(11, 'ProjectFinancialIndicator renders skeleton placeholder during initial loading');
+  pass(12, 'ProjectFinancialIndicator renders skeleton placeholder during initial loading');
 
-  // Assertion 12: Renders budgeted project summary correctly
+  // Assertion 13: Renders budgeted project summary correctly
   const mockProjectSummary = normalizeFinancialSummary({
     base_budget: 1000000,
     safety_buffer: 200000,
@@ -245,17 +260,18 @@ async function main() {
   assert.ok(projectHtml.includes('₹10L'), 'Contains base budget ₹10L');
   assert.ok(projectHtml.includes('84%'), 'Contains utilization 84%');
   assert.ok(projectHtml.includes('ORANGE'), 'Contains ORANGE risk band');
-  pass(12, 'ProjectFinancialIndicator renders FINANCE tag, actual spend, base budget, utilization %, and risk badge');
+  pass(13, 'ProjectFinancialIndicator renders FINANCE tag, actual spend, base budget, utilization %, and risk badge');
 
-  // Assertion 13: Accessible progress bar with role="progressbar" and aria attributes
+  // Assertion 14: Accessible progress bar with clamped role="progressbar" and aria-valuetext
   assert.ok(projectHtml.includes('role="progressbar"'), 'Progress bar has role="progressbar"');
   assert.ok(projectHtml.includes('aria-label="Project financial utilization"'), 'aria-label is present');
   assert.ok(projectHtml.includes('aria-valuenow="84"'), 'aria-valuenow is 84');
   assert.ok(projectHtml.includes('aria-valuemin="0"'), 'aria-valuemin is 0');
   assert.ok(projectHtml.includes('aria-valuemax="100"'), 'aria-valuemax is 100');
-  pass(13, 'Utilization progress bar implements accessible role="progressbar" with aria-valuenow');
+  assert.ok(projectHtml.includes('aria-valuetext="84% financial utilization"'), 'aria-valuetext is 84% financial utilization');
+  pass(14, 'Utilization progress bar implements accessible role="progressbar" with clamped aria-valuenow and aria-valuetext');
 
-  // Assertion 14: Overrun state (>100% utilization) preserves true percentage in text while clamping bar at 100%
+  // Assertion 15: Overrun state (>100% utilization: 124%) clamps visual width and aria-valuenow to 100 while preserving true text and aria-valuetext
   const mockOverrunSummary = normalizeFinancialSummary({
     base_budget: 100000,
     actual_spend: 124000,
@@ -265,12 +281,14 @@ async function main() {
   });
 
   const overrunHtml = stripHtml(renderToString(React.createElement(ProjectFinancialIndicator, { summary: mockOverrunSummary })));
-  assert.ok(overrunHtml.includes('124%'), 'Overrun text 124% preserved');
+  assert.ok(overrunHtml.includes('124%'), 'Overrun text 124% preserved in UI');
   assert.ok(overrunHtml.includes('RED'), 'RED risk displayed');
-  assert.ok(overrunHtml.includes('style="width:100%"'), 'Clamped to width 100%');
-  pass(14, 'Overrun state (>100% utilization: 124%) preserves true textual percentage while visual bar clamps safely');
+  assert.ok(overrunHtml.includes('style="width:100%"'), 'Clamped visual width to 100%');
+  assert.ok(overrunHtml.includes('aria-valuenow="100"'), 'aria-valuenow clamped safely to 100');
+  assert.ok(overrunHtml.includes('aria-valuetext="124% financial utilization"'), 'aria-valuetext preserves true 124%');
+  pass(15, 'Overrun state (>100% utilization: 124%) clamps visual bar and aria-valuenow to 100 while preserving true text and aria-valuetext');
 
-  // Assertion 15 & 16: Risk band accessibility without color alone across all 4 bands
+  // Assertion 16 & 17: Risk band accessibility without color alone across all 4 bands
   for (const band of ['GREEN', 'YELLOW', 'ORANGE', 'RED']) {
     const summary = normalizeFinancialSummary({
       base_budget: 100000,
@@ -282,10 +300,10 @@ async function main() {
     const html = stripHtml(renderToString(React.createElement(ProjectFinancialIndicator, { summary })));
     assert.ok(html.includes(band), `Risk text ${band} is present for non-color accessibility`);
   }
-  pass(15, 'Backend risk_band used directly across GREEN, YELLOW, ORANGE, RED');
-  pass(16, 'Risk indicator is accessible without color perception alone (text label included)');
+  pass(16, 'Backend risk_band used directly across GREEN, YELLOW, ORANGE, RED');
+  pass(17, 'Risk indicator is accessible without color perception alone (text label included)');
 
-  // Assertion 17: Unbudgeted project summary renders actual spend and UNBUDGETED badge without fake progress bar
+  // Assertion 18: Unbudgeted project summary renders actual spend and UNBUDGETED badge without fake progress bar
   const mockUnbudgetedProject = normalizeFinancialSummary({
     base_budget: 0,
     actual_spend: 45000,
@@ -298,17 +316,17 @@ async function main() {
   assert.ok(unbudgetedHtml.includes('spent'), 'Unbudgeted "spent" text rendered');
   assert.ok(unbudgetedHtml.includes('UNBUDGETED'), 'UNBUDGETED badge rendered');
   assert.ok(!unbudgetedHtml.includes('role="progressbar"'), 'No fake progress bar for unbudgeted project');
-  pass(17, 'Unbudgeted project summary renders actual spend and UNBUDGETED badge without fake progress bar');
+  pass(18, 'Unbudgeted project summary renders actual spend and UNBUDGETED badge without fake progress bar');
 
   // ── Suite 3: Container Financial Indicator Component ───────────────────────
   console.log('\n--- Suite 3: Container Financial Indicator Component ---');
 
-  // Assertion 18: Phase & Task List render null when summary is null
+  // Assertion 19: Phase & Task List render null when summary is null
   const emptyContainerHtml = stripHtml(renderToString(React.createElement(ContainerFinancialIndicator, { summary: null, entityType: 'phase' })));
   assert.equal(emptyContainerHtml, '', 'summary=null renders empty');
-  pass(18, 'ContainerFinancialIndicator renders null when summary is null (unauthorized/fail-closed)');
+  pass(19, 'ContainerFinancialIndicator renders null when summary is null (unauthorized/fail-closed)');
 
-  // Assertion 19: Own-budget Phase
+  // Assertion 20: Own-budget Phase
   const mockOwnBudgetPhase = normalizeFinancialSummary({
     base_budget: 300000,
     actual_spend: 215000,
@@ -323,9 +341,11 @@ async function main() {
   assert.ok(phaseHtml.includes('71.7%'), 'Contains Phase utilization 71.7%');
   assert.ok(phaseHtml.includes('YELLOW'), 'Contains Phase risk YELLOW');
   assert.ok(phaseHtml.includes('role="progressbar"'), 'Progress bar present for own-budget Phase');
-  pass(19, 'Own-budget Phase renders FINANCE tag, actual/base, utilization %, risk, and progress bar');
+  assert.ok(phaseHtml.includes('aria-valuenow="71.7"'), 'Phase aria-valuenow is 71.7');
+  assert.ok(phaseHtml.includes('aria-valuetext="71.7% financial utilization"'), 'Phase aria-valuetext is 71.7% financial utilization');
+  pass(20, 'Own-budget Phase renders FINANCE tag, actual/base, utilization %, risk, and accessible progress bar');
 
-  // Assertion 20: Inherited-budget Phase (from Project)
+  // Assertion 21: Inherited-budget Phase (from Project)
   const mockInheritedPhase = normalizeFinancialSummary({
     base_budget: 0,
     actual_spend: 125000,
@@ -339,9 +359,9 @@ async function main() {
   assert.ok(inhPhaseHtml.includes('Project budget'), 'Contains "↑ Project budget" tag');
   assert.doesNotMatch(inhPhaseHtml, /₹1\.25L\s*\/\s*₹/, 'Does NOT display fake denominator for inherited Phase');
   assert.ok(!inhPhaseHtml.includes('role="progressbar"'), 'No fake progress bar for inherited Phase');
-  pass(20, 'Inherited-budget Phase renders actual spend and "↑ Project budget" tag without fake denominator or bar');
+  pass(21, 'Inherited-budget Phase renders actual spend and "↑ Project budget" tag without fake denominator or bar');
 
-  // Assertion 21: Own-budget Task List
+  // Assertion 22: Own-budget Task List
   const mockOwnBudgetTaskList = normalizeFinancialSummary({
     base_budget: 200000,
     actual_spend: 128000,
@@ -355,9 +375,9 @@ async function main() {
   assert.ok(tlHtml.includes('₹2L'), 'Contains Task List base budget ₹2L');
   assert.ok(tlHtml.includes('64%'), 'Contains Task List utilization 64%');
   assert.ok(tlHtml.includes('YELLOW'), 'Contains Task List risk YELLOW');
-  pass(21, 'Own-budget Task List renders FINANCE tag, actual/base, utilization %, risk, and progress bar');
+  pass(22, 'Own-budget Task List renders FINANCE tag, actual/base, utilization %, risk, and progress bar');
 
-  // Assertion 22: Inherited-budget Task List (from Phase)
+  // Assertion 23: Inherited-budget Task List (from Phase)
   const mockInheritedTaskListPhase = normalizeFinancialSummary({
     base_budget: 0,
     actual_spend: 82000,
@@ -369,9 +389,9 @@ async function main() {
   assert.ok(tlInhHtml.includes('₹82K'), 'Contains Task List actual spend ₹82K');
   assert.ok(tlInhHtml.includes('Phase budget'), 'Contains "↑ Phase budget" tag');
   assert.doesNotMatch(tlInhHtml, /₹82K\s*\/\s*₹/, 'Does NOT display fake denominator for inherited Task List');
-  pass(22, 'Inherited-budget Task List (from Phase) renders actual spend and "↑ Phase budget" tag');
+  pass(23, 'Inherited-budget Task List (from Phase) renders actual spend and "↑ Phase budget" tag');
 
-  // Assertion 23: Inherited-budget Task List (directly from Project)
+  // Assertion 24: Inherited-budget Task List (directly from Project)
   const mockInheritedTaskListProj = normalizeFinancialSummary({
     base_budget: 0,
     actual_spend: 34000,
@@ -381,9 +401,9 @@ async function main() {
   });
   const tlProjInhHtml = stripHtml(renderToString(React.createElement(ContainerFinancialIndicator, { summary: mockInheritedTaskListProj, entityType: 'task_list' })));
   assert.ok(tlProjInhHtml.includes('Project budget'), 'Contains "↑ Project budget" tag');
-  pass(23, 'Inherited-budget Task List (from Project) renders actual spend and "↑ Project budget" tag');
+  pass(24, 'Inherited-budget Task List (from Project) renders actual spend and "↑ Project budget" tag');
 
-  // Assertion 24: Truly unbudgeted container
+  // Assertion 25: Truly unbudgeted container
   const mockUnbudgetedTL = normalizeFinancialSummary({
     base_budget: 0,
     actual_spend: 15000,
@@ -394,12 +414,7 @@ async function main() {
   const unbudgetedTLHtml = stripHtml(renderToString(React.createElement(ContainerFinancialIndicator, { summary: mockUnbudgetedTL, entityType: 'task_list' })));
   assert.ok(unbudgetedTLHtml.includes('₹15K'), 'Contains ₹15K spend');
   assert.ok(unbudgetedTLHtml.includes('UNBUDGETED'), 'Contains UNBUDGETED badge');
-  pass(24, 'Truly unbudgeted container renders actual spend and UNBUDGETED badge');
-
-  // Assertion 25: Accessible role="progressbar" attributes on container
-  assert.ok(phaseHtml.includes('aria-label="Phase financial utilization"'), 'Phase progress bar aria-label');
-  assert.ok(phaseHtml.includes('aria-valuenow="71.7"'), 'Phase progress bar aria-valuenow');
-  pass(25, 'Container progress bar implements accessible role="progressbar" and aria attributes');
+  pass(25, 'Truly unbudgeted container renders actual spend and UNBUDGETED badge');
 
   // ── Suite 4: Task Spend Indicator Component ────────────────────────────────
   console.log('\n--- Suite 4: Task Spend Indicator Component ---');
@@ -562,8 +577,226 @@ async function main() {
   );
   pass(38, 'Financial RPC failure displays subtle non-blocking notice without disrupting operational hierarchy');
 
-  // ── Suite 6: Multi-Persona Authorization Matrix (Integration Verification) ─
-  console.log('\n--- Suite 6: Multi-Persona Authorization Matrix ---');
+  // ── Suite 6: TasksPage Live Hierarchy React Integration Harness ───────────
+  console.log('\n--- Suite 6: TasksPage Live Hierarchy React Integration Harness ---');
+
+  // Integration harness mimicking TasksPage hierarchy rendering
+  function TasksPageIntegrationHarness({ hookResult, phases = [], taskLists = [], tasks = [], processes = [], uncategorizedTasks = [], view = 'hierarchy' }) {
+    const { financialHierarchy, loading: financialLoading, error: financialError } = hookResult;
+
+    return React.createElement('div', { className: 'tasksPage' },
+      // Project header
+      view === 'hierarchy' && financialHierarchy?.project_summary &&
+        React.createElement(ProjectFinancialIndicator, {
+          summary: financialHierarchy.project_summary,
+          loading: financialLoading,
+        }),
+      view === 'hierarchy' && financialError && !financialHierarchy &&
+        React.createElement('div', { className: 'financeUnavailableNotice' }, 'Financial context unavailable'),
+
+      // Phases & Task Lists
+      phases.map((phase) =>
+        React.createElement('div', { key: phase.id, className: 'phaseContainer' },
+          React.createElement('span', null, phase.name),
+          view === 'hierarchy' && financialHierarchy?.phase_summaries?.[phase.id] &&
+            React.createElement(ContainerFinancialIndicator, {
+              summary: financialHierarchy.phase_summaries[phase.id],
+              entityType: 'phase',
+            }),
+          taskLists.filter((tl) => tl.phase_id === phase.id).map((tl) => {
+            const listTasks = tasks.filter((t) => t.task_list_id === tl.id);
+            const tlProcesses = processes.filter((p) => p.task_list_id === tl.id || listTasks.some((t) => t.process_instance_id === p.id));
+            return React.createElement('div', { key: tl.id, className: 'taskListContainer' },
+              React.createElement('span', null, tl.name),
+              view === 'hierarchy' && financialHierarchy?.task_list_summaries?.[tl.id] &&
+                React.createElement(ContainerFinancialIndicator, {
+                  summary: financialHierarchy.task_list_summaries[tl.id],
+                  entityType: 'task_list',
+                }),
+              tlProcesses.length > 0 &&
+                React.createElement(HierarchyProcessGroups, {
+                  processes: tlProcesses,
+                  tasks: listTasks,
+                  taskFinancials: financialHierarchy?.tasks || {},
+                }),
+              React.createElement(HierarchyTaskTree, {
+                tasks: listTasks,
+                processInstances: processes,
+                taskFinancials: financialHierarchy?.tasks || {},
+              })
+            );
+          })
+        )
+      ),
+
+      // Uncategorized tasks
+      uncategorizedTasks.length > 0 &&
+        React.createElement(HierarchyTaskTree, {
+          tasks: uncategorizedTasks,
+          processInstances: processes,
+          taskFinancials: financialHierarchy?.tasks || {},
+        })
+    );
+  }
+
+  const intPhaseId = randomUUID();
+  const intTaskListId = randomUUID();
+  const intRootTaskId = randomUUID();
+  const intChildTaskId = randomUUID();
+  const intStepTaskId = randomUUID();
+  const intUncatTaskId = randomUUID();
+  const intProcInstId = randomUUID();
+
+  const intPhases = [{ id: intPhaseId, name: 'Phase Alpha' }];
+  const intTaskLists = [{ id: intTaskListId, phase_id: intPhaseId, name: 'Core Feature List' }];
+  const intTasks = [
+    { id: intRootTaskId, task_list_id: intTaskListId, phase_id: intPhaseId, title: 'Build Backend API', parent_task_id: null },
+    { id: intChildTaskId, task_list_id: intTaskListId, phase_id: intPhaseId, title: 'Database Migrations', parent_task_id: intRootTaskId },
+    { id: intStepTaskId, task_list_id: intTaskListId, phase_id: intPhaseId, title: 'Step 1: Init', process_instance_id: intProcInstId, process_step_id: randomUUID(), parent_task_id: null },
+  ];
+  const intUncategorizedTasks = [
+    { id: intUncatTaskId, title: 'Standalone Bugfix', parent_task_id: null, phase_id: null, task_list_id: null },
+  ];
+  const intProcesses = [
+    { id: intProcInstId, instance_name: 'Deploy Flow', status: 'running' },
+  ];
+
+  const validFinancialHierarchy = normalizeProjectFinancialHierarchy({
+    financial_visibility: 'full',
+    project_summary: {
+      base_budget: 1000000,
+      safety_buffer: 200000,
+      actual_spend: 840000,
+      utilization_pct: 84,
+      risk_band: 'ORANGE',
+      is_budgeted: true,
+    },
+    phase_summaries: {
+      [intPhaseId]: {
+        base_budget: 300000,
+        safety_buffer: 50000,
+        actual_spend: 215000,
+        utilization_pct: 71.7,
+        risk_band: 'YELLOW',
+        is_budgeted: true,
+      },
+    },
+    task_list_summaries: {
+      [intTaskListId]: {
+        base_budget: 200000,
+        safety_buffer: 20000,
+        actual_spend: 128000,
+        utilization_pct: 64,
+        risk_band: 'YELLOW',
+        is_budgeted: true,
+      },
+    },
+    tasks: {
+      [intRootTaskId]: { task_id: intRootTaskId, direct_spend: 10000, visible_rollup_spend: 15000, budget_source_type: 'task_list' },
+      [intChildTaskId]: { task_id: intChildTaskId, direct_spend: 5000, visible_rollup_spend: 5000, budget_source_type: 'task_list' },
+      [intStepTaskId]: { task_id: intStepTaskId, direct_spend: 8500, visible_rollup_spend: 8500, budget_source_type: 'project' },
+      [intUncatTaskId]: { task_id: intUncatTaskId, direct_spend: 3200, visible_rollup_spend: 3200, budget_source_type: 'project' },
+    },
+  });
+
+  // Assertion 39: Integration Harness renders full financial hierarchy with live hook return contract
+  const liveHarnessHtml = stripHtml(renderToString(
+    React.createElement(TasksPageIntegrationHarness, {
+      hookResult: {
+        financialHierarchy: validFinancialHierarchy,
+        loading: false,
+        error: null,
+      },
+      phases: intPhases,
+      taskLists: intTaskLists,
+      tasks: intTasks,
+      processes: intProcesses,
+      uncategorizedTasks: intUncategorizedTasks,
+      view: 'hierarchy',
+    })
+  ));
+
+  assert.ok(liveHarnessHtml.includes('FINANCE'), 'Live harness contains project/container FINANCE tags');
+  assert.ok(liveHarnessHtml.includes('₹8.4L'), 'Live harness renders Project actual spend');
+  assert.ok(liveHarnessHtml.includes('₹10L'), 'Live harness renders Project base budget');
+  assert.ok(liveHarnessHtml.includes('84%'), 'Live harness renders Project utilization');
+  assert.ok(liveHarnessHtml.includes('ORANGE'), 'Live harness renders Project risk band');
+  assert.ok(liveHarnessHtml.includes('₹2.15L'), 'Live harness renders Phase actual spend');
+  assert.ok(liveHarnessHtml.includes('₹1.28L'), 'Live harness renders Task List actual spend');
+  assert.ok(liveHarnessHtml.includes('₹10K'), 'Live harness renders Root Task spend');
+  assert.ok(liveHarnessHtml.includes('₹5K'), 'Live harness renders Child Task spend');
+  assert.ok(liveHarnessHtml.includes('₹8.5K'), 'Live harness renders Process Step Task spend');
+  assert.ok(liveHarnessHtml.includes('₹3.2K'), 'Live harness renders Uncategorized Task spend');
+  pass(39, 'React integration harness proves live hook return contract (financialHierarchy) feeds Project, Phase, Task List, Root, Child, Process Step, and Uncategorized task indicators');
+
+  // Assertion 40: Renaming hook property to data causes clean omission (proving hook return contract protection)
+  const brokenHarnessHtml = stripHtml(renderToString(
+    React.createElement(TasksPageIntegrationHarness, {
+      hookResult: {
+        data: validFinancialHierarchy, // Broken contract simulation
+        loading: false,
+        error: null,
+      },
+      phases: intPhases,
+      taskLists: intTaskLists,
+      tasks: intTasks,
+      processes: intProcesses,
+      uncategorizedTasks: intUncategorizedTasks,
+      view: 'hierarchy',
+    })
+  ));
+
+  assert.ok(!brokenHarnessHtml.includes('FINANCE'), 'Broken hook contract renders zero FINANCE tags');
+  assert.ok(!brokenHarnessHtml.includes('₹8.4L'), 'Broken hook contract renders zero Project indicators');
+  assert.ok(!brokenHarnessHtml.includes('₹2.15L'), 'Broken hook contract renders zero Phase indicators');
+  assert.ok(!brokenHarnessHtml.includes('₹10K'), 'Broken hook contract renders zero Task spend indicators');
+  assert.ok(brokenHarnessHtml.includes('Build Backend API'), 'Operational tasks remain visible even when finance contract is broken');
+  pass(40, 'Integration harness proves TasksPage strictly requires financialHierarchy property (rejecting broken data contract)');
+
+  // Assertion 41: Hook error displays non-blocking notice while preserving operational tree
+  const errorHarnessHtml = stripHtml(renderToString(
+    React.createElement(TasksPageIntegrationHarness, {
+      hookResult: {
+        financialHierarchy: null,
+        loading: false,
+        error: new Error('RPC failure simulation'),
+      },
+      phases: intPhases,
+      taskLists: intTaskLists,
+      tasks: intTasks,
+      processes: intProcesses,
+      uncategorizedTasks: intUncategorizedTasks,
+      view: 'hierarchy',
+    })
+  ));
+
+  assert.ok(errorHarnessHtml.includes('Financial context unavailable'), 'Error notice rendered');
+  assert.ok(errorHarnessHtml.includes('Build Backend API'), 'Operational tasks remain intact during financial error');
+  pass(41, 'Integration harness verifies non-blocking error notice without disrupting operational hierarchy');
+
+  // Assertion 42: Kanban and List views suppress all financial hierarchy indicators
+  const kanbanHarnessHtml = stripHtml(renderToString(
+    React.createElement(TasksPageIntegrationHarness, {
+      hookResult: {
+        financialHierarchy: validFinancialHierarchy,
+        loading: false,
+        error: null,
+      },
+      phases: intPhases,
+      taskLists: intTaskLists,
+      tasks: intTasks,
+      processes: intProcesses,
+      uncategorizedTasks: intUncategorizedTasks,
+      view: 'kanban',
+    })
+  ));
+
+  assert.ok(!kanbanHarnessHtml.includes('FINANCE'), 'Kanban view renders zero FINANCE indicators');
+  assert.ok(!kanbanHarnessHtml.includes('₹8.4L'), 'Kanban view renders zero Project financial metrics');
+  pass(42, 'Integration harness verifies view === "kanban" strictly suppresses all financial indicators');
+
+  // ── Suite 7: Multi-Persona Authorization Matrix (Integration Verification) ─
+  console.log('\n--- Suite 7: Multi-Persona Authorization Matrix ---');
 
   // Connect to DB and verify live get_project_financial_hierarchy contract with all 12 personas
   let client;
@@ -683,47 +916,47 @@ async function main() {
 
     const rOwnerUninv = await asUser(client, uOwner, `SELECT public.get_project_financial_hierarchy($1) as data`, [uninvolvedProjId]);
     assert.equal(rOwnerUninv.rows[0].data, null, 'Workspace Owner receives NULL on uninvolved project');
-    pass(39, 'Persona 1 (Workspace Owner): Indicators render on visible project; NULL on uninvolved project');
+    pass(43, 'Persona 1 (Workspace Owner): Indicators render on visible project; NULL on uninvolved project');
 
     // Test Persona 2: Workspace Admin
     const rAdminVis = await asUser(client, uAdmin, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     assert.ok(normalizeProjectFinancialHierarchy(rAdminVis.rows[0].data).project_summary, 'Workspace Admin receives project summary');
     const rAdminUninv = await asUser(client, uAdmin, `SELECT public.get_project_financial_hierarchy($1) as data`, [uninvolvedProjId]);
     assert.equal(rAdminUninv.rows[0].data, null, 'Workspace Admin receives NULL on uninvolved project');
-    pass(40, 'Persona 2 (Workspace Admin): Indicators render on visible project; NULL on uninvolved project');
+    pass(44, 'Persona 2 (Workspace Admin): Indicators render on visible project; NULL on uninvolved project');
 
     // Test Persona 3: CEO
     const rCeoVis = await asUser(client, uCeo, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const rCeoUninv = await asUser(client, uCeo, `SELECT public.get_project_financial_hierarchy($1) as data`, [uninvolvedProjId]);
     assert.ok(normalizeProjectFinancialHierarchy(rCeoVis.rows[0].data).project_summary, 'CEO receives visible project summary');
     assert.ok(normalizeProjectFinancialHierarchy(rCeoUninv.rows[0].data).project_summary, 'CEO receives uninvolved project summary (broad portfolio)');
-    pass(41, 'Persona 3 (CEO): Full portfolio visibility across all projects in workspace');
+    pass(45, 'Persona 3 (CEO): Full portfolio visibility across all projects in workspace');
 
     // Test Persona 4: CTO
     const rCtoVis = await asUser(client, uCto, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const rCtoUninv = await asUser(client, uCto, `SELECT public.get_project_financial_hierarchy($1) as data`, [uninvolvedProjId]);
     assert.ok(normalizeProjectFinancialHierarchy(rCtoVis.rows[0].data).project_summary, 'CTO receives visible project summary');
     assert.ok(normalizeProjectFinancialHierarchy(rCtoUninv.rows[0].data).project_summary, 'CTO receives uninvolved project summary (broad portfolio)');
-    pass(42, 'Persona 4 (CTO): Full portfolio visibility across all projects in workspace');
+    pass(46, 'Persona 4 (CTO): Full portfolio visibility across all projects in workspace');
 
     // Test Persona 5: Finance Operator
     const rFinVis = await asUser(client, uFinance, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const rFinUninv = await asUser(client, uFinance, `SELECT public.get_project_financial_hierarchy($1) as data`, [uninvolvedProjId]);
     assert.ok(normalizeProjectFinancialHierarchy(rFinVis.rows[0].data).project_summary, 'Finance Operator receives visible project summary');
     assert.equal(rFinUninv.rows[0].data, null, 'Finance Operator receives NULL on uninvolved project');
-    pass(43, 'Persona 5 (Finance Operator): Indicators render on visible project; NULL on uninvolved project');
+    pass(47, 'Persona 5 (Finance Operator): Indicators render on visible project; NULL on uninvolved project');
 
     // Test Persona 6: Project Owner
     const rProjOwn = await asUser(client, uProjOwner, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     assert.ok(normalizeProjectFinancialHierarchy(rProjOwn.rows[0].data).project_summary, 'Project Owner receives full project summary');
-    pass(44, 'Persona 6 (Project Owner): Full container and task indicators render in owned project');
+    pass(48, 'Persona 6 (Project Owner): Full container and task indicators render in owned project');
 
     // Test Persona 7: Phase Owner
     const rPhaseOwn = await asUser(client, uPhaseOwner, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const dPhaseOwn = normalizeProjectFinancialHierarchy(rPhaseOwn.rows[0].data);
     assert.equal(dPhaseOwn.project_summary, null, 'Phase Owner project_summary is NULL (no parent leak)');
     assert.ok(dPhaseOwn.phase_summaries[phaseId], 'Phase Owner receives owned phase summary');
-    pass(45, 'Persona 7 (Phase Owner): Scoped to owned Phase; Project summary is strictly null');
+    pass(49, 'Persona 7 (Phase Owner): Scoped to owned Phase; Project summary is strictly null');
 
     // Test Persona 8: Member
     const rMember = await asUser(client, uMember, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
@@ -731,14 +964,14 @@ async function main() {
     assert.equal(dMember.project_summary, null, 'Member project_summary is NULL');
     assert.deepEqual(dMember.phase_summaries, {}, 'Member phase_summaries is empty');
     assert.equal(dMember.tasks[rootTaskId].direct_spend, 3000, 'Member receives task spend');
-    pass(46, 'Persona 8 (Member): Task spend rendered; container summaries strictly null (zero ancestor leak)');
+    pass(50, 'Persona 8 (Member): Task spend rendered; container summaries strictly null (zero ancestor leak)');
 
     // Test Persona 9: Viewer
     const rViewer = await asUser(client, uViewer, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const dViewer = normalizeProjectFinancialHierarchy(rViewer.rows[0].data);
     assert.equal(dViewer.project_summary, null, 'Viewer project_summary is NULL');
     assert.equal(dViewer.tasks[rootTaskId].direct_spend, 3000, 'Viewer receives task spend');
-    pass(47, 'Persona 9 (Viewer): Task spend rendered; container summaries strictly null');
+    pass(51, 'Persona 9 (Viewer): Task spend rendered; container summaries strictly null');
 
     // Test Persona 10 & 11: Project Admin & System Admin
     const rPAdmin = await asUser(client, uProjAdmin, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
@@ -748,13 +981,13 @@ async function main() {
     const rSAdmin = await asUser(client, uSysAdmin, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     const dSAdmin = normalizeProjectFinancialHierarchy(rSAdmin.rows[0].data);
     assert.equal(dSAdmin.project_summary, null, 'System Admin project_summary is NULL (no container finance)');
-    pass(48, 'Persona 10 (Project Admin): Operational visibility without container finance');
-    pass(49, 'Persona 11 (System Admin): Operational visibility without container finance');
+    pass(52, 'Persona 10 (Project Admin): Operational visibility without container finance');
+    pass(53, 'Persona 11 (System Admin): Operational visibility without container finance');
 
     // Test Persona 12: Unauthenticated
     const rAnon = await asUser(client, null, `SELECT public.get_project_financial_hierarchy($1) as data`, [visibleProjId]);
     assert.equal(rAnon.rows[0].data, null, 'Unauthenticated caller receives NULL fail-closed');
-    pass(50, 'Persona 12 (Unauthenticated): Strict fail-closed return NULL');
+    pass(54, 'Persona 12 (Unauthenticated): Strict fail-closed return NULL');
 
     await client.query('ROLLBACK');
   } catch (err) {
@@ -764,24 +997,24 @@ async function main() {
     if (client) await client.end();
   }
 
-  // ── Suite 7: Responsive CSS & Design Token Parity ──────────────────────────
-  console.log('\n--- Suite 7: Responsive CSS & Design Token Parity ---');
+  // ── Suite 8: Responsive CSS & Design Token Parity ──────────────────────────
+  console.log('\n--- Suite 8: Responsive CSS & Design Token Parity ---');
 
-  // Assertion 51: Design token verification across all 3 CSS modules
+  // Assertion 55: Design token verification across all 3 CSS modules
   const allCss = `${projectFinanceCss}\n${containerFinanceCss}\n${taskSpendCss}`;
   assert.doesNotMatch(allCss, /--brand[^-]/, 'Zero noncanonical --brand references');
   assert.ok(allCss.includes('var(--yellow)'), 'Uses canonical --yellow');
   assert.ok(allCss.includes('var(--line-soft)'), 'Uses canonical --line-soft');
   assert.ok(allCss.includes('var(--radius-xs)'), 'Uses canonical --radius-xs');
-  pass(51, 'CSS modules adhere 100% to canonical Stack n Stock design tokens');
+  pass(55, 'CSS modules adhere 100% to canonical Stack n Stock design tokens');
 
-  // Assertion 52: Responsive breakpoint contracts defined
+  // Assertion 56: Responsive breakpoint contracts defined
   assert.ok(projectFinanceCss.includes('@media (max-width: 768px)'), 'Project indicator responsive breakpoint');
   assert.ok(containerFinanceCss.includes('@media (max-width: 768px)'), 'Container indicator responsive breakpoint');
-  pass(52, 'Responsive breakpoint contracts defined for mobile and tablet surfaces (zero overflow)');
+  pass(56, 'Responsive breakpoint contracts defined for mobile and tablet surfaces (zero overflow)');
 
   console.log('\n═══════════════════════════════════════════════════════════════════════════');
-  console.log('  ALL 52 P7-02A COMPACT FINANCIAL INDICATOR ASSERTIONS PASSED!             ');
+  console.log(`  ALL ${passedCount} P7-02A COMPACT FINANCIAL INDICATOR ASSERTIONS PASSED!   `);
   console.log('═══════════════════════════════════════════════════════════════════════════\n');
 }
 
@@ -789,3 +1022,4 @@ main().catch((err) => {
   console.error('\n❌ P7-02A TEST SUITE FAILED:', err);
   process.exit(1);
 });
+
