@@ -1,0 +1,151 @@
+/* ContainerFinancialIndicator.module.css */
+
+.containerFinance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.phase {
+  min-width: 190px;
+}
+
+.task_list {
+  min-width: 160px;
+  padding: 3px 8px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.financeLabel {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--yellow);
+  text-transform: uppercase;
+  background: rgba(253, 226, 21, 0.08);
+  padding: 1px 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(253, 226, 21, 0.2);
+  line-height: 1.1;
+}
+
+.amounts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.actual {
+  font-weight: 750;
+  color: var(--text);
+}
+
+.slash {
+  color: var(--muted-2);
+  font-weight: 400;
+}
+
+.base {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.spentLabel {
+  font-size: 0.7rem;
+  color: var(--muted-2);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.utilizationText {
+  font-size: 0.74rem;
+  font-weight: 750;
+  color: var(--text);
+  margin-left: auto;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width var(--transition);
+}
+
+.risk_green {
+  background: var(--green);
+}
+
+.risk_yellow {
+  background: var(--yellow);
+}
+
+.risk_orange {
+  background: var(--orange);
+}
+
+.risk_red {
+  background: var(--red);
+}
+
+/* Inherited and Unbudgeted Styling */
+.inherited,
+.unbudgeted {
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.inheritedRow,
+.unbudgetedRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.inheritedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 650;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  line-height: 1.2;
+}
+
+.arrowIcon {
+  color: var(--yellow);
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .containerFinance {
+    min-width: 100%;
+    margin-top: 4px;
+  }
+}

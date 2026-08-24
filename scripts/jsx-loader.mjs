@@ -1,16 +1,28 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { transformWithOxc } from 'vite';
 
 export async function resolve(specifier, context, nextResolve) {
   try {
-    return await nextResolve(specifier, context);
+    const res = await nextResolve(specifier, context);
+    if (res.url.endsWith('.jsx')) {
+      return {
+        ...res,
+        format: 'module',
+      };
+    }
+    return res;
   } catch (err) {
     if (err.code === 'ERR_MODULE_NOT_FOUND' && context.parentURL) {
       for (const ext of ['.js', '.jsx', '/index.js', '/index.jsx']) {
         try {
           const testPath = fileURLToPath(new URL(specifier + ext, context.parentURL));
           if (fs.existsSync(testPath)) {
-            return nextResolve(specifier + ext, context);
+            const res = await nextResolve(specifier + ext, context);
+            return {
+              ...res,
+              format: 'module',
+            };
           }
         } catch {}
       }
@@ -20,21 +32,34 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
+  if (url.endsWith('.css') || url.includes('.css?')) {
+    return {
+      format: 'module',
+      shortCircuit: true,
+      source: 'export default new Proxy({}, { get: (_, prop) => prop });',
+    };
+  }
+
   if (url.endsWith('.jsx')) {
-    const result = await nextLoad(url, { ...context, format: 'module' });
-    let source = result.source.toString();
+    const filePath = fileURLToPath(url);
+    let source = fs.readFileSync(filePath, 'utf8');
+
+    // Specific transform for AuthContext if needed
     source = source.replace(
       /<AuthContext\.Provider value=\{value\}>\s*\{!loading && children\}\s*<\/AuthContext\.Provider>/g,
       'React.createElement(AuthContext.Provider, { value }, !loading && children)'
     );
-    if (!source.includes("import React from 'react'") && !source.includes('import React,')) {
-      source = "import React from 'react';\n" + source;
-    }
+
+    const transformed = await transformWithOxc(source, url, {
+      jsx: { runtime: 'automatic' },
+    });
+
     return {
       format: 'module',
       shortCircuit: true,
-      source,
+      source: transformed.code,
     };
   }
+
   return nextLoad(url, context);
 }

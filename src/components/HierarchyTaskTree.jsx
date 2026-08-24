@@ -16,6 +16,7 @@ import {
 import PriorityIcon from './PriorityIcon';
 import RaciBadge from './RaciBadge';
 import StatusBadge from './StatusBadge';
+import TaskSpendIndicator from './finance/hierarchy/TaskSpendIndicator.jsx';
 import { buildHierarchyModel, getTaskDescendants } from '../lib/hierarchy';
 import styles from './HierarchyTaskTree.module.css';
 
@@ -94,7 +95,7 @@ function SubtaskGroup({ subtasks }) {
   );
 }
 
-function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set() }) {
+function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set(), taskFinancials = {} }) {
   const [expanded, setExpanded] = useState(true);
   const steps = model.processStepsByInstance.get(instance.id) || [];
   const processName = instance.defined_processes?.name || 'Process';
@@ -151,6 +152,7 @@ function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Se
                 depth={depth + 1}
                 lineage={lineage}
                 processStep
+                taskFinancials={taskFinancials}
               />
             ))
           )}
@@ -160,7 +162,7 @@ function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Se
   );
 }
 
-function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false }) {
+function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false, taskFinancials = {} }) {
   const [expanded, setExpanded] = useState(true);
   const {
     subtasks,
@@ -170,6 +172,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
   } = getTaskDescendants(task.id, model);
   const status = task.task_statuses;
   const dueDate = formatDate(task.due_date);
+  const financial = taskFinancials?.[task.id] || null;
   const nextLineage = new Set(lineage);
   nextLineage.add(task.id);
 
@@ -199,6 +202,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
         </button>
         {processStep && <span className={styles.stepTag}>Process step</span>}
         <div className={styles.taskMeta}>
+          {financial && <TaskSpendIndicator financial={financial} />}
           {status && (
             <StatusBadge status={{ name: status.name, color: status.color }} size="sm" />
           )}
@@ -228,6 +232,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
               onTaskOpen={onTaskOpen}
               depth={depth + 1}
               lineage={nextLineage}
+              taskFinancials={taskFinancials}
             />
           ))}
 
@@ -248,6 +253,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
                 onTaskOpen={onTaskOpen}
                 depth={depth + 1}
                 lineage={nextLineage}
+                taskFinancials={taskFinancials}
               />
             )
           ))}
@@ -257,7 +263,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
   );
 }
 
-export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen }) {
+export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen, taskFinancials = {} }) {
   const model = useMemo(() => buildHierarchyModel(tasks, processes), [tasks, processes]);
   if (processes.length === 0) return null;
 
@@ -269,6 +275,7 @@ export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen 
           instance={instance}
           model={model}
           onTaskOpen={onTaskOpen}
+          taskFinancials={taskFinancials}
         />
       ))}
     </div>
@@ -280,6 +287,7 @@ export default function HierarchyTaskTree({
   processInstances = [],
   onTaskOpen,
   emptyMessage = 'No tasks in this list.',
+  taskFinancials = {},
 }) {
   const model = useMemo(
     () => buildHierarchyModel(tasks, processInstances),
@@ -293,7 +301,13 @@ export default function HierarchyTaskTree({
   return (
     <div className={styles.tree} role="tree" aria-label="Task hierarchy">
       {model.rootTasks.map((task) => (
-        <TaskNode key={task.id} task={task} model={model} onTaskOpen={onTaskOpen} />
+        <TaskNode
+          key={task.id}
+          task={task}
+          model={model}
+          onTaskOpen={onTaskOpen}
+          taskFinancials={taskFinancials}
+        />
       ))}
     </div>
   );

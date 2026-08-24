@@ -101,3 +101,39 @@ export function normalizeProjectFinancialHierarchy(raw) {
   };
 }
 
+/**
+ * Compact Indian Currency Formatter (INR / ₹)
+ * Formats monetary amounts into clean, readable compact strings for UI indicators.
+ * Examples: ₹850, ₹12.4K, ₹1.25L, ₹18.4L, ₹1.2Cr
+ *
+ * @param {number|string|null|undefined} amount
+ * @returns {string} Formatted compact string e.g. "₹12.5K" or "₹1.25L"
+ */
+export function formatCompactCurrency(amount) {
+  if (amount === null || amount === undefined || amount === '') return '₹0';
+  const num = typeof amount === 'number' ? amount : Number(amount);
+  if (isNaN(num) || num === 0) return '₹0';
+
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+
+  if (abs >= 10000000) {
+    // 1 Crore = 10,000,000 (100 Lakhs)
+    const val = Number((abs / 10000000).toFixed(2));
+    return `${sign}₹${val}Cr`;
+  }
+  if (abs >= 100000) {
+    // 1 Lakh = 100,000
+    const val = Number((abs / 100000).toFixed(2));
+    return `${sign}₹${val}L`;
+  }
+  if (abs >= 1000) {
+    // 1 Thousand = 1,000
+    const val = Number((abs / 1000).toFixed(1));
+    return `${sign}₹${val}K`;
+  }
+
+  const val = Number(abs.toFixed(2));
+  return `${sign}₹${val}`;
+}
+

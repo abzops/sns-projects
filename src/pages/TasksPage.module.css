@@ -1167,3 +1167,14 @@
   opacity: 0.9;
   transform: translateY(-1px);
 }
+
+.financeUnavailableNotice {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--muted-2);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+}

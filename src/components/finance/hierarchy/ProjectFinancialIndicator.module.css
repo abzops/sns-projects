@@ -1,0 +1,140 @@
+/* ProjectFinancialIndicator.module.css */
+
+.projectFinanceSection {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xs);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.financeTag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--yellow);
+  text-transform: uppercase;
+  background: rgba(253, 226, 21, 0.1);
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  line-height: 1.2;
+}
+
+.amounts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.actualAmount {
+  font-weight: 750;
+  color: var(--text);
+}
+
+.slash {
+  color: var(--muted-2);
+  font-weight: 400;
+}
+
+.baseAmount {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.unbudgetedSub {
+  font-size: 0.72rem;
+  color: var(--muted-2);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.utilizationText {
+  font-size: 0.78rem;
+  font-weight: 750;
+  color: var(--text);
+  margin-left: auto;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width var(--transition);
+}
+
+.risk_green {
+  background: var(--green);
+}
+
+.risk_yellow {
+  background: var(--yellow);
+}
+
+.risk_orange {
+  background: var(--orange);
+}
+
+.risk_red {
+  background: var(--red);
+}
+
+/* Skeleton Loading */
+.skeletonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-xs);
+}
+
+.skeletonPill {
+  width: 120px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-pill);
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeletonBar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-pill);
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@media (max-width: 768px) {
+  .projectFinanceSection {
+    min-width: 100%;
+    max-width: 100%;
+  }
+}

@@ -55,6 +55,11 @@ import TaskCard from '../components/TaskCard';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 import TaskCompletionModal from '../components/TaskCompletionModal';
 import HierarchyTaskTree, { HierarchyProcessGroups } from '../components/HierarchyTaskTree';
+import { useProjectFinancialHierarchy } from '../hooks/useProjectFinancialHierarchy.js';
+import {
+  ProjectFinancialIndicator,
+  ContainerFinancialIndicator,
+} from '../components/finance/hierarchy/index.js';
 import Modal from '../components/Modal';
 import { TaskRowSkeleton, CardGridSkeleton } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
@@ -305,6 +310,24 @@ export default function TasksPage() {
 
   // View state: 'hierarchy' | 'kanban' | 'list'
   const [view, setView] = useState('hierarchy');
+
+  // P7-01 / P7-02A: Authoritative Project Financial Hierarchy Read Model
+  const {
+    data: financialHierarchy,
+    loading: financialLoading,
+    error: financialError,
+  } = useProjectFinancialHierarchy(
+    workspaceId,
+    visibleProjectId,
+    authorizationScopeKey,
+    {
+      enabled:
+        !userContextLoading &&
+        Boolean(visibleProjectId) &&
+        view === 'hierarchy',
+    }
+  );
+
   const [search, setSearch] = useState('');
   const [filterPhase, setFilterPhase] = useState('');
   const [filterTaskList, setFilterTaskList] = useState('');
@@ -1138,6 +1161,21 @@ export default function TasksPage() {
                 <Layers size={13} />
                 <span>{phases.length} Phases, {taskLists.length} Task Lists</span>
               </div>
+              {/* Project Financial Indicator (P7-02A) */}
+              {view === 'hierarchy' && financialHierarchy?.project_summary && (
+                <ProjectFinancialIndicator
+                  summary={financialHierarchy.project_summary}
+                  loading={financialLoading}
+                />
+              )}
+              {view === 'hierarchy' && financialError && !financialHierarchy && (
+                <div
+                  className={styles.financeUnavailableNotice}
+                  title={getErrorMessage(financialError)}
+                >
+                  <span>Financial context unavailable</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1304,6 +1342,7 @@ export default function TasksPage() {
                   (task) => task.process_instance_id && projectProcesses.some((item) => item.id === task.process_instance_id)
                 )}
                 onTaskOpen={setSelectedTask}
+                taskFinancials={financialHierarchy?.tasks || {}}
               />
             </section>
           )}
@@ -1372,6 +1411,14 @@ export default function TasksPage() {
                         </span>
                       </div>
 
+                      {/* Phase Financial Indicator (P7-02A) */}
+                      {financialHierarchy?.phase_summaries?.[phase.id] && (
+                        <ContainerFinancialIndicator
+                          summary={financialHierarchy.phase_summaries[phase.id]}
+                          entityType="phase"
+                        />
+                      )}
+
                       {/* Actions */}
                       {canMutateTasks && <div className={styles.phaseActions}>
                         <button
@@ -1407,6 +1454,7 @@ export default function TasksPage() {
                               processes={phaseProcesses}
                               tasks={phaseProcessTasks}
                               onTaskOpen={setSelectedTask}
+                              taskFinancials={financialHierarchy?.tasks || {}}
                             />
                           </section>
                         )}
@@ -1483,6 +1531,14 @@ export default function TasksPage() {
                                   </div>
                                   <span className={styles.taskListPercent}>{taskList.progress}%</span>
 
+                                  {/* Task List Financial Indicator (P7-02A) */}
+                                  {financialHierarchy?.task_list_summaries?.[taskList.id] && (
+                                    <ContainerFinancialIndicator
+                                      summary={financialHierarchy.task_list_summaries[taskList.id]}
+                                      entityType="task_list"
+                                    />
+                                  )}
+
                                   <div className={styles.taskListActions}>
                                     {taskList.task_list_type === 'defined' ? (
                                       <button
@@ -1527,11 +1583,13 @@ export default function TasksPage() {
                                       processes={taskListProcesses}
                                       tasks={listTasks}
                                       onTaskOpen={setSelectedTask}
+                                      taskFinancials={financialHierarchy?.tasks || {}}
                                     />
                                     <HierarchyTaskTree
                                       tasks={listTasks}
                                       processInstances={processInstances}
                                       onTaskOpen={setSelectedTask}
+                                      taskFinancials={financialHierarchy?.tasks || {}}
                                       emptyMessage={
                                         taskListProcesses.length > 0
                                           ? 'No ordinary tasks in this list.'
@@ -1574,6 +1632,7 @@ export default function TasksPage() {
                 tasks={tasks.filter((task) => !task.phase_id && !task.task_list_id)}
                 processInstances={processInstances}
                 onTaskOpen={setSelectedTask}
+                taskFinancials={financialHierarchy?.tasks || {}}
               />
             </div>
           )}
