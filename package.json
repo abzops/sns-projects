@@ -19,6 +19,7 @@
     "test:stability": "node scripts/test-operational-v1-stability.mjs",
     "test:p7-01": "node scripts/test-p7-01-financial-hierarchy.mjs",
     "test:p7-02a": "node --experimental-loader ./scripts/jsx-loader.mjs scripts/test-p7-02a-financial-hierarchy-indicators.mjs",
+    "test:auth-recovery": "node scripts/test-auth-password-recovery.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

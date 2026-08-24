@@ -15,6 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import BrandLogo from '../components/BrandLogo';
+import { evaluatePassword } from '../lib/passwordPolicy';
 import styles from './ChangePasswordPage.module.css';
 
 const DEFAULT_WORKSPACE_ID = 'dbcaddf1-cf02-4bad-8af1-974301cdfbea';
@@ -102,33 +103,10 @@ export default function ChangePasswordPage() {
   }, [mustChangePassword, passwordChangeInProgress, userId]);
 
   // Password requirement checks (min 12 chars, uppercase, lowercase, number, symbol)
-  const checks = useMemo(() => {
-    const hasMinLength = newPassword.length >= 12;
-    const hasUppercase = /[A-Z]/.test(newPassword);
-    const hasLowercase = /[a-z]/.test(newPassword);
-    const hasDigit = /[0-9]/.test(newPassword);
-    const hasSymbol = /[!@#$%^&*()_+~|}{[\]:;?><,.\-=]/.test(newPassword);
-    const passwordsMatch =
-      newPassword.length > 0 && newPassword === confirmPassword;
-
-    const allRequirementsMet =
-      hasMinLength &&
-      hasUppercase &&
-      hasLowercase &&
-      hasDigit &&
-      hasSymbol &&
-      passwordsMatch;
-
-    return {
-      hasMinLength,
-      hasUppercase,
-      hasLowercase,
-      hasDigit,
-      hasSymbol,
-      passwordsMatch,
-      allRequirementsMet,
-    };
-  }, [newPassword, confirmPassword]);
+  const checks = useMemo(
+    () => evaluatePassword(newPassword, confirmPassword),
+    [newPassword, confirmPassword]
+  );
 
   if (authLoading || statusLoading) {
     return (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2, Mail, Lock } from 'lucide-react';
 import BrandLogo from '../components/BrandLogo';
@@ -7,10 +7,12 @@ import styles from './LoginPage.module.css';
 
 export default function LoginPage() {
   const { user, signIn, configError } = useAuth();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage] = useState(location.state?.message || '');
 
   if (user) {
     if (user.app_metadata?.must_change_password === true) {
@@ -47,6 +49,13 @@ export default function LoginPage() {
           <p className={styles.subtitle}>Sign in to your organization account</p>
         </div>
 
+        {successMessage && !error && (
+          <div className={styles.successBox}>
+            <span className={styles.successDot} />
+            {successMessage}
+          </div>
+        )}
+
         {(error || configError) && (
           <div className={styles.errorBox}>
             <span className={styles.errorDot} />
@@ -75,7 +84,12 @@ export default function LoginPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="password">Password</label>
+            <div className={styles.labelRow}>
+              <label className={styles.label} htmlFor="password">Password</label>
+              <Link to="/forgot-password" className={styles.forgotLink}>
+                Forgot your password?
+              </Link>
+            </div>
             <div className={styles.inputWrapper}>
               <Lock size={16} className={styles.inputIcon} />
               <input
@@ -110,10 +124,7 @@ export default function LoginPage() {
 
         <div>
           <p className={styles.footerText}>
-            Don&apos;t have an account?{' '}
-            <Link to="/signup" className={styles.footerLink}>
-              Create one
-            </Link>
+            Accounts are managed by your organization.
           </p>
         </div>
       </form>

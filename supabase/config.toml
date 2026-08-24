@@ -1,9 +1,11 @@
 # Supabase Configuration for SNS Projects
 project_id = "gqerfixdmgbqahgslzsq"
 
+[auth]
+enable_signup = false
+
 [functions.admin-manage-workspace-user]
 verify_jwt = true
 
 [functions.manage-defined-process-draft]
 verify_jwt = true
-
