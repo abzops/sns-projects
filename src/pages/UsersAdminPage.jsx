@@ -45,7 +45,7 @@ import styles from './UsersAdminPage.module.css';
 async function parseEdgeFunctionError(err) {
   if (err instanceof FunctionsHttpError) {
     try {
-      const payload = await err.context.json();
+      const payload = await err.context.clone().json();
       if (payload?.error) return payload.error;
     } catch {
       // JSON parse failed — use status text
@@ -60,6 +60,55 @@ async function parseEdgeFunctionError(err) {
   }
   // Plain Error from assertNoError or other throw
   return err?.message || 'An unexpected error occurred. Please retry.';
+}
+
+// ---------------------------------------------------------------------------
+// Resilient Edge Function Invoker with auto-refresh on expired/stale auth tokens
+// ---------------------------------------------------------------------------
+async function invokeAdminEdgeFunction(payload) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+
+  let result = await supabase.functions.invoke('admin-manage-workspace-user', {
+    body: payload,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (result.error) {
+    let isTokenError = false;
+    if (result.error instanceof FunctionsHttpError) {
+      try {
+        const payloadErr = await result.error.context.clone().json();
+        if (
+          payloadErr?.error?.includes('Unauthorized') ||
+          payloadErr?.error?.includes('expired') ||
+          payloadErr?.error?.includes('token')
+        ) {
+          isTokenError = true;
+        }
+      } catch {
+        // ignore
+      }
+    } else if (
+      result.error.message?.includes('Unauthorized') ||
+      result.error.message?.includes('expired') ||
+      result.error.message?.includes('token')
+    ) {
+      isTokenError = true;
+    }
+
+    if (isTokenError) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (!refreshErr && refreshed?.session?.access_token) {
+        result = await supabase.functions.invoke('admin-manage-workspace-user', {
+          body: payload,
+          headers: { Authorization: `Bearer ${refreshed.session.access_token}` },
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 
@@ -421,13 +470,8 @@ export default function UsersAdminPage() {
         system_roles: canManageSystemRoles ? inviteSystemRoles : [],
       };
 
-      // Invoke Edge function exclusively (no privileged client fallback).
-      // supabase-js throws FunctionsHttpError on non-2xx, FunctionsRelayError on
-      // relay failures, and FunctionsFetchError on network errors — all caught below.
-      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
-        'admin-manage-workspace-user',
-        { body: payload }
-      );
+      // Invoke Edge function exclusively (no privileged client fallback) with auto session refresh.
+      const { data: edgeData, error: edgeErr } = await invokeAdminEdgeFunction(payload);
 
       if (edgeErr) {
         // Re-throw so the catch handler can parse it with parseEdgeFunctionError
@@ -524,13 +568,8 @@ export default function UsersAdminPage() {
         system_roles: canManageSystemRoles ? inviteSystemRoles : undefined,
       };
 
-      // Invoke Edge function exclusively (no privileged client fallback).
-      // supabase-js throws FunctionsHttpError on non-2xx, FunctionsRelayError on
-      // relay failures, and FunctionsFetchError on network errors — all caught below.
-      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
-        'admin-manage-workspace-user',
-        { body: payload }
-      );
+      // Invoke Edge function exclusively (no privileged client fallback) with auto session refresh.
+      const { data: edgeData, error: edgeErr } = await invokeAdminEdgeFunction(payload);
 
       if (edgeErr) {
         throw edgeErr;
@@ -562,16 +601,11 @@ export default function UsersAdminPage() {
     }
 
     try {
-      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
-        'admin-manage-workspace-user',
-        {
-          body: {
-            action: 'reissue_temp_password',
-            workspace_id: workspaceId,
-            user_id: member.user_id,
-          },
-        }
-      );
+      const { data: edgeData, error: edgeErr } = await invokeAdminEdgeFunction({
+        action: 'reissue_temp_password',
+        workspace_id: workspaceId,
+        user_id: member.user_id,
+      });
 
       if (edgeErr) throw edgeErr;
       if (!edgeData?.success) {
