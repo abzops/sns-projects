@@ -18,6 +18,7 @@ import styles from './ResetPasswordPage.module.css';
 
 export default function ResetPasswordPage() {
   const {
+    session,
     isPasswordRecovery,
     updatePassword,
     signOut,
@@ -37,6 +38,8 @@ export default function ResetPasswordPage() {
     [newPassword, confirmPassword]
   );
 
+  const recoveryAuthorized = isPasswordRecovery === true && Boolean(session?.user?.id);
+
   if (authLoading) {
     return (
       <div className={styles.page}>
@@ -48,8 +51,8 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // Entry Gate: Fail closed if no valid recovery session / state
-  if (!isPasswordRecovery) {
+  // Entry Gate: Fail closed if no valid recovery provenance + active session
+  if (!recoveryAuthorized) {
     return (
       <div className={styles.page}>
         <div className={styles.ambientGlow} />
@@ -93,13 +96,11 @@ export default function ResetPasswordPage() {
       }
 
       // Password successfully updated:
-      // 1. Sign out globally to invalidate old sessions
-      // 2. Clear recovery state
-      // 3. Navigate to login with success confirmation
-      try {
-        await signOut({ scope: 'global' });
-      } catch {
-        // Safe fallback if global sign-out encounters network edge-case
+      // Invalidate active recovery sessions across all devices
+      const { error: signOutError } = await signOut({ scope: 'global' });
+      if (signOutError) {
+        setError('Password was updated, but unable to complete secure sign-out. Please refresh and sign in manually.');
+        return;
       }
 
       clearPasswordRecoveryState();

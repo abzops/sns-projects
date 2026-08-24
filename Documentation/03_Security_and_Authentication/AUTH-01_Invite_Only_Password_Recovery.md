@@ -19,6 +19,8 @@ Prior to AUTH-01:
 AUTH-01 closes both defects by:
 - Completely eliminating public self-registration from the application bundle and enforcing server-side signup disablement.
 - Introducing a secure, enumeration-resistant "Forgot your password?" workflow (`/forgot-password`) and a dedicated "Reset Password" workflow (`/reset-password`).
+- Requiring dual provenance on the password-reset gate (`isPasswordRecovery === true && Boolean(session?.user?.id)`).
+- Validating global session invalidation (`signOut({ scope: 'global' })`) without silent error swallowing.
 - Extracting a canonical shared password complexity evaluator (`src/lib/passwordPolicy.js`) to guarantee zero drift between onboarding and recovery password policies.
 - Protecting the existing temporary password first-login onboarding contract (`must_change_password`, `complete_first_login`, `workspace_members.status`).
 
@@ -57,7 +59,7 @@ AUTH-01 closes both defects by:
                                   User clicks native recovery link
                                                 │
                                           /reset-password
-                                  (PASSWORD_RECOVERY Auth Event)
+                                  (PASSWORD_RECOVERY Auth Event + Session)
                                                 │
                                    updateUser({ newPassword })
                                                 │
@@ -79,17 +81,21 @@ AUTH-01 closes both defects by:
 - **Native Lifecycle**: Supabase Auth owns the secure recovery token issuance, cryptographic verification, and session establishment.
 - **Zero Token Persistence**: SNS Projects does not generate custom tokens, maintain token database tables, persist recovery tokens in `localStorage`, or log tokens in server or browser consoles.
 
-### C. Dynamic Recovery URL Construction
-- **Basename Awareness**: Implemented `getRecoveryRedirectUrl()` in `src/lib/url.js` using `window.location.origin` and `import.meta.env.BASE_URL` with the standard `URL` constructor.
+### C. Pure & Dynamic Recovery URL Construction
+- **Basename Awareness**: Implemented `buildRecoveryRedirectUrl(origin, base)` and `getRecoveryRedirectUrl()` in `src/lib/url.js` using `window.location.origin` and `import.meta.env.BASE_URL` with the standard `URL` constructor.
 - **Zero Hardcoded Hostnames**: Generates `https://abzops.github.io/sns-projects/reset-password` in production and `http://localhost:<port>/reset-password` in development without duplicate slashes.
 
 ### D. Recovery State Machine in AuthContext
 - `isPasswordRecovery` is set to `true` when `event === 'PASSWORD_RECOVERY'`.
-- `isPasswordRecovery` is preserved across `TOKEN_REFRESHED`, `USER_UPDATED`, and `INITIAL_SESSION` during the active recovery flow.
-- `isPasswordRecovery` is reset to `false` upon `SIGNED_OUT`, explicit completion (`clearPasswordRecoveryState`), cancellation, or standard login from `LoginPage`.
+- `isPasswordRecovery` is preserved across `TOKEN_REFRESHED`, `USER_UPDATED`, `INITIAL_SESSION`, and listener `SIGNED_IN` during the active recovery flow.
+- `isPasswordRecovery` is reset to `false` upon `SIGNED_OUT`, explicit completion (`clearPasswordRecoveryState`), cancellation, or explicit standard `signIn(email, password)`.
 
-### E. Fail-Closed Reset Gate
-- Navigating to `/reset-password` without an active Supabase recovery session renders a fail-closed error card:
+### E. Fail-Closed Reset Gate (Session + Recovery Provenance)
+- Navigating to `/reset-password` requires dual authorization:
+  ```javascript
+  const recoveryAuthorized = isPasswordRecovery === true && Boolean(session?.user?.id);
+  ```
+- Any unauthorized access renders a fail-closed error card:
   - Title: *"Reset link invalid or expired"*
   - Description: *"The password reset link is invalid, expired, or has already been used."*
   - Actions: `[ Request a New Link ]` (`/forgot-password`) and `[ Back to Sign In ]` (`/login`).
@@ -112,6 +118,7 @@ Both `ChangePasswordPage.jsx` and `ResetPasswordPage.jsx` consume this shared ev
 
 ### H. Global Session Invalidation Post-Reset
 - Upon successful password update, `supabase.auth.signOut({ scope: 'global' })` is invoked to invalidate existing sessions across all browsers.
+- `signOut` return value is inspected for errors and fails closed without silent error suppression.
 - The user is redirected to `/login` with success confirmation (*"Password reset successfully. Sign in with your new password."*).
 
 ### I. Onboarding & First-Login Immutability
@@ -129,14 +136,14 @@ Both `ChangePasswordPage.jsx` and `ResetPasswordPage.jsx` consume this shared ev
 | Action | File Path | Purpose |
 | :--- | :--- | :--- |
 | **NEW** | `src/lib/passwordPolicy.js` | Shared permanent password complexity evaluation utility |
-| **NEW** | `src/lib/url.js` | Dynamic recovery redirect URL constructor respecting basename |
+| **NEW** | `src/lib/url.js` | Pure dynamic recovery redirect URL constructor respecting basename |
 | **NEW** | `src/pages/ForgotPasswordPage.jsx` | Enumeration-safe password reset request view |
 | **NEW** | `src/pages/ForgotPasswordPage.module.css` | Styling for forgot password page with design tokens |
-| **NEW** | `src/pages/ResetPasswordPage.jsx` | Gated recovery-session password update view |
+| **NEW** | `src/pages/ResetPasswordPage.jsx` | Gated recovery-session password update view with global signout check |
 | **NEW** | `src/pages/ResetPasswordPage.module.css` | Styling for reset password page and invalid state |
-| **NEW** | `scripts/test-auth-password-recovery.mjs` | 46-assertion automated verification test suite |
+| **NEW** | `scripts/test-auth-password-recovery.mjs` | 50-assertion behavioral and contract automated test suite |
 | **NEW** | `Documentation/03_Security_and_Authentication/AUTH-01_Invite_Only_Password_Recovery.md` | Security specification & verification record |
-| **MODIFY** | `src/contexts/AuthContext.jsx` | Recovery state machine, token refresh retention, removed `signUp` |
+| **MODIFY** | `src/contexts/AuthContext.jsx` | Recovery state machine, explicit `signIn` clear, removed `signUp` |
 | **MODIFY** | `src/pages/LoginPage.jsx` | Removed signup, added forgot link and success banner |
 | **MODIFY** | `src/pages/LoginPage.module.css` | Added labelRow, forgotLink, and successBox styles |
 | **MODIFY** | `src/pages/ChangePasswordPage.jsx` | Refactored to consume shared `evaluatePassword` |
@@ -152,18 +159,18 @@ Both `ChangePasswordPage.jsx` and `ResetPasswordPage.jsx` consume this shared ev
 ## 5. Verification & Test Evidence
 
 ### Automated Test Suite (`npm run test:auth-recovery`)
-- **Assertions Passed**: **`46 / 46`** (100% PASS) across 8 test suites:
+- **Assertions Passed**: **`50 / 50`** (100% PASS) across 8 test suites:
   - Suite 1: Surface & Routing Integrity (Assertions 01–10)
-  - Suite 2: Dynamic URL Construction & Basename Safety (Assertions 11–14)
-  - Suite 3: ForgotPasswordPage Request & Enumeration Safety (Assertions 15–20)
-  - Suite 4: AuthContext Recovery State Machine (Assertions 21–25)
-  - Suite 5: ResetPasswordPage Gating & Password Update (Assertions 26–32)
-  - Suite 6: Shared Password Policy & Onboarding Parity (Assertions 33–36)
-  - Suite 7: Security Invariants & Onboarding Isolation (Assertions 37–42)
-  - Suite 8: Server-Side Configuration & Responsive CSS Tokens (Assertions 43–46)
+  - Suite 2: Pure Dynamic URL Construction & Basename Exactness (Assertions 11–15)
+  - Suite 3: ForgotPasswordPage Request & Enumeration Safety (Assertions 16–21)
+  - Suite 4: REAL Behavioral AuthContext State Machine Simulation Harness (Assertions 22–27)
+  - Suite 5: ResetPasswordPage Gating & Session Provenance (Assertions 28–37)
+  - Suite 6: Shared Password Policy & Multi-User Recovery Isolation (Assertions 38–40)
+  - Suite 7: Security Invariants & Onboarding Isolation (Assertions 41–46)
+  - Suite 8: Server-Side Configuration & Responsive CSS Tokens (Assertions 47–50)
 
 ### Full Regression Gate
-- `npm run test:auth-recovery`: 46/46 PASS
+- `npm run test:auth-recovery`: 50/50 PASS
 - `npm run test:p7-02a`: 56/56 PASS
 - `npm run test:p7-01`: 41/41 PASS
 - `npm run test:ov1-access`: 50/50 PASS

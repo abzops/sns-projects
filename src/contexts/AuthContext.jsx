@@ -37,15 +37,12 @@ export function AuthProvider({ children }) {
 
       // Dedicated Password Recovery Lifecycle State Machine:
       // - PASSWORD_RECOVERY sets recovery mode active.
-      // - TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION preserves recovery mode.
+      // - TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION / SIGNED_IN preserve active recovery mode.
       // - SIGNED_OUT explicitly terminates recovery mode.
-      // - Standard SIGNED_IN (outside recovery flow) clears recovery mode.
+      // - Explicit signIn() clears recovery mode before authenticating fresh credentials.
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
       } else if (event === 'SIGNED_OUT') {
-        setIsPasswordRecovery(false);
-      } else if (event === 'SIGNED_IN') {
-        // Only clear if not in an active recovery transition
         setIsPasswordRecovery(false);
       }
 
@@ -59,6 +56,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signIn = async (email, password) => {
+    // Explicit standard credential login terminates recovery mode
+    setIsPasswordRecovery(false);
+    setAuthEvent('SIGNED_IN');
+
     if (supabaseConfigError) {
       return { error: new Error(supabaseConfigError) };
     }
@@ -78,7 +79,12 @@ export function AuthProvider({ children }) {
     }
 
     const supabase = getSupabase();
-    return supabase.auth.signOut(options);
+    const result = await supabase.auth.signOut(options);
+    if (!result?.error) {
+      setUser(null);
+      setSession(null);
+    }
+    return result;
   };
 
   const clearPasswordRecoveryState = () => {
