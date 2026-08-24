@@ -2,9 +2,11 @@
 
 **Package**: Package 7 — Financial Hierarchy UX  
 **Slice**: P7-02A (Compact Hierarchy Indicators Presentation)  
-**Status**: `IMPLEMENTED`  
+**Status**: `VERIFIED / FROZEN`  
+**Canonical Baseline Commit**: `463c84a`  
 **Automated Verification**: `scripts/test-p7-02a-financial-hierarchy-indicators.mjs` (56/56 assertions passed across 8 suites)  
-**NPM Script**: `npm run test:p7-02a`
+**NPM Script**: `npm run test:p7-02a`  
+**Signed-in Production Manual Acceptance**: `PASSED` (Items A–Q, 1440/1024/768/390 CSS px)
 
 ---
 
