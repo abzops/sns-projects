@@ -1,19 +1,23 @@
 import React from 'react';
 import { formatCompactCurrency } from '../../../lib/finance.js';
 import FinanceRiskBadge from '../FinanceRiskBadge.jsx';
+import FinancialDetailPopover from './FinancialDetailPopover.jsx';
+import ContainerFinancialDetail from './ContainerFinancialDetail.jsx';
 import styles from './ProjectFinancialIndicator.module.css';
 
 /**
  * ProjectFinancialIndicator
  *
- * Renders a compact, accessible financial utilization indicator in the Project header.
+ * Renders a compact, accessible financial utilization indicator in the Project header
+ * and serves as a trigger for the P7-02B detailed financial context card.
  * Pure presentation: consumes authoritative P7-01 project_summary fields directly.
  *
  * @param {Object} props
  * @param {Object|null} props.summary - Normalized project financial summary
  * @param {boolean} [props.loading] - Whether financial data is currently loading
+ * @param {any} [props.scopeKey] - Key representing active scope (closes popover on change)
  */
-export default function ProjectFinancialIndicator({ summary, loading = false }) {
+export default function ProjectFinancialIndicator({ summary, loading = false, scopeKey }) {
   if (loading && !summary) {
     return (
       <div className={styles.skeletonWrap} aria-hidden="true">
@@ -34,7 +38,7 @@ export default function ProjectFinancialIndicator({ summary, loading = false }) 
   const clampedWidth = Math.min(100, Math.max(0, utilizationPct));
   const riskBand = summary.risk_band || 'GREEN';
 
-  return (
+  const triggerPill = (
     <div
       className={styles.projectFinanceSection}
       data-testid="project-financial-indicator"
@@ -80,5 +84,14 @@ export default function ProjectFinancialIndicator({ summary, loading = false }) 
         </div>
       )}
     </div>
+  );
+
+  return (
+    <FinancialDetailPopover
+      trigger={triggerPill}
+      content={<ContainerFinancialDetail summary={summary} entityType="project" />}
+      title="Project Financial Details"
+      scopeKey={scopeKey}
+    />
   );
 }

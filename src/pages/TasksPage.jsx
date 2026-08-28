@@ -1161,11 +1161,12 @@ export default function TasksPage() {
                 <Layers size={13} />
                 <span>{phases.length} Phases, {taskLists.length} Task Lists</span>
               </div>
-              {/* Project Financial Indicator (P7-02A) */}
+              {/* Project Financial Indicator (P7-02A / P7-02B) */}
               {view === 'hierarchy' && financialHierarchy?.project_summary && (
                 <ProjectFinancialIndicator
                   summary={financialHierarchy.project_summary}
                   loading={financialLoading}
+                  scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
                 />
               )}
               {view === 'hierarchy' && financialError && !financialHierarchy && (
@@ -1411,11 +1412,13 @@ export default function TasksPage() {
                         </span>
                       </div>
 
-                      {/* Phase Financial Indicator (P7-02A) */}
+                      {/* Phase Financial Indicator (P7-02A / P7-02B) */}
                       {financialHierarchy?.phase_summaries?.[phase.id] && (
                         <ContainerFinancialIndicator
                           summary={financialHierarchy.phase_summaries[phase.id]}
                           entityType="phase"
+                          title={phase.name}
+                          scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
                         />
                       )}
 
@@ -1531,11 +1534,13 @@ export default function TasksPage() {
                                   </div>
                                   <span className={styles.taskListPercent}>{taskList.progress}%</span>
 
-                                  {/* Task List Financial Indicator (P7-02A) */}
+                                  {/* Task List Financial Indicator (P7-02A / P7-02B) */}
                                   {financialHierarchy?.task_list_summaries?.[taskList.id] && (
                                     <ContainerFinancialIndicator
                                       summary={financialHierarchy.task_list_summaries[taskList.id]}
                                       entityType="task_list"
+                                      title={taskList.name}
+                                      scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
                                     />
                                   )}
 

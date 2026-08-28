@@ -1,0 +1,83 @@
+/* FinancialDetailPopover.module.css */
+
+.popoverWrapper {
+  display: inline-flex;
+  position: relative;
+}
+
+.triggerButton {
+  display: inline-flex;
+  align-items: stretch;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border-radius: var(--radius-xs);
+  transition: all var(--transition);
+  outline: none;
+}
+
+.triggerButton:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.triggerButton:hover {
+  opacity: 0.95;
+}
+
+.triggerActive {
+  outline: 1px solid rgba(253, 226, 21, 0.4);
+}
+
+/* Floating Popover Card in Portal */
+.popoverCard {
+  position: fixed;
+  z-index: 9999;
+  width: 330px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-card, #121214);
+  border: 1px solid var(--line-light, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-sm, 8px);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  padding: 12px 14px;
+  font-family: var(--font, system-ui, sans-serif);
+  color: var(--text, #ffffff);
+  animation: popoverFadeIn 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+
+.pinned {
+  border-color: rgba(253, 226, 21, 0.35);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.8), 0 0 12px rgba(253, 226, 21, 0.1);
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popoverCard {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .popoverCard {
+    width: calc(100vw - 24px);
+    max-width: 360px;
+    padding: 10px 12px;
+  }
+}

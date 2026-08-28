@@ -1,6 +1,8 @@
 import React from 'react';
 import { formatCompactCurrency } from '../../../lib/finance.js';
 import FinanceRiskBadge from '../FinanceRiskBadge.jsx';
+import FinancialDetailPopover from './FinancialDetailPopover.jsx';
+import ContainerFinancialDetail from './ContainerFinancialDetail.jsx';
 import styles from './ContainerFinancialIndicator.module.css';
 
 /**
@@ -22,15 +24,23 @@ function getBudgetSourceLabel(sourceType) {
 /**
  * ContainerFinancialIndicator
  *
- * Renders compact, accessible financial utilization indicator inside Phase and Task List headers.
+ * Renders compact, accessible financial utilization indicator inside Phase and Task List headers
+ * and serves as a trigger for the P7-02B detailed container context card.
  * Pure presentation: consumes authoritative P7-01 container summary objects directly.
  * Handles own-budget and inherited-budget semantics explicitly.
  *
  * @param {Object} props
  * @param {Object|null} props.summary - Normalized container financial summary
  * @param {('phase'|'task_list')} [props.entityType='phase'] - Type of the container
+ * @param {string} [props.title] - Container name or label for accessible title
+ * @param {any} [props.scopeKey] - Key representing active scope (closes popover on change)
  */
-export default function ContainerFinancialIndicator({ summary, entityType = 'phase' }) {
+export default function ContainerFinancialIndicator({
+  summary,
+  entityType = 'phase',
+  title,
+  scopeKey,
+}) {
   if (!summary) {
     return null;
   }
@@ -44,10 +54,13 @@ export default function ContainerFinancialIndicator({ summary, entityType = 'pha
   const riskBand = summary.risk_band || 'GREEN';
   const sourceLabel = getBudgetSourceLabel(summary.budget_source_type);
   const ariaLabel = `${entityType === 'phase' ? 'Phase' : 'Task List'} financial utilization`;
+  const accessibleTitle = `${entityType === 'phase' ? 'Phase' : 'Task List'} Financial Details`;
 
-  // Own Budget Display
+  let triggerContent = null;
+
+  // 1. Own Budget Display
   if (isOwnBudget) {
-    return (
+    triggerContent = (
       <div
         className={`${styles.containerFinance} ${styles[entityType]}`}
         data-testid={`${entityType}-financial-indicator`}
@@ -79,11 +92,9 @@ export default function ContainerFinancialIndicator({ summary, entityType = 'pha
         </div>
       </div>
     );
-  }
-
-  // Inherited Budget Display (explicit ancestry attribution)
-  if (isInherited) {
-    return (
+  } else if (isInherited) {
+    // 2. Inherited Budget Display (explicit ancestry attribution)
+    triggerContent = (
       <div
         className={`${styles.containerFinance} ${styles.inherited} ${styles[entityType]}`}
         data-testid={`${entityType}-financial-indicator-inherited`}
@@ -100,21 +111,36 @@ export default function ContainerFinancialIndicator({ summary, entityType = 'pha
         </div>
       </div>
     );
+  } else {
+    // 3. Truly Unbudgeted Display
+    triggerContent = (
+      <div
+        className={`${styles.containerFinance} ${styles.unbudgeted} ${styles[entityType]}`}
+        data-testid={`${entityType}-financial-indicator-unbudgeted`}
+      >
+        <div className={styles.unbudgetedRow}>
+          <span className={styles.amounts}>
+            <strong className={styles.actual}>{actualSpendFormatted}</strong>
+            <span className={styles.spentLabel}> spent</span>
+          </span>
+          <FinanceRiskBadge isBudgeted={false} size="xs" />
+        </div>
+      </div>
+    );
   }
 
-  // Truly Unbudgeted Display
   return (
-    <div
-      className={`${styles.containerFinance} ${styles.unbudgeted} ${styles[entityType]}`}
-      data-testid={`${entityType}-financial-indicator-unbudgeted`}
-    >
-      <div className={styles.unbudgetedRow}>
-        <span className={styles.amounts}>
-          <strong className={styles.actual}>{actualSpendFormatted}</strong>
-          <span className={styles.spentLabel}> spent</span>
-        </span>
-        <FinanceRiskBadge isBudgeted={false} size="xs" />
-      </div>
-    </div>
+    <FinancialDetailPopover
+      trigger={triggerContent}
+      content={
+        <ContainerFinancialDetail
+          summary={summary}
+          entityType={entityType}
+          title={title}
+        />
+      }
+      title={accessibleTitle}
+      scopeKey={scopeKey}
+    />
   );
 }

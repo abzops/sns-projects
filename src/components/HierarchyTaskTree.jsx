@@ -202,7 +202,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
         </button>
         {processStep && <span className={styles.stepTag}>Process step</span>}
         <div className={styles.taskMeta}>
-          {financial && <TaskSpendIndicator financial={financial} />}
+          {financial && <TaskSpendIndicator financial={financial} taskTitle={task.title} />}
           {status && (
             <StatusBadge status={{ name: status.name, color: status.color }} size="sm" />
           )}

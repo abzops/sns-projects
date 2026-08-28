@@ -1,0 +1,109 @@
+/* TaskFinancialDetail.module.css */
+
+.detailCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.header {
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.08));
+  padding-bottom: 6px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.taskTag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--yellow, #fde215);
+  background: rgba(253, 226, 21, 0.1);
+  padding: 1px 5px;
+  border-radius: var(--radius-pill, 9999px);
+  border: 1px solid rgba(253, 226, 21, 0.25);
+  line-height: 1.2;
+}
+
+.cardTitle {
+  margin: 2px 0 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text, #ffffff);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionHeader {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted-2, #777777);
+  text-transform: uppercase;
+}
+
+.metricsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px 10px;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.metricItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metricLabel {
+  font-size: 0.68rem;
+  color: var(--muted, #a0a0a0);
+  font-weight: 500;
+}
+
+.metricValueActual {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #ffffff;
+  font-family: var(--font, system-ui, sans-serif);
+}
+
+.metricValueSubtree {
+  font-size: 0.84rem;
+  font-weight: 750;
+  color: var(--yellow, #fde215);
+  font-family: var(--font, system-ui, sans-serif);
+}
+
+.helpText {
+  font-size: 0.68rem;
+  color: var(--muted-2, #888888);
+  font-style: italic;
+  margin-top: 1px;
+}
+
+.contextBox {
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xs, 4px);
+}
+
+.contextText {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #00d2ff;
+}
