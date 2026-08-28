@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/create-spa-fallback.mjs",
     "db:setup": "node scripts/apply-supabase-db.mjs",
     "lint": "oxlint",
     "verify:css-modules": "node scripts/verify-css-module-contracts.mjs",

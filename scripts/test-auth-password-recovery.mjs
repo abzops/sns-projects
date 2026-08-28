@@ -493,20 +493,31 @@ report(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Suite 8: Server-Side Configuration & Responsive CSS Tokens
+// Suite 8: Server-Side Configuration, SPA Fallback & Responsive CSS Tokens
 // ─────────────────────────────────────────────────────────────────────────────
-console.log('\n--- Suite 8: Server-Side Configuration & Responsive CSS Tokens ---');
+console.log('\n--- Suite 8: Server-Side Configuration, SPA Fallback & Responsive CSS Tokens ---');
 
 const configToml = fs.readFileSync(path.join(repoRoot, 'supabase/config.toml'), 'utf-8');
+const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
 
 report(
   47,
-  'supabase/config.toml declares [auth] enable_signup = false for local and staging environments',
-  configToml.includes('[auth]') && configToml.includes('enable_signup = false')
+  'supabase/config.toml declares [auth] enable_signup = false, site_url and additional_redirect_urls',
+  configToml.includes('[auth]') &&
+  configToml.includes('enable_signup = false') &&
+  configToml.includes('site_url = "https://abzops.github.io/sns-projects/"') &&
+  configToml.includes('https://abzops.github.io/sns-projects/reset-password')
 );
 
 report(
   48,
+  'Cross-platform SPA fallback generator scripts/create-spa-fallback.mjs exists and is wired into package.json postbuild',
+  fs.existsSync(path.join(repoRoot, 'scripts/create-spa-fallback.mjs')) &&
+  packageJson.scripts?.postbuild === 'node scripts/create-spa-fallback.mjs'
+);
+
+report(
+  49,
   'LoginPage.module.css includes responsive breakpoints and token compliance',
   loginCss.includes('@media (max-width: 480px)') &&
   loginCss.includes('var(--accent)') &&
@@ -514,7 +525,7 @@ report(
 );
 
 report(
-  49,
+  50,
   'ForgotPasswordPage.module.css includes responsive breakpoints and token compliance',
   forgotCss.includes('@media (max-width: 480px)') &&
   forgotCss.includes('var(--accent)') &&
@@ -522,7 +533,7 @@ report(
 );
 
 report(
-  50,
+  51,
   'ResetPasswordPage.module.css includes responsive breakpoints and token compliance',
   resetCss.includes('@media (max-width: 480px)') &&
   resetCss.includes('var(--accent)') &&

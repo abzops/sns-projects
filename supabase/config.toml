@@ -3,6 +3,13 @@ project_id = "gqerfixdmgbqahgslzsq"
 
 [auth]
 enable_signup = false
+site_url = "https://abzops.github.io/sns-projects/"
+additional_redirect_urls = [
+  "https://abzops.github.io/sns-projects/reset-password",
+  "https://abzops.github.io/sns-projects/",
+  "http://localhost:5173/reset-password",
+  "http://localhost:3000/reset-password"
+]
 
 [functions.admin-manage-workspace-user]
 verify_jwt = true
