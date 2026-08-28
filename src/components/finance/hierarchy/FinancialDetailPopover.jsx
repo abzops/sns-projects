@@ -44,15 +44,39 @@ export default function FinancialDetailPopover({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const popoverWidth = Math.min(340, viewportWidth - 24);
-    const estimatedHeight = 280;
 
-    let top = rect.bottom + 6;
+    // Measure actual rendered height if available, fallback to 280
+    const renderedHeight = popoverRef.current
+      ? popoverRef.current.getBoundingClientRect().height
+      : 280;
+
     let placement = 'bottom';
+    let top = rect.bottom + 6;
 
-    // Flip above if not enough room below
-    if (rect.bottom + estimatedHeight > viewportHeight - 12 && rect.top - estimatedHeight > 12) {
-      top = rect.top - estimatedHeight - 6;
+    const spaceBelow = viewportHeight - rect.bottom - 18;
+    const spaceAbove = rect.top - 18;
+
+    // Flip above if not enough room below but enough room above
+    if (spaceBelow < renderedHeight && spaceAbove >= renderedHeight) {
+      top = rect.top - renderedHeight - 6;
       placement = 'top';
+    } else if (spaceBelow < renderedHeight && spaceAbove < renderedHeight) {
+      // Doesn't fit fully either way: pick side with more space and clamp
+      if (spaceAbove > spaceBelow) {
+        top = Math.max(12, rect.top - renderedHeight - 6);
+        placement = 'top';
+      } else {
+        top = Math.min(rect.bottom + 6, Math.max(12, viewportHeight - renderedHeight - 12));
+        placement = 'bottom';
+      }
+    }
+
+    // Always clamp top to viewport boundaries [12, viewportHeight - 12]
+    if (top < 12) {
+      top = 12;
+    }
+    if (top + renderedHeight > viewportHeight - 12) {
+      top = Math.max(12, viewportHeight - renderedHeight - 12);
     }
 
     // Horizontal alignment and viewport clamping
@@ -72,6 +96,11 @@ export default function FinancialDetailPopover({
     if (!isOpen) return;
     updatePosition();
 
+    // Re-measure after DOM paint
+    const rafId = requestAnimationFrame(() => {
+      updatePosition();
+    });
+
     const handleScrollOrResize = () => {
       updatePosition();
     };
@@ -80,6 +109,7 @@ export default function FinancialDetailPopover({
     window.addEventListener('scroll', handleScrollOrResize, true);
 
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleScrollOrResize);
       window.removeEventListener('scroll', handleScrollOrResize, true);
     };

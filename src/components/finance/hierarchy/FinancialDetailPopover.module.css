@@ -40,6 +40,9 @@
   z-index: 9999;
   width: 330px;
   max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-card, #121214);
   border: 1px solid var(--line-light, rgba(255, 255, 255, 0.12));
   border-radius: var(--radius-sm, 8px);

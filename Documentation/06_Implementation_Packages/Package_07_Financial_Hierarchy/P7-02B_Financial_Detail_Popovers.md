@@ -104,12 +104,12 @@ graph TD
 
 ## 4. Verification & Certification
 
-All 38 dedicated automated test assertions in `scripts/test-p7-02b-financial-detail-popovers.mjs` passed alongside the full platform regression gate:
+All 51 dedicated automated test assertions in `scripts/test-p7-02b-financial-detail-popovers.mjs` passed alongside the full platform regression gate:
 
 ```bash
 # Dedicated P7-02B Test Suite
 npm run test:p7-02b
-# Output: ALL 38 P7-02B FINANCIAL DETAIL POPOVER ASSERTIONS PASSED!
+# Output: ALL 51 P7-02B FINANCIAL DETAIL POPOVER ASSERTIONS PASSED!
 
 # Full Platform Regression Gate
 npm run test:p7-02a             # 56 / 56 PASSED
@@ -135,9 +135,9 @@ npm run build                   # Built successfully
 
 | File | Purpose |
 | :--- | :--- |
-| `src/components/finance/hierarchy/FinancialDetailPopover.jsx` | Reusable accessible popover container with portal rendering and keyboard/focus management |
-| `src/components/finance/hierarchy/FinancialDetailPopover.module.css` | Styles for trigger button, fixed floating card, focus rings, and responsive viewport sizing |
-| `src/components/finance/hierarchy/ContainerFinancialDetail.jsx` | Financial detail context card for Project, Phase, and Task List containers |
+| `src/components/finance/hierarchy/FinancialDetailPopover.jsx` | Reusable accessible popover container with portal rendering, dynamic height flip/clamping, and keyboard/focus management |
+| `src/components/finance/hierarchy/FinancialDetailPopover.module.css` | Styles for trigger button, fixed floating card, vertical viewport containment (`max-height: calc(100vh - 24px)`), focus rings, and responsive viewport sizing |
+| `src/components/finance/hierarchy/ContainerFinancialDetail.jsx` | Financial detail context card for Project, Phase, and Task List containers (honoring `is_budgeted=false` unbudgeted Project semantics) |
 | `src/components/finance/hierarchy/ContainerFinancialDetail.module.css` | Grid styling for container budget and spend breakdowns |
 | `src/components/finance/hierarchy/TaskFinancialDetail.jsx` | Financial detail context card for Tasks (direct spend, visible subtree spend, budget context) |
 | `src/components/finance/hierarchy/TaskFinancialDetail.module.css` | Metric styling for task spend indicators |
@@ -145,4 +145,4 @@ npm run build                   # Built successfully
 | `src/components/finance/hierarchy/ContainerFinancialIndicator.jsx` | Wraps compact phase and task list indicator as popover trigger |
 | `src/components/finance/hierarchy/TaskSpendIndicator.jsx` | Wraps compact task spend indicator as popover trigger |
 | `src/components/finance/hierarchy/index.js` | Exports all hierarchy finance components |
-| `scripts/test-p7-02b-financial-detail-popovers.mjs` | 38 automated test assertions verifying interaction, accessibility, scope safety, and data presentation |
+| `scripts/test-p7-02b-financial-detail-popovers.mjs` | 51 automated test assertions verifying interaction, accessibility, scope safety, unbudgeted Project semantics, and data presentation |

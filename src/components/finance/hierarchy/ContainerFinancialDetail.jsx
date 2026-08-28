@@ -38,8 +38,11 @@ export default function ContainerFinancialDetail({
   if (!summary) return null;
 
   const isProject = entityType === 'project';
-  const isOwnBudget = summary.is_budgeted === true || isProject;
-  const isInherited = !isOwnBudget && Boolean(summary.budget_source_id);
+  const isOwnBudget = summary.is_budgeted === true;
+  const isInherited =
+    !isProject &&
+    !isOwnBudget &&
+    Boolean(summary.budget_source_id);
   const sourceLabel = getBudgetSourceLabel(summary.budget_source_type);
 
   const displayTitle =
@@ -223,13 +226,13 @@ export default function ContainerFinancialDetail({
     );
   }
 
-  // 3. TRUE UNBUDGETED CONTAINER
+  // 3. TRUE UNBUDGETED CONTAINER (Project, Phase, or Task List without budget or source)
   return (
     <div className={styles.detailCard} data-testid="container-financial-detail-unbudgeted">
       <div className={styles.header}>
         <div className={styles.titleRow}>
           <span className={styles.entityTag}>
-            {entityType === 'phase' ? 'PHASE' : 'TASK LIST'}
+            {isProject ? 'PROJECT' : entityType === 'phase' ? 'PHASE' : 'TASK LIST'}
           </span>
           <span className={styles.unbudgetedTag}>UNBUDGETED</span>
         </div>
@@ -239,7 +242,7 @@ export default function ContainerFinancialDetail({
       <div className={styles.section}>
         <div className={styles.sectionHeader}>ACTUAL SPEND</div>
         <div className={styles.metricItem}>
-          <span className={styles.metricLabel}>Spend to date</span>
+          <span className={styles.metricLabel}>Actual Spend</span>
           <span className={styles.metricValueActual}>{formatCurrency(summary.actual_spend, false)}</span>
         </div>
       </div>

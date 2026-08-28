@@ -95,7 +95,7 @@ function SubtaskGroup({ subtasks }) {
   );
 }
 
-function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set(), taskFinancials = {} }) {
+function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set(), taskFinancials = {}, scopeKey }) {
   const [expanded, setExpanded] = useState(true);
   const steps = model.processStepsByInstance.get(instance.id) || [];
   const processName = instance.defined_processes?.name || 'Process';
@@ -153,6 +153,7 @@ function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Se
                 lineage={lineage}
                 processStep
                 taskFinancials={taskFinancials}
+                scopeKey={scopeKey}
               />
             ))
           )}
@@ -162,7 +163,7 @@ function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Se
   );
 }
 
-function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false, taskFinancials = {} }) {
+function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false, taskFinancials = {}, scopeKey }) {
   const [expanded, setExpanded] = useState(true);
   const {
     subtasks,
@@ -202,7 +203,13 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
         </button>
         {processStep && <span className={styles.stepTag}>Process step</span>}
         <div className={styles.taskMeta}>
-          {financial && <TaskSpendIndicator financial={financial} taskTitle={task.title} />}
+          {financial && (
+            <TaskSpendIndicator
+              financial={financial}
+              taskTitle={task.title}
+              scopeKey={scopeKey}
+            />
+          )}
           {status && (
             <StatusBadge status={{ name: status.name, color: status.color }} size="sm" />
           )}
@@ -233,6 +240,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
               depth={depth + 1}
               lineage={nextLineage}
               taskFinancials={taskFinancials}
+              scopeKey={scopeKey}
             />
           ))}
 
@@ -254,6 +262,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
                 depth={depth + 1}
                 lineage={nextLineage}
                 taskFinancials={taskFinancials}
+                scopeKey={scopeKey}
               />
             )
           ))}
@@ -263,7 +272,7 @@ function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), pro
   );
 }
 
-export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen, taskFinancials = {} }) {
+export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen, taskFinancials = {}, scopeKey }) {
   const model = useMemo(() => buildHierarchyModel(tasks, processes), [tasks, processes]);
   if (processes.length === 0) return null;
 
@@ -276,6 +285,7 @@ export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen,
           model={model}
           onTaskOpen={onTaskOpen}
           taskFinancials={taskFinancials}
+          scopeKey={scopeKey}
         />
       ))}
     </div>
@@ -288,6 +298,7 @@ export default function HierarchyTaskTree({
   onTaskOpen,
   emptyMessage = 'No tasks in this list.',
   taskFinancials = {},
+  scopeKey,
 }) {
   const model = useMemo(
     () => buildHierarchyModel(tasks, processInstances),
@@ -307,6 +318,7 @@ export default function HierarchyTaskTree({
           model={model}
           onTaskOpen={onTaskOpen}
           taskFinancials={taskFinancials}
+          scopeKey={scopeKey}
         />
       ))}
     </div>

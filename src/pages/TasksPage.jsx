@@ -311,7 +311,7 @@ export default function TasksPage() {
   // View state: 'hierarchy' | 'kanban' | 'list'
   const [view, setView] = useState('hierarchy');
 
-  // P7-01 / P7-02A: Authoritative Project Financial Hierarchy Read Model
+  // P7-01 / P7-02A / P7-02B: Authoritative Project Financial Hierarchy Read Model & Popover Scope
   const {
     financialHierarchy,
     loading: financialLoading,
@@ -327,6 +327,14 @@ export default function TasksPage() {
         view === 'hierarchy',
     }
   );
+
+  const financialPopoverScopeKey = [
+    user?.id || 'anonymous',
+    workspaceId || 'none',
+    visibleProjectId || projectId || 'none',
+    authorizationScopeKey || 'unresolved',
+    view,
+  ].join(':');
 
   const [search, setSearch] = useState('');
   const [filterPhase, setFilterPhase] = useState('');
@@ -1166,7 +1174,7 @@ export default function TasksPage() {
                 <ProjectFinancialIndicator
                   summary={financialHierarchy.project_summary}
                   loading={financialLoading}
-                  scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
+                  scopeKey={financialPopoverScopeKey}
                 />
               )}
               {view === 'hierarchy' && financialError && !financialHierarchy && (
@@ -1418,7 +1426,7 @@ export default function TasksPage() {
                           summary={financialHierarchy.phase_summaries[phase.id]}
                           entityType="phase"
                           title={phase.name}
-                          scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
+                          scopeKey={financialPopoverScopeKey}
                         />
                       )}
 
@@ -1540,7 +1548,7 @@ export default function TasksPage() {
                                       summary={financialHierarchy.task_list_summaries[taskList.id]}
                                       entityType="task_list"
                                       title={taskList.name}
-                                      scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}
+                                      scopeKey={financialPopoverScopeKey}
                                     />
                                   )}
 
@@ -1589,12 +1597,14 @@ export default function TasksPage() {
                                       tasks={listTasks}
                                       onTaskOpen={setSelectedTask}
                                       taskFinancials={financialHierarchy?.tasks || {}}
+                                      scopeKey={financialPopoverScopeKey}
                                     />
                                     <HierarchyTaskTree
                                       tasks={listTasks}
                                       processInstances={processInstances}
                                       onTaskOpen={setSelectedTask}
                                       taskFinancials={financialHierarchy?.tasks || {}}
+                                      scopeKey={financialPopoverScopeKey}
                                       emptyMessage={
                                         taskListProcesses.length > 0
                                           ? 'No ordinary tasks in this list.'
@@ -1638,6 +1648,7 @@ export default function TasksPage() {
                 processInstances={processInstances}
                 onTaskOpen={setSelectedTask}
                 taskFinancials={financialHierarchy?.tasks || {}}
+                scopeKey={financialPopoverScopeKey}
               />
             </div>
           )}

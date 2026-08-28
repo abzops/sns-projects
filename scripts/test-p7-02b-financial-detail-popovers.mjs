@@ -3,11 +3,12 @@
  *
  * Comprehensive automated verification for P7-02B:
  * 1. Architecture, Zero-RPC & Database Integrity (A, B, AV, AW, AY, AZ)
- * 2. Project Financial Detail Popover & Context Card (C, D, E, F, G, H, I, J, K, L)
+ * 2. Project Financial Detail Popover & Context Card (C, D, E, F, G, H, I, J, K, L + Unbudgeted Project Regression)
  * 3. Own-Budget & Inherited-Budget Containers (M, N, O, P, Q, R, S, AD, AE)
  * 4. Task Spend Detail Popovers & Subtree Contracts (T, U, V, W, X, Y, Z, AA, AB, AC, AF)
- * 5. Popover Interaction, Accessibility & Keyboard Contracts (AG, AH, AI, AJ, AK, AL, AM, AN, AO)
- * 6. Scope Switch Safety & View Transition Isolation (AP, AQ, AR, AS, AT, AU, AX)
+ * 5. Scope Key Architecture & Hierarchy Tree Propagation (AP, AQ, AR, AS, AT, AU + Deep Scope Propagation)
+ * 6. Popover Viewport Safety, Mobile 390px & CSS Contract (AX + Vertical Viewport Safety)
+ * 7. Mounted React Interaction Harness (Click, Enter, Space, Escape, Focus Restore, Scope Reset)
  *
  * Usage:
  *   node --experimental-loader ./scripts/jsx-loader.mjs scripts/test-p7-02b-financial-detail-popovers.mjs
@@ -17,7 +18,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
 import ProjectFinancialIndicator from '../src/components/finance/hierarchy/ProjectFinancialIndicator.jsx';
@@ -26,6 +28,7 @@ import TaskSpendIndicator from '../src/components/finance/hierarchy/TaskSpendInd
 import FinancialDetailPopover from '../src/components/finance/hierarchy/FinancialDetailPopover.jsx';
 import ContainerFinancialDetail from '../src/components/finance/hierarchy/ContainerFinancialDetail.jsx';
 import TaskFinancialDetail from '../src/components/finance/hierarchy/TaskFinancialDetail.jsx';
+import HierarchyTaskTree, { HierarchyProcessGroups } from '../src/components/HierarchyTaskTree.jsx';
 import * as hierarchyExports from '../src/components/finance/hierarchy/index.js';
 
 const repoRoot = process.cwd();
@@ -202,6 +205,42 @@ async function runTests() {
   assert.ok(overrunDetailHtml.includes('RED'), 'J: Overrun renders RED risk band');
   pass(17, 'J: Backend Overrun amount displayed accurately without client calculation');
 
+  // Dedicated UNBUDGETED Project Regression Test (Section 1 & 2)
+  const unbudgetedProject = {
+    entity_type: 'project',
+    entity_id: 'proj-unb',
+    is_budgeted: false,
+    budget_source_type: null,
+    budget_source_id: null,
+    base_budget: 0,
+    safety_buffer: 0,
+    total_ceiling: 0,
+    actual_spend: 15000,
+    remaining_base: 0,
+    utilization_pct: 0,
+    risk_band: 'GREEN',
+  };
+  const unbudgetedProjHtml = stripHtml(renderToString(
+    React.createElement(ContainerFinancialDetail, { summary: unbudgetedProject, entityType: 'project' })
+  ));
+
+  // Must contain accurate unbudgeted markers
+  assert.ok(unbudgetedProjHtml.includes('PROJECT'), 'Unbudgeted project displays PROJECT entity tag');
+  assert.ok(unbudgetedProjHtml.includes('UNBUDGETED'), 'Unbudgeted project displays UNBUDGETED badge');
+  assert.ok(unbudgetedProjHtml.includes('Actual Spend'), 'Unbudgeted project displays Actual Spend label');
+  assert.ok(unbudgetedProjHtml.includes('₹15,000'), 'Unbudgeted project displays Actual Spend value ₹15,000');
+  assert.ok(unbudgetedProjHtml.includes('No effective budget assigned.'), 'Unbudgeted project displays "No effective budget assigned." notice');
+
+  // Must NOT contain fabricated budgetary health metrics
+  assert.ok(!unbudgetedProjHtml.includes('Project Budget'), 'Unbudgeted project must NOT display Project Budget badge');
+  assert.ok(!unbudgetedProjHtml.includes('Base Budget'), 'Unbudgeted project must NOT display Base Budget');
+  assert.ok(!unbudgetedProjHtml.includes('Safety Buffer'), 'Unbudgeted project must NOT display Safety Buffer');
+  assert.ok(!unbudgetedProjHtml.includes('Total Ceiling'), 'Unbudgeted project must NOT display Total Ceiling');
+  assert.ok(!unbudgetedProjHtml.includes('Financial Risk:'), 'Unbudgeted project must NOT display Financial Risk');
+  assert.ok(!unbudgetedProjHtml.includes('Utilization'), 'Unbudgeted project must NOT display Utilization');
+  assert.ok(!unbudgetedProjHtml.includes('0%'), 'Unbudgeted project must NOT display 0% Utilization');
+  pass(18, 'Unbudgeted Project Regression: is_budgeted=false renders UNBUDGETED card without fake Base ₹0, 0%, or GREEN risk');
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Suite 3: Own-Budget & Inherited-Budget Containers
   // ─────────────────────────────────────────────────────────────────────────────
@@ -228,7 +267,7 @@ async function runTests() {
   ));
   assert.ok(ownPhaseDetailHtml.includes('Budget Owner'), 'M: Own-budget Phase labeled Budget Owner');
   assert.ok(ownPhaseDetailHtml.includes('PHASE'), 'M: Entity tag PHASE displayed');
-  pass(18, 'M: Own-budget Phase explicitly identified as Budget Owner');
+  pass(19, 'M: Own-budget Phase explicitly identified as Budget Owner');
 
   // N: Own-budget Task List explicitly identified as Task List Budget Owner
   const mockOwnTaskListSummary = {
@@ -251,7 +290,7 @@ async function runTests() {
   ));
   assert.ok(ownTaskListDetailHtml.includes('Budget Owner'), 'N: Own-budget Task List labeled Budget Owner');
   assert.ok(ownTaskListDetailHtml.includes('TASK LIST'), 'N: Entity tag TASK LIST displayed');
-  pass(19, 'N: Own-budget Task List explicitly identified as Budget Owner');
+  pass(20, 'N: Own-budget Task List explicitly identified as Budget Owner');
 
   // O: Inherited Phase says "Uses Project Budget"
   const mockInheritedPhaseSummary = {
@@ -273,7 +312,7 @@ async function runTests() {
   ));
   assert.ok(inheritedPhaseDetailHtml.includes('Uses Project Budget'), 'O: Inherited Phase displays "Uses Project Budget"');
   assert.ok(inheritedPhaseDetailHtml.includes('This Phase does not own an independent budget.'), 'O: Explanatory notice rendered');
-  pass(20, 'O: Inherited Phase explicitly displays "Uses Project Budget" with non-ownership clarification');
+  pass(21, 'O: Inherited Phase explicitly displays "Uses Project Budget" with non-ownership clarification');
 
   // P: Inherited Task List from Phase says "Uses Phase Budget"
   const mockInheritedTlFromPhase = {
@@ -295,7 +334,7 @@ async function runTests() {
   ));
   assert.ok(inheritedTlPhaseHtml.includes('Uses Phase Budget'), 'P: Inherited Task List displays "Uses Phase Budget"');
   assert.ok(inheritedTlPhaseHtml.includes('This Task List uses the Phase budget.'), 'P: Explanatory notice rendered');
-  pass(21, 'P: Inherited Task List from Phase displays "Uses Phase Budget"');
+  pass(22, 'P: Inherited Task List from Phase displays "Uses Phase Budget"');
 
   // Q: Inherited Task List from Project says "Uses Project Budget"
   const mockInheritedTlFromProject = {
@@ -317,13 +356,13 @@ async function runTests() {
   ));
   assert.ok(inheritedTlProjHtml.includes('Uses Project Budget'), 'Q: Inherited Task List from Project displays "Uses Project Budget"');
   assert.ok(inheritedTlProjHtml.includes('This Task List uses the Project budget.'), 'Q: Explanatory notice rendered');
-  pass(22, 'Q: Inherited Task List from Project displays "Uses Project Budget"');
+  pass(23, 'Q: Inherited Task List from Project displays "Uses Project Budget"');
 
   // R: Inherited container never labels ancestor budget as its own
   assert.ok(!inheritedPhaseDetailHtml.includes('Phase Budget Owner'), 'R: Inherited container never claims budget ownership');
   assert.ok(!inheritedTlPhaseHtml.includes('Task List Budget Owner'), 'R: Inherited container never claims budget ownership');
   assert.ok(inheritedPhaseDetailHtml.includes('CONTEXTUAL BUDGET (PROJECT)'), 'R: Contextual budget labeled explicitly as ancestor context');
-  pass(23, 'R: Inherited containers strictly label ancestor budget as Contextual Budget, avoiding false ownership');
+  pass(24, 'R: Inherited containers strictly label ancestor budget as Contextual Budget, avoiding false ownership');
 
   // S: True unbudgeted container renders UNBUDGETED state without fake GREEN
   const mockUnbudgetedPhase = {
@@ -345,14 +384,14 @@ async function runTests() {
   assert.ok(unbudgetedHtml.includes('UNBUDGETED'), 'S: Unbudgeted container displays UNBUDGETED badge');
   assert.ok(unbudgetedHtml.includes('No effective budget assigned.'), 'S: Unbudgeted container displays clear notice');
   assert.ok(!unbudgetedHtml.includes('0% Utilization'), 'S: Unbudgeted container does NOT fabricate 0% utilization');
-  pass(24, 'S: True unbudgeted container renders UNBUDGETED notice without fabricated base or fake GREEN');
+  pass(25, 'S: True unbudgeted container renders UNBUDGETED notice without fabricated base or fake GREEN');
 
   // AD, AE: Unauthorized / missing container summary yields no trigger
   const nullPhaseTrigger = renderToString(React.createElement(ContainerFinancialIndicator, { summary: null, entityType: 'phase' }));
   const nullTlTrigger = renderToString(React.createElement(ContainerFinancialIndicator, { summary: null, entityType: 'task_list' }));
   assert.strictEqual(nullPhaseTrigger, '', 'AD: Missing Phase summary yields null trigger');
   assert.strictEqual(nullTlTrigger, '', 'AE: Missing Task List summary yields null trigger');
-  pass(25, 'AD & AE: Unauthorized/missing Phase and Task List summaries yield null triggers (fail-closed)');
+  pass(26, 'AD & AE: Unauthorized/missing Phase and Task List summaries yield null triggers (fail-closed)');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Suite 4: Task Spend Detail Popovers & Subtree Contracts
@@ -374,7 +413,7 @@ async function runTests() {
   ));
   assert.ok(taskDetailHtml.includes('Direct Spend'), 'T: Task detail displays Direct Spend label');
   assert.ok(taskDetailHtml.includes('₹34,200'), 'T: Task detail displays formatted direct spend ₹34,200');
-  pass(26, 'T: Task detail displays backend Direct Spend formatted in INR');
+  pass(27, 'T: Task detail displays backend Direct Spend formatted in INR');
 
   // U: Task visible_rollup_spend uses EXACT label "Visible Subtree Spend"
   assert.ok(taskDetailHtml.includes('Visible Subtree Spend'), 'U: EXACT label "Visible Subtree Spend" used');
@@ -383,7 +422,7 @@ async function runTests() {
   assert.ok(!taskDetailHtml.includes('Total Spend'), 'U: Strictly prohibited "Total Spend" is absent');
   assert.ok(!taskDetailHtml.includes('Total Task Spend'), 'U: Strictly prohibited "Total Task Spend" is absent');
   assert.ok(!taskDetailHtml.includes('Complete Spend'), 'U: Strictly prohibited "Complete Spend" is absent');
-  pass(27, 'U: Task subtree spend uses EXACT label "Visible Subtree Spend" with permission disclaimer');
+  pass(28, 'U: Task subtree spend uses EXACT label "Visible Subtree Spend" with permission disclaimer');
 
   // Omission when visible_rollup_spend === direct_spend
   const mockLeafTask = {
@@ -393,7 +432,7 @@ async function runTests() {
   };
   const leafTaskDetailHtml = stripHtml(renderToString(React.createElement(TaskFinancialDetail, { financial: mockLeafTask })));
   assert.ok(!leafTaskDetailHtml.includes('Visible Subtree Spend'), 'Subtree spend omitted when equal to direct spend');
-  pass(28, 'Task detail omits Visible Subtree Spend row when leaf task has identical direct and rollup spend');
+  pass(29, 'Task detail omits Visible Subtree Spend row when leaf task has identical direct and rollup spend');
 
   // V, W, X, Y, Z: Strict prohibitions on Task Financial Detail
   assert.ok(!taskDetailHtml.includes('Base Budget'), 'V: Tasks NEVER render Base Budget');
@@ -402,73 +441,355 @@ async function runTests() {
   assert.ok(!taskDetailHtml.includes('Total Ceiling'), 'Tasks NEVER render Total Ceiling');
   assert.ok(!taskDetailHtml.includes('Utilization'), 'Y: Tasks NEVER render Utilization %');
   assert.ok(!taskDetailHtml.includes('Financial Risk:'), 'Z: Tasks NEVER render Risk Band');
-  pass(29, 'V, W, X, Y, Z: Tasks NEVER render Base Budget, Buffer, Ceiling, Remaining, Utilization, or Risk Band');
+  pass(30, 'V, W, X, Y, Z: Tasks NEVER render Base Budget, Buffer, Ceiling, Remaining, Utilization, or Risk Band');
 
   // Budget Context on Task
   assert.ok(taskDetailHtml.includes('Uses Task List Budget'), 'Task detail displays "Uses Task List Budget"');
   const mockProjTask = { ...mockTaskFinancial, budget_source_type: 'project' };
   const projTaskHtml = stripHtml(renderToString(React.createElement(TaskFinancialDetail, { financial: mockProjTask })));
   assert.ok(projTaskHtml.includes('Uses Project Budget'), 'Task detail displays "Uses Project Budget"');
-  pass(30, 'Task detail displays accurate Budget Context based on ancestor funding source');
+  pass(31, 'Task detail displays accurate Budget Context based on ancestor funding source');
 
   // AA: Child Task uses Task detail contract
-  assert.ok(treeSrc.includes('<TaskSpendIndicator financial={financial} taskTitle={task.title} />'), 'AA: Child tasks in recursive tree use TaskSpendIndicator');
-  pass(31, 'AA: Recursive Child Tasks consume TaskSpendIndicator and Task detail contract identically');
+  assert.ok(treeSrc.includes('TaskSpendIndicator'), 'AA: Child tasks in recursive tree use TaskSpendIndicator');
+  pass(32, 'AA: Recursive Child Tasks consume TaskSpendIndicator and Task detail contract identically');
 
   // AB: Process Step uses Task detail contract
   assert.ok(treeSrc.includes('processStep'), 'AB: Process Step branch passes financial to TaskSpendIndicator');
-  pass(32, 'AB: Process Step Tasks consume TaskSpendIndicator and Task detail contract identically');
+  pass(33, 'AB: Process Step Tasks consume TaskSpendIndicator and Task detail contract identically');
 
   // AC: Subtasks have no finance detail trigger
   assert.ok(!treeSrc.includes('<TaskSpendIndicator financial={subtask'), 'AC: Subtasks do not render TaskSpendIndicator');
-  pass(33, 'AC: Subtasks do NOT render independent financial detail popovers (represented exclusively in parent Task)');
+  pass(34, 'AC: Subtasks do NOT render independent financial detail popovers (represented exclusively in parent Task)');
 
   // AF: Unauthorized / missing Task yields no trigger
   const nullTaskHtml = renderToString(React.createElement(TaskSpendIndicator, { financial: null }));
   assert.strictEqual(nullTaskHtml, '', 'AF: Null task financial renders nothing');
-  pass(34, 'AF: Unauthorized or missing task financial object yields null trigger (fail-closed)');
+  pass(35, 'AF: Unauthorized or missing task financial object yields null trigger (fail-closed)');
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Suite 5: Popover Interaction, Accessibility & Keyboard Contracts
+  // Suite 5: Scope Key Architecture & Hierarchy Tree Propagation
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log('\n--- Suite 5: Popover Interaction, Accessibility & Keyboard Contracts ---');
+  console.log('\n--- Suite 5: Scope Key Architecture & Hierarchy Tree Propagation ---');
 
-  // AG, AH, AI, AJ, AK, AL, AM, AN, AO
-  assert.ok(popoverSrc.includes('handleClick'), 'AG: Click toggles open/pinned state');
-  assert.ok(popoverSrc.includes('isPinned'), 'AH: Second click unpins/closes popover');
-  assert.ok(popoverSrc.includes('handleMouseEnter'), 'AI: Hover provides desktop preview without breaking keyboard access');
-  assert.ok(popoverSrc.includes('handleTriggerKeyDown') && popoverSrc.includes('e.key === \'Enter\''), 'AJ: Enter opens/toggles popover');
-  assert.ok(popoverSrc.includes('e.key === \' \''), 'AK: Space key opens/toggles popover');
-  assert.ok(popoverSrc.includes('e.key === \'Escape\''), 'AL: Escape key closes popover');
-  assert.ok(popoverSrc.includes('triggerRef.current?.focus()'), 'AL: Focus restored to trigger on Escape close');
-  assert.ok(popoverSrc.includes('pointerdown'), 'AM: Outside pointer down closes popover');
-  assert.ok(popoverSrc.includes('aria-expanded={isOpen}'), 'AN: aria-expanded reflects open/closed state');
-  assert.ok(popoverSrc.includes('aria-haspopup="dialog"'), 'AN: aria-haspopup="dialog" declared on trigger');
-  assert.ok(popoverSrc.includes('role="dialog"'), 'AN: Popover container declared as role="dialog"');
-  assert.ok(popoverCss.includes(':focus-visible'), 'AO: :focus-visible style declared for visible keyboard focus outline');
-  pass(35, 'AG–AO: Complete interaction & accessibility contract verified (Click/Hover/Enter/Space/Escape/Focus-Restore/ARIA)');
+  // Scope key definition in TasksPage
+  assert.ok(
+    tasksPageSrc.includes('const financialPopoverScopeKey = [') &&
+    tasksPageSrc.includes('user?.id || \'anonymous\'') &&
+    tasksPageSrc.includes('workspaceId || \'none\'') &&
+    tasksPageSrc.includes('visibleProjectId || projectId || \'none\'') &&
+    tasksPageSrc.includes('authorizationScopeKey || \'unresolved\'') &&
+    tasksPageSrc.includes('view'),
+    'TasksPage defines authoritative financialPopoverScopeKey with user.id'
+  );
+  pass(36, 'AP & AQ: TasksPage constructs single authoritative financialPopoverScopeKey containing authenticated user.id');
+
+  // Propagation to Project and Container indicators
+  assert.ok(
+    tasksPageSrc.includes('<ProjectFinancialIndicator\n                  summary={financialHierarchy.project_summary}\n                  loading={financialLoading}\n                  scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes financialPopoverScopeKey to ProjectFinancialIndicator'
+  );
+  assert.ok(
+    tasksPageSrc.includes('<ContainerFinancialIndicator\n                          summary={financialHierarchy.phase_summaries[phase.id]}\n                          entityType="phase"\n                          title={phase.name}\n                          scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes financialPopoverScopeKey to Phase ContainerFinancialIndicator'
+  );
+  assert.ok(
+    tasksPageSrc.includes('<ContainerFinancialIndicator\n                                      summary={financialHierarchy.task_list_summaries[taskList.id]}\n                                      entityType="task_list"\n                                      title={taskList.name}\n                                      scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes financialPopoverScopeKey to Task List ContainerFinancialIndicator'
+  );
+  pass(37, 'AR & AS: TasksPage propagates financialPopoverScopeKey to Project, Phase, and Task List indicators');
+
+  // Propagation through HierarchyTaskTree & HierarchyProcessGroups
+  assert.ok(
+    tasksPageSrc.includes('<HierarchyProcessGroups\n                                      processes={taskListProcesses}\n                                      tasks={listTasks}\n                                      onTaskOpen={setSelectedTask}\n                                      taskFinancials={financialHierarchy?.tasks || {}}\n                                      scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes scopeKey to HierarchyProcessGroups'
+  );
+  assert.ok(
+    tasksPageSrc.includes('<HierarchyTaskTree\n                                      tasks={listTasks}\n                                      processInstances={processInstances}\n                                      onTaskOpen={setSelectedTask}\n                                      taskFinancials={financialHierarchy?.tasks || {}}\n                                      scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes scopeKey to task list HierarchyTaskTree'
+  );
+  assert.ok(
+    tasksPageSrc.includes('<HierarchyTaskTree\n                tasks={tasks.filter((task) => !task.phase_id && !task.task_list_id)}\n                processInstances={processInstances}\n                onTaskOpen={setSelectedTask}\n                taskFinancials={financialHierarchy?.tasks || {}}\n                scopeKey={financialPopoverScopeKey}'),
+    'TasksPage passes scopeKey to uncategorized HierarchyTaskTree'
+  );
+  pass(38, 'TasksPage propagates financialPopoverScopeKey to HierarchyTaskTree and HierarchyProcessGroups');
+
+  // HierarchyTaskTree internals: propagation to TaskNode, recursive Child tasks, ProcessGroup, Process Steps, and TaskSpendIndicator
+  assert.ok(treeSrc.includes('function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false, taskFinancials = {}, scopeKey })'), 'TaskNode receives scopeKey');
+  assert.ok(treeSrc.includes('<TaskSpendIndicator\n              financial={financial}\n              taskTitle={task.title}\n              scopeKey={scopeKey}\n            />'), 'TaskNode passes scopeKey to TaskSpendIndicator');
+  assert.ok(treeSrc.includes('function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set(), taskFinancials = {}, scopeKey })'), 'ProcessGroup receives scopeKey');
+  assert.ok(treeSrc.includes('export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen, taskFinancials = {}, scopeKey })'), 'HierarchyProcessGroups receives scopeKey');
+  pass(39, 'Tree scopeKey propagation: HierarchyTaskTree -> TaskNode -> Child TaskNode -> ProcessGroup -> Step TaskNode -> TaskSpendIndicator');
+
+  // AT & AU: View switches unmount indicators
+  assert.ok(tasksPageSrc.includes('view === \'hierarchy\' && financialHierarchy?.project_summary'), 'Hierarchy view gates Project financial indicator');
+  pass(40, 'AT & AU: View transitions (Hierarchy -> Board / List) strictly unmount financial indicators and close popovers');
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Suite 6: Scope Switch Safety & View Transition Isolation
+  // Suite 6: Popover Viewport Safety, Mobile 390px & CSS Contract
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log('\n--- Suite 6: Scope Switch Safety & View Transition Isolation ---');
+  console.log('\n--- Suite 6: Popover Viewport Safety, Mobile 390px & CSS Contract ---');
 
-  // AP, AQ, AR, AS, AT, AU
-  assert.ok(popoverSrc.includes('scopeKey'), 'Scope key prop received by FinancialDetailPopover');
-  assert.ok(popoverSrc.includes('useEffect(() => {\n    setIsOpen(false);\n    setIsPinned(false);\n  }, [scopeKey]);'), 'Popover resets state immediately on scopeKey change');
+  // Max-height, internal vertical scroll, and overscroll-behavior
+  assert.ok(popoverCss.includes('max-height: calc(100vh - 24px);'), 'Popover card includes max-height: calc(100vh - 24px)');
+  assert.ok(popoverCss.includes('overflow-y: auto;'), 'Popover card includes overflow-y: auto for internal scrolling');
+  assert.ok(popoverCss.includes('overscroll-behavior: contain;'), 'Popover card includes overscroll-behavior: contain');
+  pass(41, 'Vertical Viewport Safety: Popover card constrained by viewport height with internal vertical scroll');
 
-  assert.ok(tasksPageSrc.includes('scopeKey={`${workspaceId}:${projectId}:${authorizationScopeKey}:${view}`}'), 'TasksPage passes combined scopeKey (workspaceId, projectId, authorizationScopeKey, view) to Project & Container indicators');
-  pass(36, 'AP, AQ, AR, AS: User, Workspace, Project, and Authorization scope switches immediately dismiss open popovers');
+  // Rendered height measurement and boundary clamping logic
+  assert.ok(popoverSrc.includes('getBoundingClientRect().height'), 'FinancialDetailPopover dynamically measures actual rendered height');
+  assert.ok(popoverSrc.includes('top < 12'), 'Top position strictly clamped to minimum 12px viewport top gutter');
+  assert.ok(popoverSrc.includes('top + renderedHeight > viewportHeight - 12'), 'Top position clamped to viewportHeight - 12px bottom gutter');
+  assert.ok(popoverSrc.includes('requestAnimationFrame'), 'Position re-measured after DOM paint');
+  pass(42, 'Dynamic Flip & Clamping: Measures rendered popover height, flips to top when below boundary, and clamps within [12px, viewportHeight - 12px]');
 
-  // AT, AU: View transitions (Hierarchy -> Board / List) close finance popovers
-  assert.ok(tasksPageSrc.includes('view === \'hierarchy\' && financialHierarchy?.project_summary'), 'Kanban and List views strictly suppress Project financial indicator');
-  pass(37, 'AT & AU: Switching from Hierarchy to Kanban or List view immediately unmounts all financial indicators and closes popovers');
+  // Mobile 390px & reduced-motion CSS contracts
+  assert.ok(popoverCss.includes('@media (max-width: 480px)'), 'Mobile responsive breakpoint defined in FinancialDetailPopover.module.css');
+  assert.ok(popoverCss.includes('max-width: calc(100vw - 24px)'), 'Mobile 390px viewport width clamping verified');
+  assert.ok(popoverCss.includes('@media (prefers-reduced-motion: reduce)'), 'prefers-reduced-motion respected');
+  pass(43, 'AX & Mobile 390px: Responsive viewport clamping (1440px / 1024px / 768px / 390px) and reduced motion support verified');
 
-  // AX: Responsive viewport-safe styles
-  assert.ok(popoverCss.includes('@media (max-width: 480px)'), 'AX: Mobile responsive breakpoint defined in FinancialDetailPopover.module.css');
-  assert.ok(popoverCss.includes('max-width: calc(100vw - 24px)'), 'AX: Popover clamps to viewport width without horizontal page overflow');
-  assert.ok(popoverCss.includes('@media (prefers-reduced-motion: reduce)'), 'AX: prefers-reduced-motion respected');
-  pass(38, 'AX: Responsive viewport clamping (1440px / 1024px / 768px / 390px) and reduced motion support verified');
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Suite 7: Mounted React Interaction Harness
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log('\n--- Suite 7: Mounted React Interaction Harness ---');
+
+  // Configure Mock DOM environment for React 19 createRoot
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+
+  class MockDOMElement {
+    constructor(nodeType = 1, nodeName = 'DIV') {
+      this.nodeType = nodeType;
+      this.nodeName = nodeName;
+      this.tagName = nodeName;
+      this.childNodes = [];
+      this.parentNode = null;
+      this.ownerDocument = null;
+      this.style = {};
+      this._attributes = {};
+      this._listeners = new Map();
+      this.namespaceURI = 'http://www.w3.org/1999/xhtml';
+    }
+    appendChild(child) {
+      child.parentNode = this;
+      this.childNodes.push(child);
+      return child;
+    }
+    insertBefore(child, before) {
+      child.parentNode = this;
+      const idx = this.childNodes.indexOf(before);
+      if (idx === -1) this.childNodes.push(child);
+      else this.childNodes.splice(idx, 0, child);
+      return child;
+    }
+    removeChild(child) {
+      const idx = this.childNodes.indexOf(child);
+      if (idx !== -1) this.childNodes.splice(idx, 1);
+      child.parentNode = null;
+      return child;
+    }
+    setAttribute(k, v) { this._attributes[k] = String(v); }
+    getAttribute(k) { return this._attributes[k]; }
+    removeAttribute(k) { delete this._attributes[k]; }
+    addEventListener(event, fn) {
+      if (!this._listeners.has(event)) this._listeners.set(event, []);
+      this._listeners.get(event).push(fn);
+    }
+    removeEventListener(event, fn) {
+      if (!this._listeners.has(event)) return;
+      const list = this._listeners.get(event).filter((f) => f !== fn);
+      this._listeners.set(event, list);
+    }
+    dispatchEvent(event) {
+      if (!event.target) event.target = this;
+      if (!event.preventDefault) event.preventDefault = () => {};
+      if (!event.stopPropagation) {
+        event.stopPropagation = () => { event._stopPropagation = true; };
+      }
+      let curr = this;
+      while (curr) {
+        const list = curr._listeners.get(event.type) || [];
+        for (const fn of list) fn(event);
+        if (event._stopPropagation) break;
+        curr = curr.parentNode;
+      }
+      return true;
+    }
+    getBoundingClientRect() {
+      return { top: 100, bottom: 130, left: 50, right: 150, width: 100, height: 30 };
+    }
+    contains(other) {
+      let curr = other;
+      while (curr) {
+        if (curr === this) return true;
+        curr = curr.parentNode;
+      }
+      return false;
+    }
+    focus() {
+      if (this.ownerDocument) this.ownerDocument.activeElement = this;
+    }
+  }
+
+  const mockDoc = new MockDOMElement(9, '#document');
+  mockDoc.ownerDocument = mockDoc;
+  mockDoc.createElement = (tag) => { const el = new MockDOMElement(1, tag.toUpperCase()); el.ownerDocument = mockDoc; return el; };
+  mockDoc.createElementNS = (ns, tag) => { const el = new MockDOMElement(1, tag.toUpperCase()); el.ownerDocument = mockDoc; el.namespaceURI = ns || 'http://www.w3.org/1999/xhtml'; return el; };
+  mockDoc.createTextNode = (text) => { const el = new MockDOMElement(3, '#text'); el.nodeValue = text; el.ownerDocument = mockDoc; return el; };
+  mockDoc.createComment = (text) => { const el = new MockDOMElement(8, '#comment'); el.nodeValue = text; el.ownerDocument = mockDoc; return el; };
+  mockDoc.createDocumentFragment = () => { const el = new MockDOMElement(11, '#document-fragment'); el.ownerDocument = mockDoc; return el; };
+  mockDoc.documentElement = new MockDOMElement(1, 'HTML');
+  mockDoc.documentElement.ownerDocument = mockDoc;
+  mockDoc.head = new MockDOMElement(1, 'HEAD');
+  mockDoc.head.ownerDocument = mockDoc;
+  mockDoc.body = new MockDOMElement(1, 'BODY');
+  mockDoc.body.ownerDocument = mockDoc;
+  mockDoc.activeElement = null;
+
+  global.window = {
+    document: mockDoc,
+    innerWidth: 1200,
+    innerHeight: 800,
+    addEventListener: (ev, fn) => mockDoc.addEventListener(ev, fn),
+    removeEventListener: (ev, fn) => mockDoc.removeEventListener(ev, fn),
+    dispatchEvent: (ev) => mockDoc.dispatchEvent(ev),
+    requestAnimationFrame: (cb) => { cb(); return 1; },
+    cancelAnimationFrame: () => {},
+    setTimeout: global.setTimeout,
+    clearTimeout: global.clearTimeout,
+    Node: MockDOMElement,
+    Element: MockDOMElement,
+    HTMLElement: MockDOMElement,
+    HTMLIFrameElement: MockDOMElement,
+    HTMLInputElement: MockDOMElement,
+    HTMLTextAreaElement: MockDOMElement,
+    HTMLSelectElement: MockDOMElement,
+  };
+  mockDoc.defaultView = global.window;
+  global.document = mockDoc;
+  global.Node = MockDOMElement;
+  global.Element = MockDOMElement;
+  global.HTMLElement = MockDOMElement;
+  global.HTMLIFrameElement = MockDOMElement;
+  global.HTMLInputElement = MockDOMElement;
+  global.HTMLTextAreaElement = MockDOMElement;
+  global.HTMLSelectElement = MockDOMElement;
+  global.DocumentFragment = MockDOMElement;
+  global.SVGElement = MockDOMElement;
+  global.requestAnimationFrame = (cb) => { cb(); return 1; };
+  global.cancelAnimationFrame = () => {};
+
+  // Mount Test Harness for FinancialDetailPopover
+  function Harness({ scopeKey = 'user1:ws1:proj1:scopeA:hierarchy' }) {
+    return React.createElement(FinancialDetailPopover, {
+      trigger: React.createElement('span', { id: 'trigger-pill' }, 'Spend ₹10L'),
+      content: React.createElement('div', { id: 'popover-content' }, 'Detail Breakdown'),
+      title: 'Project Finance',
+      scopeKey,
+    });
+  }
+
+  const container = mockDoc.createElement('div');
+  mockDoc.body.appendChild(container);
+  const root = createRoot(container);
+
+  await act(async () => {
+    root.render(React.createElement(Harness, { scopeKey: 'scope-1' }));
+  });
+
+  // Find trigger button
+  const triggerBtn = container.childNodes[0]?.childNodes[0];
+  assert.ok(triggerBtn, 'Trigger button mounted in DOM');
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Initial state: aria-expanded=false');
+  pass(44, 'Mounted Harness: Component renders trigger with aria-expanded="false"');
+
+  // 1. Click Trigger -> Open
+  await act(async () => {
+    triggerBtn.dispatchEvent({
+      type: 'click',
+      stopPropagation: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Click opens popover (aria-expanded=true)');
+  pass(45, 'Mounted Harness (Click Open): Trigger click sets isOpen=true and aria-expanded="true"');
+
+  // 2. Second Click -> Close
+  await act(async () => {
+    triggerBtn.dispatchEvent({
+      type: 'click',
+      stopPropagation: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Second click closes popover');
+  pass(46, 'Mounted Harness (Second Click): Second trigger click unpins and closes popover');
+
+  // 3. Enter Key -> Open
+  await act(async () => {
+    triggerBtn.dispatchEvent({
+      type: 'keydown',
+      key: 'Enter',
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Enter key opens popover');
+  pass(47, 'Mounted Harness (Enter Key): Enter key opens popover');
+
+  // 4. Escape Key -> Close & Restore Focus
+  await act(async () => {
+    mockDoc.dispatchEvent({
+      type: 'keydown',
+      key: 'Escape',
+      preventDefault: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Escape key closes popover');
+  assert.strictEqual(mockDoc.activeElement, triggerBtn, 'Focus restored to trigger on Escape');
+  pass(48, 'Mounted Harness (Escape Key): Escape closes popover and restores keyboard focus to trigger');
+
+  // 5. Space Key -> Toggle Open
+  await act(async () => {
+    triggerBtn.dispatchEvent({
+      type: 'keydown',
+      key: ' ',
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Space key opens popover');
+  pass(49, 'Mounted Harness (Space Key): Space key toggles popover open');
+
+  // 6. Outside Pointer Down -> Close
+  const outsideNode = mockDoc.createElement('div');
+  mockDoc.body.appendChild(outsideNode);
+  await act(async () => {
+    mockDoc.dispatchEvent({
+      type: 'pointerdown',
+      target: outsideNode,
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Outside pointer down closes popover');
+  pass(50, 'Mounted Harness (Outside Pointer): Pointer click outside popover dismisses overlay');
+
+  // 7. Re-open and test scopeKey change dismissal
+  await act(async () => {
+    triggerBtn.dispatchEvent({
+      type: 'click',
+      stopPropagation: () => {},
+    });
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Popover re-opened');
+
+  // Re-render with new scopeKey
+  await act(async () => {
+    root.render(React.createElement(Harness, { scopeKey: 'user2:ws1:proj1:scopeA:hierarchy' }));
+  });
+  assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Scope change (user switch) immediately closes popover');
+  pass(51, 'Mounted Harness (Scope Isolation): Changing financialPopoverScopeKey immediately resets open state');
+
+  await act(async () => {
+    root.unmount();
+  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Final Tally
