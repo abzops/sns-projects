@@ -499,11 +499,29 @@ async function runTests() {
   );
   pass(37, 'AR & AS: TasksPage propagates financialPopoverScopeKey to Project, Phase, and Task List indicators');
 
-  // Propagation through HierarchyTaskTree & HierarchyProcessGroups
-  assert.ok(
-    tasksPageSrc.includes('<HierarchyProcessGroups\n                                      processes={taskListProcesses}\n                                      tasks={listTasks}\n                                      onTaskOpen={setSelectedTask}\n                                      taskFinancials={financialHierarchy?.tasks || {}}\n                                      scopeKey={financialPopoverScopeKey}'),
-    'TasksPage passes scopeKey to HierarchyProcessGroups'
+  // Propagation through all three HierarchyProcessGroups placements:
+  // A. Project Processes HierarchyProcessGroups receives financialPopoverScopeKey
+  const hasProjectProcessesScopeKey = tasksPageSrc.includes(
+    '<HierarchyProcessGroups\n                processes={projectProcesses}\n                tasks={tasks.filter(\n                  (task) => task.process_instance_id && projectProcesses.some((item) => item.id === task.process_instance_id)\n                )}\n                onTaskOpen={setSelectedTask}\n                taskFinancials={financialHierarchy?.tasks || {}}\n                scopeKey={financialPopoverScopeKey}'
   );
+  assert.ok(hasProjectProcessesScopeKey, 'A: Project Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+  pass(38, 'A: Project Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+
+  // B. Phase Processes HierarchyProcessGroups receives financialPopoverScopeKey
+  const hasPhaseProcessesScopeKey = tasksPageSrc.includes(
+    '<HierarchyProcessGroups\n                              processes={phaseProcesses}\n                              tasks={phaseProcessTasks}\n                              onTaskOpen={setSelectedTask}\n                              taskFinancials={financialHierarchy?.tasks || {}}\n                              scopeKey={financialPopoverScopeKey}'
+  );
+  assert.ok(hasPhaseProcessesScopeKey, 'B: Phase Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+  pass(39, 'B: Phase Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+
+  // C. Task List Processes HierarchyProcessGroups receives financialPopoverScopeKey
+  const hasTaskListProcessesScopeKey = tasksPageSrc.includes(
+    '<HierarchyProcessGroups\n                                      processes={taskListProcesses}\n                                      tasks={listTasks}\n                                      onTaskOpen={setSelectedTask}\n                                      taskFinancials={financialHierarchy?.tasks || {}}\n                                      scopeKey={financialPopoverScopeKey}'
+  );
+  assert.ok(hasTaskListProcessesScopeKey, 'C: Task List Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+  pass(40, 'C: Task List Processes HierarchyProcessGroups receives financialPopoverScopeKey');
+
+  // HierarchyTaskTree list tasks and uncategorized tasks
   assert.ok(
     tasksPageSrc.includes('<HierarchyTaskTree\n                                      tasks={listTasks}\n                                      processInstances={processInstances}\n                                      onTaskOpen={setSelectedTask}\n                                      taskFinancials={financialHierarchy?.tasks || {}}\n                                      scopeKey={financialPopoverScopeKey}'),
     'TasksPage passes scopeKey to task list HierarchyTaskTree'
@@ -512,18 +530,18 @@ async function runTests() {
     tasksPageSrc.includes('<HierarchyTaskTree\n                tasks={tasks.filter((task) => !task.phase_id && !task.task_list_id)}\n                processInstances={processInstances}\n                onTaskOpen={setSelectedTask}\n                taskFinancials={financialHierarchy?.tasks || {}}\n                scopeKey={financialPopoverScopeKey}'),
     'TasksPage passes scopeKey to uncategorized HierarchyTaskTree'
   );
-  pass(38, 'TasksPage propagates financialPopoverScopeKey to HierarchyTaskTree and HierarchyProcessGroups');
+  pass(41, 'TasksPage propagates financialPopoverScopeKey to task list and uncategorized HierarchyTaskTree instances');
 
   // HierarchyTaskTree internals: propagation to TaskNode, recursive Child tasks, ProcessGroup, Process Steps, and TaskSpendIndicator
   assert.ok(treeSrc.includes('function TaskNode({ task, model, onTaskOpen, depth = 0, lineage = new Set(), processStep = false, taskFinancials = {}, scopeKey })'), 'TaskNode receives scopeKey');
   assert.ok(treeSrc.includes('<TaskSpendIndicator\n              financial={financial}\n              taskTitle={task.title}\n              scopeKey={scopeKey}\n            />'), 'TaskNode passes scopeKey to TaskSpendIndicator');
   assert.ok(treeSrc.includes('function ProcessGroup({ instance, model, onTaskOpen, depth = 0, lineage = new Set(), taskFinancials = {}, scopeKey })'), 'ProcessGroup receives scopeKey');
   assert.ok(treeSrc.includes('export function HierarchyProcessGroups({ processes = [], tasks = [], onTaskOpen, taskFinancials = {}, scopeKey })'), 'HierarchyProcessGroups receives scopeKey');
-  pass(39, 'Tree scopeKey propagation: HierarchyTaskTree -> TaskNode -> Child TaskNode -> ProcessGroup -> Step TaskNode -> TaskSpendIndicator');
+  pass(42, 'Tree scopeKey propagation: HierarchyTaskTree -> TaskNode -> Child TaskNode -> ProcessGroup -> Step TaskNode -> TaskSpendIndicator');
 
   // AT & AU: View switches unmount indicators
   assert.ok(tasksPageSrc.includes('view === \'hierarchy\' && financialHierarchy?.project_summary'), 'Hierarchy view gates Project financial indicator');
-  pass(40, 'AT & AU: View transitions (Hierarchy -> Board / List) strictly unmount financial indicators and close popovers');
+  pass(43, 'AT & AU: View transitions (Hierarchy -> Board / List) strictly unmount financial indicators and close popovers');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Suite 6: Popover Viewport Safety, Mobile 390px & CSS Contract
@@ -534,20 +552,20 @@ async function runTests() {
   assert.ok(popoverCss.includes('max-height: calc(100vh - 24px);'), 'Popover card includes max-height: calc(100vh - 24px)');
   assert.ok(popoverCss.includes('overflow-y: auto;'), 'Popover card includes overflow-y: auto for internal scrolling');
   assert.ok(popoverCss.includes('overscroll-behavior: contain;'), 'Popover card includes overscroll-behavior: contain');
-  pass(41, 'Vertical Viewport Safety: Popover card constrained by viewport height with internal vertical scroll');
+  pass(44, 'Vertical Viewport Safety: Popover card constrained by viewport height with internal vertical scroll');
 
   // Rendered height measurement and boundary clamping logic
   assert.ok(popoverSrc.includes('getBoundingClientRect().height'), 'FinancialDetailPopover dynamically measures actual rendered height');
   assert.ok(popoverSrc.includes('top < 12'), 'Top position strictly clamped to minimum 12px viewport top gutter');
   assert.ok(popoverSrc.includes('top + renderedHeight > viewportHeight - 12'), 'Top position clamped to viewportHeight - 12px bottom gutter');
   assert.ok(popoverSrc.includes('requestAnimationFrame'), 'Position re-measured after DOM paint');
-  pass(42, 'Dynamic Flip & Clamping: Measures rendered popover height, flips to top when below boundary, and clamps within [12px, viewportHeight - 12px]');
+  pass(45, 'Dynamic Flip & Clamping: Measures rendered popover height, flips to top when below boundary, and clamps within [12px, viewportHeight - 12px]');
 
   // Mobile 390px & reduced-motion CSS contracts
   assert.ok(popoverCss.includes('@media (max-width: 480px)'), 'Mobile responsive breakpoint defined in FinancialDetailPopover.module.css');
   assert.ok(popoverCss.includes('max-width: calc(100vw - 24px)'), 'Mobile 390px viewport width clamping verified');
   assert.ok(popoverCss.includes('@media (prefers-reduced-motion: reduce)'), 'prefers-reduced-motion respected');
-  pass(43, 'AX & Mobile 390px: Responsive viewport clamping (1440px / 1024px / 768px / 390px) and reduced motion support verified');
+  pass(46, 'AX & Mobile 390px: Responsive viewport clamping (1440px / 1024px / 768px / 390px) and reduced motion support verified');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Suite 7: Mounted React Interaction Harness
@@ -701,7 +719,7 @@ async function runTests() {
   const triggerBtn = container.childNodes[0]?.childNodes[0];
   assert.ok(triggerBtn, 'Trigger button mounted in DOM');
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Initial state: aria-expanded=false');
-  pass(44, 'Mounted Harness: Component renders trigger with aria-expanded="false"');
+  pass(47, 'Mounted Harness: Component renders trigger with aria-expanded="false"');
 
   // 1. Click Trigger -> Open
   await act(async () => {
@@ -711,7 +729,7 @@ async function runTests() {
     });
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Click opens popover (aria-expanded=true)');
-  pass(45, 'Mounted Harness (Click Open): Trigger click sets isOpen=true and aria-expanded="true"');
+  pass(48, 'Mounted Harness (Click Open): Trigger click sets isOpen=true and aria-expanded="true"');
 
   // 2. Second Click -> Close
   await act(async () => {
@@ -721,7 +739,7 @@ async function runTests() {
     });
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Second click closes popover');
-  pass(46, 'Mounted Harness (Second Click): Second trigger click unpins and closes popover');
+  pass(49, 'Mounted Harness (Second Click): Second trigger click unpins and closes popover');
 
   // 3. Enter Key -> Open
   await act(async () => {
@@ -733,7 +751,7 @@ async function runTests() {
     });
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Enter key opens popover');
-  pass(47, 'Mounted Harness (Enter Key): Enter key opens popover');
+  pass(50, 'Mounted Harness (Enter Key): Enter key opens popover');
 
   // 4. Escape Key -> Close & Restore Focus
   await act(async () => {
@@ -745,7 +763,7 @@ async function runTests() {
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Escape key closes popover');
   assert.strictEqual(mockDoc.activeElement, triggerBtn, 'Focus restored to trigger on Escape');
-  pass(48, 'Mounted Harness (Escape Key): Escape closes popover and restores keyboard focus to trigger');
+  pass(51, 'Mounted Harness (Escape Key): Escape closes popover and restores keyboard focus to trigger');
 
   // 5. Space Key -> Toggle Open
   await act(async () => {
@@ -757,7 +775,7 @@ async function runTests() {
     });
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'true', 'Space key opens popover');
-  pass(49, 'Mounted Harness (Space Key): Space key toggles popover open');
+  pass(52, 'Mounted Harness (Space Key): Space key toggles popover open');
 
   // 6. Outside Pointer Down -> Close
   const outsideNode = mockDoc.createElement('div');
@@ -769,7 +787,7 @@ async function runTests() {
     });
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Outside pointer down closes popover');
-  pass(50, 'Mounted Harness (Outside Pointer): Pointer click outside popover dismisses overlay');
+  pass(53, 'Mounted Harness (Outside Pointer): Pointer click outside popover dismisses overlay');
 
   // 7. Re-open and test scopeKey change dismissal
   await act(async () => {
@@ -785,7 +803,7 @@ async function runTests() {
     root.render(React.createElement(Harness, { scopeKey: 'user2:ws1:proj1:scopeA:hierarchy' }));
   });
   assert.strictEqual(triggerBtn.getAttribute('aria-expanded'), 'false', 'Scope change (user switch) immediately closes popover');
-  pass(51, 'Mounted Harness (Scope Isolation): Changing financialPopoverScopeKey immediately resets open state');
+  pass(54, 'Mounted Harness (Scope Isolation): Changing financialPopoverScopeKey immediately resets open state');
 
   await act(async () => {
     root.unmount();

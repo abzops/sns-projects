@@ -1352,6 +1352,7 @@ export default function TasksPage() {
                 )}
                 onTaskOpen={setSelectedTask}
                 taskFinancials={financialHierarchy?.tasks || {}}
+                scopeKey={financialPopoverScopeKey}
               />
             </section>
           )}
@@ -1466,6 +1467,7 @@ export default function TasksPage() {
                               tasks={phaseProcessTasks}
                               onTaskOpen={setSelectedTask}
                               taskFinancials={financialHierarchy?.tasks || {}}
+                              scopeKey={financialPopoverScopeKey}
                             />
                           </section>
                         )}
