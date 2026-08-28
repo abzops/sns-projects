@@ -1,8 +1,8 @@
 # AUTH-01: Invite-Only Authentication & Forgotten Password Recovery
 
 ## Status
-- **Status**: `IMPLEMENTED / CLOSURE REQUIRED`
-- **Canonical Baseline Commit**: `[Pending Hotfix Commit]`
+- **Status**: `IMPLEMENTED / PRODUCTION CLOSURE REQUIRED`
+- **Canonical Baseline Commit**: `[Pending Final Production Acceptance]`
 - **Date**: 2026-08-28
 - **Applies To**: Global Authentication, Session Lifecycle, Password Recovery, Organization Security
 

@@ -1,8 +1,8 @@
 /**
- * Comprehensive Automated Test Suite for AUTH-01:
+ * Automated Test Suite for AUTH-01:
  * Invite-Only Authentication + Forgotten Password Recovery
  *
- * Covers static contracts and REAL behavioral state-machine & gating suites.
+ * Covers static contracts, state-machine model specifications, and gating rules.
  */
 
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ import { buildRecoveryRedirectUrl, getRecoveryRedirectUrl } from '../src/lib/url
 const repoRoot = process.cwd();
 
 console.log('═══════════════════════════════════════════════════════════════════');
-console.log('SNS PROJECTS — AUTH-01 AUTOMATED TEST HARNESS (BEHAVIORAL + CONTRACTS)');
+console.log('SNS PROJECTS — AUTH-01 TEST SUITE (CONTRACTS & STATE MACHINE MODEL)');
 console.log('Invite-Only Authentication + Forgotten Password Recovery');
 console.log('═══════════════════════════════════════════════════════════════════\n');
 
@@ -207,9 +207,9 @@ report(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Suite 4: REAL Behavioral AuthContext State Machine Simulation Harness
+// Suite 4: State-Machine Specification & Contract Simulator Harness
 // ─────────────────────────────────────────────────────────────────────────────
-console.log('\n--- Suite 4: REAL Behavioral AuthContext State Machine Simulation Harness ---');
+console.log('\n--- Suite 4: State-Machine Specification & Contract Simulator Harness ---');
 
 class AuthStateMachineSimulator {
   constructor() {
@@ -253,54 +253,54 @@ class AuthStateMachineSimulator {
   }
 }
 
-// Behavioral Test A: PASSWORD_RECOVERY -> recovery TRUE
+// Contract Test A: PASSWORD_RECOVERY -> recovery TRUE
 const simA = new AuthStateMachineSimulator();
 simA.handleAuthEvent('PASSWORD_RECOVERY', { user: { id: 'user_rec_1', email: 'user@stacknstock.in' } });
 report(
   22,
-  'Behavioral Sequence A: PASSWORD_RECOVERY event establishes isPasswordRecovery === true',
+  'Contract Sequence A: PASSWORD_RECOVERY event establishes isPasswordRecovery === true',
   simA.isPasswordRecovery === true && simA.user.id === 'user_rec_1'
 );
 
-// Behavioral Test B: PASSWORD_RECOVERY + TOKEN_REFRESHED -> still TRUE
+// Contract Test B: PASSWORD_RECOVERY + TOKEN_REFRESHED -> still TRUE
 simA.handleAuthEvent('TOKEN_REFRESHED', { user: { id: 'user_rec_1', email: 'user@stacknstock.in' } });
 report(
   23,
-  'Behavioral Sequence B: TOKEN_REFRESHED preserves isPasswordRecovery === true without disruption',
+  'Contract Sequence B: TOKEN_REFRESHED preserves isPasswordRecovery === true without disruption',
   simA.isPasswordRecovery === true
 );
 
-// Behavioral Test C: PASSWORD_RECOVERY + USER_UPDATED -> still TRUE
+// Contract Test C: PASSWORD_RECOVERY + USER_UPDATED -> still TRUE
 simA.handleAuthEvent('USER_UPDATED', { user: { id: 'user_rec_1', email: 'user@stacknstock.in' } });
 report(
   24,
-  'Behavioral Sequence C: USER_UPDATED caused by password update preserves isPasswordRecovery === true',
+  'Contract Sequence C: USER_UPDATED caused by password update preserves isPasswordRecovery === true',
   simA.isPasswordRecovery === true
 );
 
-// Behavioral Test D: PASSWORD_RECOVERY + listener SIGNED_IN -> must NOT be cleared by listener
+// Contract Test D: PASSWORD_RECOVERY + listener SIGNED_IN -> must NOT be cleared by listener
 simA.handleAuthEvent('SIGNED_IN', { user: { id: 'user_rec_1', email: 'user@stacknstock.in' } });
 report(
   25,
-  'Behavioral Sequence D: SIGNED_IN from auth listener does NOT cancel active recovery state',
+  'Contract Sequence D: SIGNED_IN from auth listener does NOT cancel active recovery state',
   simA.isPasswordRecovery === true
 );
 
-// Behavioral Test E: explicit AuthContext.signIn() -> recovery cleared
+// Contract Test E: explicit AuthContext.signIn() -> recovery cleared
 await simA.signIn('other@stacknstock.in', 'Password123!');
 report(
   26,
-  'Behavioral Sequence E: Explicit AuthContext.signIn() clears recovery state BEFORE credential login',
+  'Contract Sequence E: Explicit AuthContext.signIn() clears recovery state BEFORE credential login',
   simA.isPasswordRecovery === false && simA.authEvent === 'SIGNED_IN'
 );
 
-// Behavioral Test F: SIGNED_OUT -> FALSE
+// Contract Test F: SIGNED_OUT -> FALSE
 const simF = new AuthStateMachineSimulator();
 simF.handleAuthEvent('PASSWORD_RECOVERY', { user: { id: 'user_rec_2' } });
 simF.handleAuthEvent('SIGNED_OUT', null);
 report(
   27,
-  'Behavioral Sequence F: SIGNED_OUT event resets isPasswordRecovery to false and user/session to null',
+  'Contract Sequence F: SIGNED_OUT event resets isPasswordRecovery to false and user/session to null',
   simF.isPasswordRecovery === false && simF.user === null && simF.session === null
 );
 
@@ -316,31 +316,31 @@ function evaluateResetGate(isPasswordRecovery, session) {
   return isPasswordRecovery === true && Boolean(session?.user?.id);
 }
 
-// Behavioral Test G: recovery=true, session=null -> invalid
+// Contract Test G: recovery=true, session=null -> invalid
 report(
   28,
-  'Behavioral Gate G: isPasswordRecovery=true + session=null is REJECTED (fail-closed)',
+  'Contract Gate G: isPasswordRecovery=true + session=null is REJECTED (fail-closed)',
   evaluateResetGate(true, null) === false
 );
 
-// Behavioral Test H: recovery=true, session.user exists -> authorized
+// Contract Test H: recovery=true, session.user exists -> authorized
 report(
   29,
-  'Behavioral Gate H: isPasswordRecovery=true + valid session.user.id is AUTHORIZED for reset',
+  'Contract Gate H: isPasswordRecovery=true + valid session.user.id is AUTHORIZED for reset',
   evaluateResetGate(true, { user: { id: 'valid_user_id' } }) === true
 );
 
-// Behavioral Test I: recovery=false, session.user exists -> invalid (normal user cannot reset via /reset-password)
+// Contract Test I: recovery=false, session.user exists -> invalid (normal user cannot reset via /reset-password)
 report(
   30,
-  'Behavioral Gate I: Normal authenticated session alone (recovery=false) CANNOT access reset form',
+  'Contract Gate I: Normal authenticated session alone (recovery=false) CANNOT access reset form',
   evaluateResetGate(false, { user: { id: 'logged_in_user' } }) === false
 );
 
-// Behavioral Test J: recovery=false, session=null -> invalid
+// Contract Test J: recovery=false, session=null -> invalid
 report(
   31,
-  'Behavioral Gate J: Unauthenticated visitor (recovery=false + session=null) is REJECTED (fail-closed)',
+  'Contract Gate J: Unauthenticated visitor (recovery=false + session=null) is REJECTED (fail-closed)',
   evaluateResetGate(false, null) === false
 );
 
@@ -428,7 +428,7 @@ report(
   resetSrc.includes('import { evaluatePassword } from \'../lib/passwordPolicy\';')
 );
 
-// Behavioral Test K: Multi-user recovery isolation
+// Model Test K: Multi-user recovery isolation
 const simMultiUser = new AuthStateMachineSimulator();
 simMultiUser.handleAuthEvent('SIGNED_IN', { user: { id: 'user_A', email: 'userA@stacknstock.in' } });
 assert.strictEqual(simMultiUser.user.id, 'user_A');
@@ -438,7 +438,7 @@ assert.strictEqual(simMultiUser.isPasswordRecovery, false);
 simMultiUser.handleAuthEvent('PASSWORD_RECOVERY', { user: { id: 'user_B', email: 'userB@stacknstock.in' } });
 report(
   40,
-  'Multi-User Isolation: Opening User B recovery link while User A is logged in replaces identity with User B before password submission',
+  'Multi-User Isolation Model: Opening User B recovery link while User A is logged in replaces identity with User B before password submission',
   simMultiUser.user.id === 'user_B' && simMultiUser.isPasswordRecovery === true
 );
 
@@ -493,12 +493,12 @@ report(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Suite 8: Server-Side Configuration, SPA Fallback & Responsive CSS Tokens
+// Suite 8: Server-Side Configuration, SPA Routing & Responsive CSS Tokens
 // ─────────────────────────────────────────────────────────────────────────────
-console.log('\n--- Suite 8: Server-Side Configuration, SPA Fallback & Responsive CSS Tokens ---');
+console.log('\n--- Suite 8: Server-Side Configuration, SPA Routing & Responsive CSS Tokens ---');
 
 const configToml = fs.readFileSync(path.join(repoRoot, 'supabase/config.toml'), 'utf-8');
-const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
+const deployWorkflow = fs.readFileSync(path.join(repoRoot, '.github/workflows/deploy-pages.yml'), 'utf-8');
 
 report(
   47,
@@ -511,9 +511,8 @@ report(
 
 report(
   48,
-  'Cross-platform SPA fallback generator scripts/create-spa-fallback.mjs exists and is wired into package.json postbuild',
-  fs.existsSync(path.join(repoRoot, 'scripts/create-spa-fallback.mjs')) &&
-  packageJson.scripts?.postbuild === 'node scripts/create-spa-fallback.mjs'
+  'GitHub Pages workflow (.github/workflows/deploy-pages.yml) generates 404.html SPA fallback from index.html',
+  deployWorkflow.includes('cp dist/index.html dist/404.html')
 );
 
 report(
